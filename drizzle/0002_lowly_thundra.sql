@@ -1,0 +1,1 @@
+ALTER TABLE "people" ADD COLUMN "isPrimaryContact" boolean DEFAULT false NOT NULL;
