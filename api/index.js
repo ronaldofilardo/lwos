@@ -4173,13 +4173,9 @@ var proposalRouter = router({
 });
 
 // server/features/leads/lead-router.ts
-init_roles();
 var leadRouter = router({
   // Pública — usada pela tela de "Tenho interesse" no login, sem autenticação.
-  create: protectedProcedure.input(leadCreateSchema).mutation(async ({ ctx, input }) => {
-    if (!input.familyId) throw new Error("familyId \xE9 obrigat\xF3rio para cria\xE7\xE3o de lead.");
-    const user = requireRole(ctx, TEAM_ROLES);
-    await assertFamilyAccess(ctx, input.familyId);
+  create: publicProcedure.input(leadCreateSchema).mutation(async ({ ctx, input }) => {
     checkRateLimit(`lead:create:${ctx.req.ip ?? "unknown"}`, 10);
     return createLeadRecord(input);
   }),
