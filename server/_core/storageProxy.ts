@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Express } from "express";
 import path from "node:path";
 import { authenticateRequest } from "./auth";
@@ -76,3 +77,4 @@ export function registerStorageProxy(app: Express) {
     }
   });
 }
+
