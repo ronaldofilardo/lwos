@@ -3,11 +3,11 @@ import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
-import ClientDashboard from "./ClientDashboard";
+import ClientFamilyDashboard from "./ClientFamilyDashboard";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  if (user?.role === "CLIENTE") return <ClientDashboard />;
+  if (user?.role === "CLIENTE") return <ClientFamilyDashboard />;
   return <TeamDashboard />;
 }
 

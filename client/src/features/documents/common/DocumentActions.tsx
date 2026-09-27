@@ -6,6 +6,8 @@ type Props = {
   documentId: string;
   canReview: boolean;
   busy: boolean;
+  status: string;
+  disabled?: boolean;
   onUpload: (file: File) => Promise<unknown>;
   onReview: (
     status: "VALIDADO" | "REJEITADO",
@@ -18,6 +20,8 @@ export function DocumentActions({
   documentId,
   canReview,
   busy,
+  status,
+  disabled,
   onUpload,
   onReview,
   onDispense,
@@ -38,89 +42,93 @@ export function DocumentActions({
     setDispenseReason("");
   };
 
+  const isDispensed = status === "DISPENSADO";
+  const needsValidation = status === "RECEBIDO_EM_ANALISE";
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <input
-          ref={fileRef}
-          className="hidden"
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx"
-          onChange={e => upload(e.target.files?.[0])}
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() => fileRef.current?.click()}
-        >
-          <Upload className="mr-1 size-3" /> Enviar Versão
-        </Button>
-
-        {canReview ? (
+        {isDispensed ? (
+          // Quando dispensado: mostra mensagem em vez de botões
+          <span className="text-purple-600 text-sm font-medium">
+            Documento dispensado
+          </span>
+        ) : (
           <>
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() => onReview("VALIDADO")}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white"
-            >
-              <Check className="mr-1 size-3" /> Validar
-            </Button>
-
-            <input
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              placeholder="Motivo da rejeição"
-              className="h-8 w-36 rounded-md border border-input px-2 text-xs"
+            <input 
+              type="file" 
+              ref={fileRef} 
+              accept=".pdf,image/*"
+              className="hidden" 
+              onChange={e => upload(e.target.files?.[0])} 
             />
             <Button
               size="sm"
-              variant="destructive"
-              disabled={busy || reason.trim().length < 3}
-              onClick={() => onReview("REJEITADO", reason)}
-            >
-              <X className="mr-1 size-3" /> Rejeitar
-            </Button>
-
-            <Button
-              size="sm"
               variant="outline"
-              className="text-purple-700 border-purple-200 hover:bg-purple-50"
-              disabled={busy}
-              onClick={() => setShowDispense(!showDispense)}
+              disabled={busy || disabled}
+              onClick={() => fileRef.current?.click()}
             >
-              <Ban className="mr-1 size-3" /> Dispensar
+              <Upload className="mr-1 size-3" /> Enviar Versão
             </Button>
+          </>
+        )}
+
+        {canReview ? (
+          <>
+            {/* Ocultando botão Enviar Versão duplicado que existia aqui */}
+
+            {isDispensed ? null : (
+              <Button
+                size="sm"
+                disabled={busy || !needsValidation || disabled}
+                onClick={() => onReview("VALIDADO")}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              >
+                <Check className="mr-1 size-3" /> Validar
+              </Button>
+            )}
+
+            {isDispensed ? null : (
+              <input
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                placeholder="Motivo da rejeição"
+                disabled={!needsValidation || disabled}
+                className="h-8 w-36 rounded-md border border-input px-2 text-xs"
+              />
+            )}
+
+            {isDispensed ? null : (
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={busy || reason.trim().length < 3 || !needsValidation || disabled}
+                onClick={() => onReview("REJEITADO", reason)}
+              >
+                <X className="mr-1 size-3" /> Rejeitar
+              </Button>
+            )}
+
+            {isDispensed ? null : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-purple-700 border-purple-200 hover:bg-purple-50"
+                disabled={busy || disabled}
+                onClick={() => setShowDispense(!showDispense)}
+              >
+                <Ban className="mr-1 size-3" /> Dispensar
+              </Button>
+            )}
+
+            {isDispensed ? (
+              <span className="text-purple-600 text-sm ml-2">
+                Dispensado por Sócio
+              </span>
+            ) : null}
           </>
         ) : null}
       </div>
-
-      {showDispense && canReview ? (
-        <div className="flex items-center gap-2 justify-end pt-1">
-          <input
-            value={dispenseReason}
-            onChange={e => setDispenseReason(e.target.value)}
-            placeholder="Justificativa jurídica/prática da dispensa"
-            className="h-8 w-64 rounded-md border border-purple-300 px-2 text-xs bg-purple-50/40"
-          />
-          <Button
-            size="sm"
-            className="bg-purple-700 hover:bg-purple-800 text-white"
-            disabled={busy || dispenseReason.trim().length < 3}
-            onClick={handleDispense}
-          >
-            Aprovar Dispensa (Sócio)
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowDispense(false)}
-          >
-            Cancelar
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }

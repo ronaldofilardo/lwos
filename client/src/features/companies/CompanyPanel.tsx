@@ -18,9 +18,11 @@ type Person = { id: string; fullName: string };
 
 function StakeholderManager({
   companyId,
+  familyId,
   people,
 }: {
   companyId: string;
+  familyId: string;
   people: Person[];
 }) {
   const utils = trpc.useUtils();
@@ -46,6 +48,13 @@ function StakeholderManager({
     onSuccess: () => {
       refresh();
       toast.success("Participação removida.");
+    },
+    onError,
+  });
+  const requestExternalDoc = trpc.documents.create.useMutation({
+    onSuccess: () => {
+      utils.documents.list.invalidate({ familyId });
+      toast.success("Requisito de documento pessoal criado para o não-membro.");
     },
     onError,
   });
@@ -88,6 +97,23 @@ function StakeholderManager({
                   {row.percentage}%
                   {person ? "" : " · não-membro"}
                 </span>
+                {!person ? (
+                  <button
+                    type="button"
+                    className="rounded border border-lucathi-line px-1.5 py-0.5 text-lucathi-navy hover:bg-lucathi-mist"
+                    disabled={requestExternalDoc.isPending}
+                    onClick={() =>
+                      requestExternalDoc.mutate({
+                        familyId,
+                        entityType: "SOCIEDADE",
+                        entityId: companyId,
+                        category: `Doc. pessoal — ${label}`.slice(0, 80),
+                      })
+                    }
+                  >
+                    Doc pessoal
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   aria-label="Remover participação"
@@ -275,7 +301,11 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
                 <Info className="mr-1 size-3.5" /> Detalhes
               </Button>
             </div>
-            <StakeholderManager companyId={item.id} people={people.data ?? []} />
+            <StakeholderManager
+              companyId={item.id}
+              familyId={familyId}
+              people={people.data ?? []}
+            />
           </div>
         ))}
         {!list.data?.length ? (

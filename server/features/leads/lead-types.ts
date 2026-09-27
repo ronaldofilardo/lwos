@@ -9,6 +9,7 @@ export const ALLOWED_LEAD_MIME_TYPES = new Set([
 ]);
 
 export const leadCreateSchema = z.object({
+  familyId: z.string().optional(),
   fullName: z.string().min(3).max(160),
   taxId: z.string().min(11).max(20),
   email: z.string().email(),

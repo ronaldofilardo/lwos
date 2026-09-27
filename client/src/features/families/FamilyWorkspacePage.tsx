@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   ArrowLeft,
   FileStack,
@@ -6,10 +7,11 @@ import {
   Presentation,
   ShieldCheck,
 } from "lucide-react";
-import { Link, useRoute } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { PeoplePanel } from "@/features/people/PeoplePanel";
 import { DocumentPanel } from "@/features/documents/DocumentPanel";
 import { CertidaoPanel } from "@/features/certidoes/CertidaoPanel";
@@ -21,14 +23,31 @@ import { FinancialProposalPanel } from "@/features/proposals/FinancialProposalPa
 import { PortalPanel } from "@/features/portal/PortalPanel";
 import { AuditPanel } from "@/features/audit/AuditPanel";
 import { ProcessTimeline } from "./common/ProcessTimeline";
+import { UnifiedRequirementsMap } from "./common/UnifiedRequirementsMap";
 
 export function FamilyWorkspacePage() {
   const [, params] = useRoute("/familias/:familyId");
   const familyId = params?.familyId ?? "";
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const isClient = user?.role === "CLIENTE";
+
+  // O titular (CLIENTE) não usa a área de trabalho do sócio: segue para a
+  // página dedicada da própria família.
+  useEffect(() => {
+    if (isClient && familyId) navigate(`/minha-familia/${familyId}`);
+  }, [isClient, familyId, navigate]);
+
   const family = trpc.families.get.useQuery(
     { familyId },
     { enabled: Boolean(familyId) }
   );
+
+  if (!user || isClient) {
+    return (
+      <p className="text-sm text-lucathi-gray">Abrindo sua família…</p>
+    );
+  }
 
   if (family.isLoading) {
     return (
@@ -164,8 +183,7 @@ export function FamilyWorkspacePage() {
 
         {/* ABA 3: MATRIZ DOCUMENTAL, SEÇÕES E CERTIDÕES */}
         <TabsContent value="documentos" className="space-y-6">
-          <DocumentPanel familyId={familyId} />
-          <CertidaoPanel familyId={familyId} />
+          <DocumentPanel familyId={familyId} sociedadesExtras={<CertidaoPanel familyId={familyId} />} />
         </TabsContent>
 
         {/* ABA 4: PORTAL & AUDITORIA */}
@@ -176,8 +194,9 @@ export function FamilyWorkspacePage() {
           </div>
         </TabsContent>
 
-        {/* ABA 5: VISÃO UNIFICADA COMPLETA — timeline do processo */}
+        {/* ABA 5: VISÃO UNIFICADA COMPLETA — mapa visual + timeline */}
         <TabsContent value="visao-unificada" className="space-y-6">
+          <UnifiedRequirementsMap familyId={familyId} />
           <ProcessTimeline familyId={familyId} />
         </TabsContent>
       </Tabs>

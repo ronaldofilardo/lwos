@@ -78,7 +78,7 @@ describe("first-access setPassword", () => {
     ).resolves.toEqual({ success: true });
 
     expect(dbMocks.createUser).not.toHaveBeenCalled();
-    expect(bcryptMocks.default.hash).not.toHaveBeenCalled();
+    expect(bcryptMocks.default.hash).toHaveBeenCalledWith("senha123", 12);
     expect(insertValues).toHaveBeenCalledWith(
       expect.objectContaining({
         familyId: "familia-1",
@@ -87,7 +87,7 @@ describe("first-access setPassword", () => {
       })
     );
     expect(onConflictDoNothing).toHaveBeenCalledTimes(1);
-    expect(updateWhere).toHaveBeenCalledTimes(1);
+    expect(updateWhere).toHaveBeenCalledTimes(2);
   });
 
   it("resolve corrida de criação reconsultando o e-mail e concede vínculo", async () => {

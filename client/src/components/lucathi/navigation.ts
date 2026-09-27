@@ -6,3 +6,9 @@ export const navigationItems = [
   { label: "Patrimônio", path: "/patrimonio", icon: Building2 },
   { label: "Relatórios", path: "/relatorios", icon: FileText },
 ] as const;
+
+/** Sidebar do titular (CLIENTE): só o essencial, sem módulos da equipe. */
+export const clientNavigationItems = [
+  { label: "Início", path: "/dashboard", icon: LayoutDashboard },
+  { label: "Minha família", path: "/minha-familia", icon: UsersRound },
+] as const;

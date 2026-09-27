@@ -150,6 +150,59 @@ export const familyRouter = router({
 
       return { token, fullName: contact.fullName };
     }),
+  generatePasswordResetLink: protectedProcedure
+    .input(z.object({ familyId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const user = requireRole(ctx, ["SOCIO"]);
+      const db = await requireDatabase();
+
+      const existingAccess = await db
+        .select({ id: familyAccess.id })
+        .from(familyAccess)
+        .where(
+          and(
+            eq(familyAccess.familyId, input.familyId),
+            eq(familyAccess.accessRole, "CLIENTE")
+          )
+        )
+        .limit(1);
+      if (!existingAccess[0])
+        throw new Error(
+          "Esta família não possui acesso de cliente ativo. Gere um link de primeiro acesso."
+        );
+
+      const contact = await getPrimaryContact(input.familyId);
+      if (!contact)
+        throw new Error(
+          "Família sem titular."
+        );
+      if (!contact.taxId) throw new Error("Titular sem CPF cadastrado.");
+
+      const token = randomBytes(24).toString("base64url");
+      const linkId = createId();
+      await db.insert(firstAccessLinks).values({
+        id: linkId,
+        familyId: input.familyId,
+        personId: contact.id,
+        tokenHash: hashToken(token),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        createdBy: String(user.id),
+      });
+
+      try {
+        await recordAudit({
+          action: "LINK_REDEFINICAO_SENHA_GERADO",
+          entityType: "FAMILIA",
+          entityId: input.familyId,
+          actorUserId: user.id,
+          familyId: input.familyId,
+        });
+      } catch {
+        /* audit failure should not break main operation */
+      }
+
+      return { token, fullName: contact.fullName };
+    }),
   getDashboard: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user!;
     if (user.role === "CLIENTE") return getClientDashboardData(user.id);

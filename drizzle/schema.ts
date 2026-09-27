@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -640,6 +641,21 @@ export const auditLogs = pgTable(
     createdAt: auditTime,
   },
   table => [index("audit_family_idx").on(table.familyId)]
+);
+
+export const fileBlobs = pgTable(
+  "fileBlobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: varchar("key", { length: 600 }).notNull().unique(),
+    fileName: varchar("fileName", { length: 300 }).notNull(),
+    mimeType: varchar("mimeType", { length: 150 }).notNull(),
+    sizeBytes: integer("sizeBytes").notNull(),
+    sha256: varchar("sha256", { length: 64 }).notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [uniqueIndex("fileBlobs_key_key").on(table.key)]
 );
 
 export type User = typeof users.$inferSelect;

@@ -1,5 +1,12 @@
 import { mergeConfig, defineConfig } from "vitest/config";
-import viteConfig from "./vite.config";
+import viteConfigExport from "./vite.config";
+
+// vite.config.ts exporta uma função (precisa do mode para ler .env);
+// resolvemos para objeto antes de mesclar.
+const viteConfig =
+  typeof viteConfigExport === "function"
+    ? viteConfigExport({ mode: "test", command: "serve" })
+    : viteConfigExport;
 
 export default mergeConfig(
   viteConfig,

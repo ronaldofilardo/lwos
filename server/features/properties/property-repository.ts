@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 import { encumbrances, properties, propertyOwners } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
@@ -21,6 +21,21 @@ function totalOwnership(rows: { ownershipPercentage: string | null }[]) {
 export async function createPropertyRecord(input: z.infer<typeof propertyInputSchema>) {
   const db = await requireDatabase();
   const id = createId();
+
+  // Verificar se já existe um imóvel com mesma descrição e cidade para esta família
+  const existingProperty = await db.select().from(properties).where(
+    and(
+      eq(properties.familyId, input.familyId),
+      eq(properties.description, input.description),
+      eq(properties.propertyCity, input.propertyCity)
+    )
+  ).limit(1);
+
+  if (existingProperty.length > 0) {
+    // Já existe este imóvel integralizado - retornar o ID existente
+    return existingProperty[0].id;
+  }
+
   await db.insert(properties).values({
     ...input,
     id,

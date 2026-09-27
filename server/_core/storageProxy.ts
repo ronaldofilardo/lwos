@@ -22,7 +22,7 @@ const MIME_BY_EXT: Record<string, string> = {
  * mesma regra de acesso do tRPC (userHasFamilyAccess) é aplicada aqui.
  */
 export function registerStorageProxy(app: Express) {
-  app.get("/local-storage/*", async (req, res) => {
+  app.get("/api/local-storage/*", async (req, res) => {
     let user;
     try {
       user = await authenticateRequest(req);

@@ -5,7 +5,7 @@ import { assertFamilyAccess } from "../access/family-access";
 import { requireRole } from "../access/authorization";
 import { recordAudit } from "../audit/audit-repository";
 import {
-  createDocumentRecord,
+  findOrCreateDocumentRecord,
   getDocumentRecord,
   listDocumentRecords,
   listVersions,
@@ -42,7 +42,8 @@ export const documentRouter = router({
     .input(createDocumentSchema)
     .mutation(async ({ ctx, input }) => {
       const user = requireRole(ctx, TEAM_ROLES);
-      const documentId = await createDocumentRecord(input);
+      await assertFamilyAccess(ctx, input.familyId);
+      const documentId = await findOrCreateDocumentRecord(input);
       await recordAudit({
         action: "DOCUMENTO_CRIADO",
         entityType: "DOCUMENTO",

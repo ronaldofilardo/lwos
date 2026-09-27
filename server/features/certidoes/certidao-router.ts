@@ -16,6 +16,8 @@ export const certidaoRouter = router({
   list: protectedProcedure
     .input(z.object({ familyId: z.string() }))
     .query(async ({ ctx, input }) => {
+      // Leitura liberada para o titular (CLIENTE) com vínculo na família;
+      // gerar/atualizar continua restrito à equipe (TEAM_ROLES / SOCIO).
       await assertFamilyAccess(ctx, input.familyId);
       return listCertidaoRecords(input.familyId);
     }),

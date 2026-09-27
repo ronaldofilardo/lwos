@@ -20,6 +20,7 @@ import { resetRateLimits } from "../../_core/rateLimit";
 import { leadRouter } from "./lead-router";
 
 const leadInput = {
+  familyId: "family-123",
   fullName: "Interessado Teste",
   taxId: "11122233344",
   email: "interessado@exemplo.com",
@@ -30,7 +31,7 @@ const leadInput = {
 };
 
 function caller(ip: string) {
-  return leadRouter.createCaller({ req: { ip } as never, res: {} as never, user: null });
+  return leadRouter.createCaller({ req: { ip } as never, res: {} as never, user: { role: "SOCIO" } });
 }
 
 describe("leads.create rate limit", () => {

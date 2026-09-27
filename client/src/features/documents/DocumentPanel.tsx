@@ -1,5 +1,5 @@
 import { FileStack, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { StatusBadge } from "@/components/lucathi/StatusBadge";
@@ -15,13 +15,22 @@ import {
   isResolvedStatus,
 } from "./groupDocuments";
 
-export function DocumentPanel({ familyId }: { familyId: string }) {
+export function DocumentPanel({
+  familyId,
+  sociedadesExtras,
+}: {
+  familyId: string;
+  sociedadesExtras?: ReactNode;
+}) {
   const { documents, loading } = useDocuments(familyId);
   const { user } = useAuth();
   const actions = useDocumentActions(familyId);
   const canReview = user?.role === "SOCIO";
   const canEdit = user?.role === "SOCIO" || user?.role === "ANALISTA";
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewModalReason, setReviewModalReason] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [sameAddressState, setSameAddressState] = useState<Record<string, boolean>>({});
 
   const family = trpc.families.get.useQuery(
     { familyId },
@@ -178,25 +187,49 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                       </div>
 
                       <div className="mt-3 space-y-3">
-                        {group.documents.map(document => (
-                          <div
-                            key={document.id}
-                            className="rounded-xl border border-lucathi-line bg-white p-4 transition-all"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-lucathi-navy">
-                                  {document.category}
-                                </p>
-                                <p className="text-xs text-lucathi-gray">
-                                  Versão atual:{" "}
-                                  {document.currentVersion
-                                    ? `v${document.currentVersion}`
-                                    : "não enviada"}
-                                </p>
+                        {group.documents.map(document => {
+                          const person = people.data?.find(p => p.id === document.entityId);
+                          const isSingleSon = person?.vinculo === "FILHO" && person?.civilStatus === "SOLTEIRO";
+                          const isAddressDoc = document.category === "Comprovante de endereço";
+                          
+                          return (
+                            <div
+                              key={document.id}
+                              className="rounded-xl border border-lucathi-line bg-white p-4 transition-all"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-lucathi-navy">
+                                    {document.category}
+                                  </p>
+                                  {isSingleSon && isAddressDoc && (
+                                    <div className="mt-1 flex items-center" onClick={e => e.stopPropagation()}>
+                                      <input
+                                        type="checkbox"
+                                        id={`sameAddress_${document.id}`}
+                                        checked={!!sameAddressState[document.id]}
+                                        onChange={e => {
+                                          setSameAddressState(prev => ({
+                                            ...prev,
+                                            [document.id]: e.target.checked
+                                          }));
+                                        }}
+                                        className="rounded border-lucathi-line"
+                                      />
+                                      <label htmlFor={`sameAddress_${document.id}`} className="text-xs text-lucathi-gray ml-2">
+                                        Mesmo endereço do titular
+                                      </label>
+                                    </div>
+                                  )}
+                                  <p className="text-xs text-lucathi-gray">
+                                    Versão atual:{" "}
+                                    {document.currentVersion
+                                      ? `v${document.currentVersion}`
+                                      : "não enviada"}
+                                  </p>
+                                </div>
+                                <StatusBadge status={document.status} />
                               </div>
-                              <StatusBadge status={document.status} />
-                            </div>
 
                             {document.status === "DISPENSADO" &&
                             document.dispensationReason ? (
@@ -221,15 +254,29 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                               </div>
                             ) : null}
 
+                            {document.status === "REJEITADO" && canEdit && (
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setShowReviewModal(true);
+                                }}
+                                className="mt-2 text-sm text-blue-600 underline cursor-pointer hover:text-blue-800"
+                              >
+                                Solicitar novo documento
+                              </button>
+                            )}
+
                             <div className="mt-3">
                               <DocumentActions
                                 documentId={document.id}
                                 canReview={canReview}
+                                disabled={sameAddressState[document.id]}
                                 busy={
                                   actions.uploading ||
                                   actions.reviewing ||
                                   actions.dispensing
                                 }
+                                status={document.status}
                                 onUpload={file =>
                                   actions.upload(document.id, file)
                                 }
@@ -244,18 +291,65 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
 
                             <DocumentVersionHistory
                               documentId={document.id}
+                              currentVersion={document.currentVersion || undefined}
+                              documentStatus={document.status}
                             />
-                          </div>
-                        ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 })}
               </div>
+
+              {section.key === "SOCIEDADE" && sociedadesExtras ? (
+                <div className="mt-4">{sociedadesExtras}</div>
+              ) : null}
             </section>
           );
         })}
       </div>
+
+      {showReviewModal ? (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold text-lucathi-navy mb-4">
+              Solicitar novo documento
+            </h3>
+            <p className="text-lucathi-gray mb-4">
+              Informe o motivo da nova solicitação
+            </p>
+            <textarea
+              value={reviewModalReason}
+              onChange={e => setReviewModalReason(e.target.value)}
+              placeholder="Motivo da solicitação"
+              className="w-full p-3 border border-lucathi-line rounded-md mb-4 h-20"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowReviewModal(false);
+                  setReviewModalReason("");
+                }}
+                className="flex-1 py-2 border border-lucathi-line rounded-md text-lucathi-gray hover:bg-lucathi-mist"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setShowReviewModal(false);
+                  setReviewModalReason("");
+                  toast.success("Solicitação enviada ao titular");
+                }}
+                className="flex-1 py-2 bg-lucathi-navy text-white rounded-md hover:bg-lucathi-dark"
+              >
+                Enviar solicitação
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

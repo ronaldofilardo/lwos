@@ -15,6 +15,9 @@ import { PlaceholderPage } from "./pages/PlaceholderPage";
 import PrimeiroAcesso from "./pages/PrimeiroAcesso";
 import Interesse from "./pages/Interesse";
 import Leads from "./pages/Leads";
+import ClientFamilyPage, {
+  ClientFamilyIndex,
+} from "./pages/ClientFamilyPage";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -26,6 +29,8 @@ function Router() {
       <Route path={"/dashboard"}>{() => <AuthGate><AppShell><Dashboard /></AppShell></AuthGate>}</Route>
       <Route path={"/interessados"}>{() => <AuthGate><AppShell><Leads /></AppShell></AuthGate>}</Route>
       <Route path={"/portal/:token"} component={ClientPortalPage} />
+      <Route path={"/minha-familia/:familyId"}>{() => <AuthGate><AppShell><ClientFamilyPage /></AppShell></AuthGate>}</Route>
+      <Route path={"/minha-familia"}>{() => <AuthGate><AppShell><ClientFamilyIndex /></AppShell></AuthGate>}</Route>
       <Route path={"/familias/:familyId"}>{() => <AuthGate><AppShell><FamilyWorkspacePage /></AppShell></AuthGate>}</Route>
       <Route path={"/familias"}>{() => <AuthGate><AppShell><FamilyPage /></AppShell></AuthGate>}</Route>
       <Route path={"/patrimonio"}>{() => <AppShell><PlaceholderPage title="Patrimônio" description="Imóveis, gravames, sociedades e integralizações já possuem contratos de servidor e receberão a camada operacional nesta rota." /></AppShell>}</Route>

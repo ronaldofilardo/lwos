@@ -8,8 +8,8 @@ import { requireRole } from "../access/authorization";
 import { recordAudit } from "../audit/audit-repository";
 
 export const userRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
-    requireRole(ctx, ["SOCIO", "ADMIN"]);
+list: protectedProcedure.query(async ({ ctx }) => {
+    requireRole(ctx, ["SOCIO"]);  // ← somente Sócio
     const db = await requireDatabase();
     return db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).orderBy(desc(users.lastSignedIn));
   }),

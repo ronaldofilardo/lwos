@@ -1,13 +1,18 @@
 import { checkRateLimit } from "../../_core/rateLimit";
 import { publicProcedure, protectedProcedure, router } from "../../_core/trpc";
+import { TEAM_ROLES } from "@shared/domain/roles";
 import { requireRole } from "../access/authorization";
+import { assertFamilyAccess } from "../access/family-access";
 import { recordAudit } from "../audit/audit-repository";
 import { acceptLeadRecord, createLeadRecord, listLeadRecords, rejectLeadRecord } from "./lead-repository";
 import { leadAcceptSchema, leadCreateSchema, leadRejectSchema } from "./lead-types";
 
 export const leadRouter = router({
   // Pública — usada pela tela de "Tenho interesse" no login, sem autenticação.
-  create: publicProcedure.input(leadCreateSchema).mutation(async ({ ctx, input }) => {
+  create: protectedProcedure.input(leadCreateSchema).mutation(async ({ ctx, input }) => {
+    if (!input.familyId) throw new Error("familyId é obrigatório para criação de lead.");
+    const user = requireRole(ctx, TEAM_ROLES);
+    await assertFamilyAccess(ctx, input.familyId);
     checkRateLimit(`lead:create:${ctx.req.ip ?? "unknown"}`, 10);
     return createLeadRecord(input);
   }),

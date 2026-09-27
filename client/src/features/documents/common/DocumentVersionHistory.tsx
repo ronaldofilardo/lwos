@@ -1,8 +1,17 @@
 import { Copy, History } from "lucide-react";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { StatusBadge } from "@/components/lucathi/StatusBadge";
 
-export function DocumentVersionHistory({ documentId }: { documentId: string }) {
+export function DocumentVersionHistory({
+  documentId,
+  currentVersion,
+  documentStatus,
+}: {
+  documentId: string;
+  currentVersion?: number;
+  documentStatus: string;
+}) {
   const versions = trpc.documents.versions.useQuery({ documentId });
   const [copied, setCopied] = useState<string | null>(null);
   const copyHash = async (hash: string) => {
@@ -23,8 +32,20 @@ export function DocumentVersionHistory({ documentId }: { documentId: string }) {
           className="mt-1 flex items-center gap-2 text-xs text-lucathi-gray"
         >
           <span className="flex-1 truncate">
-            v{version.versionNumber} · {version.originalName}
+            <a
+              href={`/api/local-storage/${version.storageKey}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-lucathi-navy hover:underline hover:text-lucathi-deep cursor-pointer"
+            >
+              v{version.versionNumber} · {version.originalName}
+            </a>
           </span>
+          {version.versionNumber === currentVersion && (
+            <div className="scale-75 origin-right">
+              <StatusBadge status={documentStatus} />
+            </div>
+          )}
           <span
             className="font-mono text-[10px] bg-white/70 px-1.5 py-0.5 rounded shrink-0 max-w-[140px] truncate"
             title={version.sha256}

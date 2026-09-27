@@ -70,6 +70,9 @@ export const firstAccessRouter = router({
       const existing = await getUserByEmail(person.email);
       if (existing) {
         userId = existing.id;
+        const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+        const { users } = await import("../../../drizzle/schema");
+        await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
       } else {
         const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
         try {

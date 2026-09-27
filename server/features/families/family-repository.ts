@@ -1,5 +1,5 @@
 import { desc, eq, count, inArray, and } from "drizzle-orm";
-import { families as familiesTable, projects, people, documents, familyAccess } from "../../../drizzle/schema";
+import { families as familiesTable, projects, people, documents, familyAccess, fileBlobs } from "../../../drizzle/schema";
 import { createId } from "../_shared/ids";
 import { requireDatabase } from "../_shared/database";
 import { readdir, stat } from "node:fs/promises";
@@ -105,27 +105,69 @@ export async function getClientDashboardData(userId: number) {
 }
 
 /**
- * Storage local (visão de time): tudo dentro de STORAGE_ROOT.
- * `allowedFolders`, quando informado, restringe a listagem a essas subpastas —
- * usado pro CLIENTE, que só pode ver a pasta de storage da(s) família(s) dele.
+ * Listagem de arquivos/pastas no storage.
+ * Como o storage agora é no banco de dados (fileBlobs), esta função
+ * agrupa as keys por prefixo de pasta e retorna o tamanho total por pasta.
+ *
+ * `allowedFolders`, quando informado, restringe a listagem a essas pastas
+ * (matching pelo prefixo da key). usado pelo CLIENTE (via listClientStorageFiles).
  */
 export async function listStorageFiles(allowedFolders?: string[]): Promise<{ path: string; size: number; isDirectory: boolean }[]> {
-  const root = process.env.STORAGE_ROOT ?? "";
-  if (!root) return [];
-  const scoped = allowedFolders !== undefined;
-  if (scoped && allowedFolders.length === 0) return [];
-  try {
-    const entries = await readdir(root, { withFileTypes: true });
-    const filtered = scoped ? entries.filter(entry => allowedFolders!.includes(entry.name)) : entries;
-    const items = await Promise.all(filtered.map(async (entry) => {
-      const fullPath = path.join(root, entry.name);
-      const stats = await stat(fullPath);
-      return { path: fullPath, size: stats.size, isDirectory: entry.isDirectory() };
-    }));
-    return items;
-  } catch {
-    return [];
+  const db = await requireDatabase();
+
+  // Busca todas as keys no banco
+  const allKeys = await db.select({ key: fileBlobs.key, sizeBytes: fileBlobs.sizeBytes }).from(fileBlobs);
+
+  // Agrupa por pasta (primeiro segmento da key)
+  const folderMap = new Map<string, { size: number; fileCount: number }>();
+
+  for (const { key, sizeBytes } of allKeys) {
+    // O formato da key é "familyId/relativePath"
+    // O primeiro segmento após o "/" é a "pasta" raiz a ser listada
+    const parts = key.split("/");
+    if (parts.length === 0) continue;
+
+    const folderName = parts[0]; // ex: "familia-123"
+    const fileName = parts.slice(1).join("/") || ""; // restante do caminho
+
+    if (!folderMap.has(folderName)) {
+      folderMap.set(folderName, { size: 0, fileCount: 0 });
+    }
+    folderMap.get(folderName)!.size += (sizeBytes ?? 0);
+    folderMap.get(folderName)!.fileCount += 1;
   }
+
+  // Se houver pastas definidas como allowed, filtramos
+  const result: { path: string; size: number; isDirectory: boolean }[] = [];
+
+  if (allowedFolders !== undefined) {
+    // Modo restrito: apenas pastas solicitadas
+    for (const folder of allowedFolders) {
+      const info = folderMap.get(folder);
+      if (info) {
+        result.push({
+          path: folder,
+          size: info.size,
+          isDirectory: true,
+        });
+        // Também inclui os arquivos soltos dentro dessa pasta, se houver
+        // (aqui simplificamos: apenas a pasta)
+      }
+    }
+  } else {
+    // Modo geral: listar todas as pastas e arquivos
+    for (const [folderName, info] of folderMap) {
+      result.push({
+        path: folderName,
+        size: info.size,
+        isDirectory: true,
+      });
+      // Poderia também listar arquivos individuais aqui, mas o frontend
+      // atual espera pastas no topo. Mantemos simples.
+    }
+  }
+
+  return result;
 }
 
 export async function listClientStorageFiles(userId: number) {

@@ -38,12 +38,14 @@ function isExpired(validUntil: string | null) {
 function CertidaoRowItem({
   row,
   canEdit,
+  canUpload,
   onStatusChange,
   onUpload,
   busy,
 }: {
   row: CertidaoRow;
   canEdit: boolean;
+  canUpload: boolean;
   onStatusChange: (certidaoId: string, status: CertidaoStatus, validUntil?: string) => void;
   onUpload: (documentId: string, file: File) => void;
   busy: boolean;
@@ -66,9 +68,6 @@ function CertidaoRowItem({
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-lucathi-line bg-white px-3 py-2.5">
       <div className="min-w-40 flex-1">
         <p className="text-sm font-semibold text-lucathi-navy">
-          {row.subjectName ?? "Registro não vinculado"}
-        </p>
-        <p className="text-xs text-lucathi-gray">
           {certidaoTypeLabels[row.type as keyof typeof certidaoTypeLabels] ?? row.type}
         </p>
       </div>
@@ -122,7 +121,7 @@ function CertidaoRowItem({
             ? `v${row.documentCurrentVersion}`
             : "sem arquivo"}
         </span>
-        {row.documentId ? (
+        {canUpload && row.documentId ? (
           <Button
             size="sm"
             variant="outline"
@@ -150,7 +149,14 @@ function CertidaoRowItem({
   );
 }
 
-export function CertidaoPanel({ familyId }: { familyId: string }) {
+export function CertidaoPanel({
+  familyId,
+  readOnly = false,
+}: {
+  familyId: string;
+  /** Titular (CLIENTE): mostra apenas status/validade, sem gerar nem anexar. */
+  readOnly?: boolean;
+}) {
   const { user } = useAuth();
   const utils = trpc.useUtils();
   const canEdit = user?.role === "SOCIO";
@@ -262,36 +268,51 @@ export function CertidaoPanel({ familyId }: { familyId: string }) {
                 </span>
               </div>
 
-              <div className="mt-3 space-y-2">
-                {scoped.map(row => (
-                  <CertidaoRowItem
-                    key={row.id}
-                    row={row}
-                    canEdit={canEdit}
-                    busy={updateStatus.isPending || upload.isPending}
-                    onStatusChange={(certidaoId, status, validUntil) =>
-                      updateStatus.mutate({ certidaoId, status, validUntil })
-                    }
-                    onUpload={(documentId, file) => {
-                      void (async () => {
-                        try {
-                          const base64Data = await readAsBase64(file);
-                          await upload.mutateAsync({
-                            documentId,
-                            fileName: file.name,
-                            mimeType: file.type,
-                            base64Data,
-                          });
-                        } catch (error) {
-                          toast.error(
-                            error instanceof Error
-                              ? error.message
-                              : "Falha ao enviar o arquivo."
-                          );
+              <div className="mt-3 space-y-4">
+                {Object.entries(
+                  scoped.reduce((acc, row) => {
+                    const key = row.subjectName ?? "Registro não vinculado";
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(row);
+                    return acc;
+                  }, {} as Record<string, typeof scoped>)
+                ).map(([subjectName, items]) => (
+                  <div key={subjectName} className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray px-1 pb-1">
+                      {subjectName}
+                    </h4>
+                    {items.map(row => (
+                      <CertidaoRowItem
+                        key={row.id}
+                        row={row}
+                        canEdit={canEdit}
+                        canUpload={!readOnly}
+                        busy={updateStatus.isPending || upload.isPending}
+                        onStatusChange={(certidaoId, status, validUntil) =>
+                          updateStatus.mutate({ certidaoId, status, validUntil })
                         }
-                      })();
-                    }}
-                  />
+                        onUpload={(documentId, file) => {
+                          void (async () => {
+                            try {
+                              const base64Data = await readAsBase64(file);
+                              await upload.mutateAsync({
+                                documentId,
+                                fileName: file.name,
+                                mimeType: file.type,
+                                base64Data,
+                              });
+                            } catch (error) {
+                              toast.error(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Falha ao enviar o arquivo."
+                              );
+                            }
+                          })();
+                        }}
+                      />
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>
