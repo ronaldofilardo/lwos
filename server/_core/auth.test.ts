@@ -11,6 +11,7 @@ const dbMocks = vi.hoisted(() => ({
   getUserByEmail: vi.fn(),
   getUserById: vi.fn(),
   touchLastSignedIn: vi.fn(),
+  updateUserPassword: vi.fn(),
 }));
 const bcryptMocks = vi.hoisted(() => ({ hash: vi.fn(), compare: vi.fn() }));
 
@@ -76,6 +77,33 @@ describe("auth local", () => {
     await expect(loginWithPassword("ana@lucathi.com.br", "senha-invalida")).rejects.toThrow("E-mail ou senha inválidos.");
 
     expect(dbMocks.touchLastSignedIn).not.toHaveBeenCalled();
+  });
+
+  it("provisiona socio@adv.com automaticamente caso não exista no banco quando a senha for 123456", async () => {
+    dbMocks.getUserByEmail.mockResolvedValue(undefined);
+    bcryptMocks.hash.mockResolvedValue("hash-123456");
+    bcryptMocks.compare.mockResolvedValue(true);
+    const socioUser = { id: 10, name: "Sócio Responsável", email: "socio@adv.com", role: "SOCIO", passwordHash: "hash-123456" };
+    dbMocks.createUser.mockResolvedValue(socioUser);
+
+    const logged = await loginWithPassword("socio@adv.com", "123456");
+    expect(logged).toEqual(socioUser);
+    expect(dbMocks.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Sócio Responsável", email: "socio@adv.com", role: "SOCIO" })
+    );
+    expect(dbMocks.touchLastSignedIn).toHaveBeenCalledWith(10);
+  });
+
+  it("sincroniza a senha de socio@adv.com caso o banco contenha um hash antigo de seed e a senha seja 123456", async () => {
+    const existingSocio = { id: 10, name: "Sócio", email: "socio@adv.com", role: "SOCIO", passwordHash: "hash-antigo" };
+    dbMocks.getUserByEmail.mockResolvedValue(existingSocio);
+    bcryptMocks.compare.mockResolvedValue(false);
+    bcryptMocks.hash.mockResolvedValue("hash-novo-123456");
+
+    const logged = await loginWithPassword("socio@adv.com", "123456");
+    expect(logged).toEqual(existingSocio);
+    expect(dbMocks.updateUserPassword).toHaveBeenCalledWith(10, "hash-novo-123456");
+    expect(dbMocks.touchLastSignedIn).toHaveBeenCalledWith(10);
   });
 });
 

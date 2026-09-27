@@ -60,4 +60,11 @@ describe("leads.create rate limit", () => {
     const other = caller("3.3.3.3");
     await expect(other.create(leadInput)).resolves.toEqual({ id: "lead-1" });
   });
+
+  it("permite criação pública de interessado sem autenticação (user: null e sem familyId)", async () => {
+    const publicCaller = leadRouter.createCaller({ req: { ip: "4.4.4.4" } as never, res: {} as never, user: null });
+    const { familyId, ...publicInput } = leadInput;
+    await expect(publicCaller.create(publicInput)).resolves.toEqual({ id: "lead-1" });
+    expect(leadMocks.createLeadRecord).toHaveBeenCalledWith(publicInput);
+  });
 });

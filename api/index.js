@@ -1003,7 +1003,7 @@ async function loginWithPassword(email, password) {
   return user;
 }
 function registerAuthRoutes(app2) {
-  app2.post(["/api/auth/login", "/auth/login"], async (req, res) => {
+  const loginHandler = async (req, res) => {
     const { email, password } = req.body ?? {};
     if (typeof email !== "string" || typeof password !== "string") {
       res.status(400).json({ error: "E-mail e senha s\xE3o obrigat\xF3rios." });
@@ -1029,8 +1029,10 @@ function registerAuthRoutes(app2) {
       }
       res.status(401).json({ error: error instanceof Error ? error.message : "Falha no login." });
     }
-  });
-  app2.post(["/api/auth/register", "/auth/register"], async (req, res) => {
+  };
+  app2.post("/api/auth/login", loginHandler);
+  app2.post("/auth/login", loginHandler);
+  const registerHandler = async (req, res) => {
     const { name, email, password } = req.body ?? {};
     if (typeof name !== "string" || typeof email !== "string" || typeof password !== "string") {
       res.status(400).json({ error: "Nome, e-mail e senha s\xE3o obrigat\xF3rios." });
@@ -1050,7 +1052,9 @@ function registerAuthRoutes(app2) {
       }
       res.status(400).json({ error: error instanceof Error ? error.message : "Falha no cadastro." });
     }
-  });
+  };
+  app2.post("/api/auth/register", registerHandler);
+  app2.post("/auth/register", registerHandler);
 }
 async function authenticateRequest(req) {
   const cookies = parseCookies(req.headers.cookie);

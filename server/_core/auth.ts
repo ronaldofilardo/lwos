@@ -126,7 +126,7 @@ export async function loginWithPassword(email: string, password: string): Promis
 }
 
 export function registerAuthRoutes(app: Express) {
-  app.post(["/api/auth/login", "/auth/login"], async (req: Request, res: Response) => {
+  const loginHandler = async (req: Request, res: Response) => {
     const { email, password } = req.body ?? {};
     if (typeof email !== "string" || typeof password !== "string") {
       res.status(400).json({ error: "E-mail e senha são obrigatórios." });
@@ -153,9 +153,11 @@ export function registerAuthRoutes(app: Express) {
       }
       res.status(401).json({ error: error instanceof Error ? error.message : "Falha no login." });
     }
-  });
+  };
+  app.post("/api/auth/login", loginHandler);
+  app.post("/auth/login", loginHandler);
 
-  app.post(["/api/auth/register", "/auth/register"], async (req: Request, res: Response) => {
+  const registerHandler = async (req: Request, res: Response) => {
     const { name, email, password } = req.body ?? {};
     if (typeof name !== "string" || typeof email !== "string" || typeof password !== "string") {
       res.status(400).json({ error: "Nome, e-mail e senha são obrigatórios." });
@@ -176,7 +178,9 @@ export function registerAuthRoutes(app: Express) {
       }
       res.status(400).json({ error: error instanceof Error ? error.message : "Falha no cadastro." });
     }
-  });
+  };
+  app.post("/api/auth/register", registerHandler);
+  app.post("/auth/register", registerHandler);
 }
 
 /** Usado pelo contexto tRPC em cada request. */
