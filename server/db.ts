@@ -73,3 +73,13 @@ export async function touchLastSignedIn(id: number) {
     logInfo("database.touch_last_signed_in_failed");
   }
 }
+
+export async function updateUserPassword(id: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.update(users).set({ passwordHash }).where(eq(users.id, id));
+  } catch {
+    logInfo("database.update_user_password_failed");
+  }
+}
