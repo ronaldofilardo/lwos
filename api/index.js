@@ -1080,6 +1080,28 @@ function getStoragePath(relKey) {
   return path.resolve(root, relKey);
 }
 var cachedDb = null;
+var fileBlobsTableEnsured = false;
+async function ensureFileBlobsTable(db) {
+  if (fileBlobsTableEnsured) return;
+  try {
+    await db.execute(sql2`
+      CREATE TABLE IF NOT EXISTS "fileBlobs" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "key" varchar(600) NOT NULL UNIQUE,
+        "fileName" varchar(300) NOT NULL,
+        "mimeType" varchar(150) NOT NULL,
+        "sizeBytes" integer NOT NULL,
+        "sha256" varchar(64) NOT NULL,
+        "content" text NOT NULL,
+        "createdAt" timestamp DEFAULT now() NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS "fileBlobs_key_key" ON "fileBlobs" USING btree ("key");
+    `);
+    fileBlobsTableEnsured = true;
+  } catch (err) {
+    console.warn("[storage] ensureFileBlobsTable error:", err);
+  }
+}
 function getDb2() {
   if (!cachedDb) {
     try {
@@ -1128,6 +1150,7 @@ async function storagePut(relKey, data, _contentType = "application/octet-stream
   if (!db) {
     throw new Error("Banco de dados indispon\xEDvel para armazenamento.");
   }
+  await ensureFileBlobsTable(db);
   await db.insert(fileBlobs).values({
     key,
     fileName: relKey.split("/").pop() ?? "arquivo",
@@ -1264,7 +1287,7 @@ async function getDocumentVersionByStorageKey(storageKey) {
 // server/features/leads/lead-repository.ts
 init_schema();
 init_database();
-import { and as and2, desc as desc2, eq as eq5 } from "drizzle-orm";
+import { and as and2, desc as desc2, eq as eq5, sql as sql3 } from "drizzle-orm";
 
 // server/features/documents/person-document-categories.ts
 var PERSON_DOCUMENT_CATEGORIES = [
@@ -1470,6 +1493,39 @@ var leadRejectSchema = z3.object({
 });
 
 // server/features/leads/lead-repository.ts
+var leadsTableEnsured = false;
+async function ensureLeadsTable(db) {
+  if (leadsTableEnsured) return;
+  try {
+    await db.execute(sql3`
+      DO $$ BEGIN
+        CREATE TYPE "leadStatus" AS ENUM('PENDENTE', 'ACEITO', 'RECUSADO');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+
+      CREATE TABLE IF NOT EXISTS "leads" (
+        "id" varchar(36) PRIMARY KEY NOT NULL,
+        "fullName" varchar(160) NOT NULL,
+        "taxId" varchar(20) NOT NULL,
+        "email" varchar(320) NOT NULL,
+        "birthDate" date NOT NULL,
+        "fileName" varchar(255) NOT NULL,
+        "mimeType" varchar(100) NOT NULL,
+        "storageKey" varchar(500) NOT NULL,
+        "status" "leadStatus" DEFAULT 'PENDENTE' NOT NULL,
+        "reviewedBy" integer,
+        "reviewNote" text,
+        "familyId" varchar(36),
+        "createdAt" timestamp DEFAULT now() NOT NULL,
+        "updatedAt" timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    leadsTableEnsured = true;
+  } catch (err) {
+    console.warn("[leads] ensureLeadsTable error:", err);
+  }
+}
 async function createLeadRecord(input) {
   if (!ALLOWED_LEAD_MIME_TYPES.has(input.mimeType))
     throw new Error(
@@ -1479,6 +1535,7 @@ async function createLeadRecord(input) {
   if (!bytes.length || bytes.length > 5 * 1024 * 1024)
     throw new Error("Arquivo inv\xE1lido ou maior que 5 MB.");
   const db = await requireDatabase();
+  await ensureLeadsTable(db);
   const id = createId();
   const taxId = input.taxId.replace(/\D/g, "");
   const relativeKey = `leads/${id}/${input.fileName}`;

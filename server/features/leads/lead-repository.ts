@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   leads,
   families as familiesTable,
@@ -18,6 +18,40 @@ import {
 } from "./lead-types";
 import type { z } from "zod";
 
+let leadsTableEnsured = false;
+async function ensureLeadsTable(db: any) {
+  if (leadsTableEnsured) return;
+  try {
+    await db.execute(sql`
+      DO $$ BEGIN
+        CREATE TYPE "leadStatus" AS ENUM('PENDENTE', 'ACEITO', 'RECUSADO');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+
+      CREATE TABLE IF NOT EXISTS "leads" (
+        "id" varchar(36) PRIMARY KEY NOT NULL,
+        "fullName" varchar(160) NOT NULL,
+        "taxId" varchar(20) NOT NULL,
+        "email" varchar(320) NOT NULL,
+        "birthDate" date NOT NULL,
+        "fileName" varchar(255) NOT NULL,
+        "mimeType" varchar(100) NOT NULL,
+        "storageKey" varchar(500) NOT NULL,
+        "status" "leadStatus" DEFAULT 'PENDENTE' NOT NULL,
+        "reviewedBy" integer,
+        "reviewNote" text,
+        "familyId" varchar(36),
+        "createdAt" timestamp DEFAULT now() NOT NULL,
+        "updatedAt" timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    leadsTableEnsured = true;
+  } catch (err) {
+    console.warn("[leads] ensureLeadsTable error:", err);
+  }
+}
+
 export async function createLeadRecord(
   input: z.infer<typeof leadCreateSchema>
 ) {
@@ -30,6 +64,7 @@ export async function createLeadRecord(
     throw new Error("Arquivo inválido ou maior que 5 MB.");
 
   const db = await requireDatabase();
+  await ensureLeadsTable(db);
   const id = createId();
   const taxId = input.taxId.replace(/\D/g, "");
   const relativeKey = `leads/${id}/${input.fileName}`;

@@ -22,6 +22,30 @@ function getStoragePath(relKey: string) {
 // Pool e drizzle compartilhados (igual server/db.ts)
 let cachedDb: ReturnType<typeof drizzle> | null = null;
 
+let fileBlobsTableEnsured = false;
+
+async function ensureFileBlobsTable(db: ReturnType<typeof drizzle>) {
+  if (fileBlobsTableEnsured) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "fileBlobs" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "key" varchar(600) NOT NULL UNIQUE,
+        "fileName" varchar(300) NOT NULL,
+        "mimeType" varchar(150) NOT NULL,
+        "sizeBytes" integer NOT NULL,
+        "sha256" varchar(64) NOT NULL,
+        "content" text NOT NULL,
+        "createdAt" timestamp DEFAULT now() NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS "fileBlobs_key_key" ON "fileBlobs" USING btree ("key");
+    `);
+    fileBlobsTableEnsured = true;
+  } catch (err) {
+    console.warn("[storage] ensureFileBlobsTable error:", err);
+  }
+}
+
 function getDb() {
   if (!cachedDb) {
     try {
@@ -90,6 +114,8 @@ export async function storagePut(
   if (!db) {
     throw new Error("Banco de dados indisponível para armazenamento.");
   }
+
+  await ensureFileBlobsTable(db);
 
   // Insere/atualiza no banco (upsert por key único)
   await db.insert(fileBlobs).values({
