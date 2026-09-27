@@ -62,5 +62,8 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
   });
 }
+  return app;
+}
 
-startServer().catch(console.error);
+const appPromise = startServer().catch(console.error);
+export default appPromise;
