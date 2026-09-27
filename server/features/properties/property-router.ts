@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../../_core/trpc";
-import { TEAM_ROLES } from "@shared/domain/roles";
+import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { assertFamilyAccess } from "../access/family-access";
 import { requireRole } from "../access/authorization";
 import { recordAudit } from "../audit/audit-repository";

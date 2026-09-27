@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { checkRateLimit } from "../../_core/rateLimit";
 import { publicProcedure, protectedProcedure, router } from "../../_core/trpc";
-import { TEAM_ROLES } from "@shared/domain/roles";
+import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { requireRole } from "../access/authorization";
 import { assertFamilyAccess } from "../access/family-access";
 import { recordAudit } from "../audit/audit-repository";

@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { ForbiddenError } from "@shared/_core/errors";
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { ForbiddenError } from "../../shared/_core/errors";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import bcrypt from "bcryptjs";
 import { parse as parseCookieHeader } from "cookie";
 import type { Express, Request, Response } from "express";
@@ -98,7 +98,7 @@ export async function loginWithPassword(email: string, password: string): Promis
 }
 
 export function registerAuthRoutes(app: Express) {
-  app.post("/api/auth/login", async (req: Request, res: Response) => {
+  app.post(["/api/auth/login", "/auth/login"], async (req: Request, res: Response) => {
     const { email, password } = req.body ?? {};
     if (typeof email !== "string" || typeof password !== "string") {
       res.status(400).json({ error: "E-mail e senha são obrigatórios." });
@@ -127,7 +127,7 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  app.post("/api/auth/register", async (req: Request, res: Response) => {
+  app.post(["/api/auth/register", "/auth/register"], async (req: Request, res: Response) => {
     const { name, email, password } = req.body ?? {};
     if (typeof name !== "string" || typeof email !== "string" || typeof password !== "string") {
       res.status(400).json({ error: "Nome, e-mail e senha são obrigatórios." });

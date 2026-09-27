@@ -8,7 +8,7 @@ import { createId } from "../_shared/ids";
 import { requireDatabase } from "../_shared/database";
 import { assertFamilyAccess } from "../access/family-access";
 import { requireRole } from "../access/authorization";
-import { TEAM_ROLES } from "@shared/domain/roles";
+import { TEAM_ROLES } from "../../../shared/domain/roles";
 import {
   createFamilyRecord,
   getFamilyRecord,

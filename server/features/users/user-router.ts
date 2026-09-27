@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { users } from "../../../drizzle/schema";
-import { APP_ROLES } from "@shared/domain/roles";
+import { APP_ROLES } from "../../../shared/domain/roles";
 import { protectedProcedure, router } from "../../_core/trpc";
 import { requireDatabase } from "../_shared/database";
 import { requireRole } from "../access/authorization";

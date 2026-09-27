@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import type { AppRole } from "@shared/domain/roles";
+import type { AppRole } from "../../../shared/domain/roles";
 import type { TrpcContext } from "../../_core/context";
 
 export function requireUser(ctx: TrpcContext) {

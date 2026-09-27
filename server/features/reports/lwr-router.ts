@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { lwrReports } from "../../../drizzle/schema";
 import { protectedProcedure, router } from "../../_core/trpc";
-import { TEAM_ROLES } from "@shared/domain/roles";
+import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import { assertFamilyAccess } from "../access/family-access";

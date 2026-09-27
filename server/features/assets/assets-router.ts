@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TEAM_ROLES } from "@shared/domain/roles";
+import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { protectedProcedure, router } from "../../_core/trpc";
 import { assertFamilyAccess } from "../access/family-access";
 import { requireRole } from "../access/authorization";

@@ -14,7 +14,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { APP_ROLES } from "@shared/domain/roles";
+import { APP_ROLES } from "../shared/domain/roles";
 
 const ids = { id: varchar("id", { length: 36 }).primaryKey() };
 const auditTime = timestamp("createdAt").defaultNow().notNull();
