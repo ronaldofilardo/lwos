@@ -14,12 +14,15 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 registerStorageProxy(app);
 registerAuthRoutes(app);
 
-app.use(
-  "/api/trpc",
-  createExpressMiddleware({
-    router: appRouter,
-    createContext,
-  })
-);
+// Na Vercel, a função api/[...path].ts recebe requests em /api/*
+// O Express precisa aceitar /trpc/* (sem o prefixo /api) porque
+// o serverless function já está "montada" em /api/ pela Vercel.
+const trpcMiddleware = createExpressMiddleware({
+  router: appRouter,
+  createContext,
+});
+
+app.use("/trpc", trpcMiddleware);
+app.use("/api/trpc", trpcMiddleware);
 
 export default app;
