@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const databaseMocks = vi.hoisted(() => ({ requireDatabase: vi.fn() }));
 vi.mock("../_shared/database", () => databaseMocks);
 
-import { userHasFamilyAccess } from "./family-access";
+import { assertFamilyAccess, userHasFamilyAccess } from "./family-access";
 
 const client = { id: 11, role: "CLIENTE" } as never;
 const analyst = { id: 12, role: "ANALISTA" } as never;
@@ -36,5 +36,37 @@ describe("userHasFamilyAccess", () => {
     databaseMocks.requireDatabase.mockResolvedValue({ select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit }) }) }) });
 
     await expect(userHasFamilyAccess(client, "familia-sem-acesso")).resolves.toBe(false);
+  });
+});
+
+describe("assertFamilyAccess", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("exige sessão autenticada antes de consultar a base", async () => {
+    await expect(assertFamilyAccess({ user: null } as never, "familia-1")).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Autenticação necessária.",
+    });
+    expect(databaseMocks.requireDatabase).not.toHaveBeenCalled();
+  });
+
+  it("responde FORBIDDEN para CLIENTE sem associação com a família", async () => {
+    const limit = vi.fn().mockResolvedValue([]);
+    databaseMocks.requireDatabase.mockResolvedValue({ select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit }) }) }) });
+
+    await expect(assertFamilyAccess({ user: client } as never, "familia-2")).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Acesso à família não autorizado.",
+    });
+  });
+
+  it("devolve o usuário autorizado (interno ou CLIENTE com associação)", async () => {
+    await expect(assertFamilyAccess({ user: analyst } as never, "familia-1")).resolves.toBe(analyst);
+    expect(databaseMocks.requireDatabase).not.toHaveBeenCalled();
+
+    const limit = vi.fn().mockResolvedValue([{ id: "acesso-9" }]);
+    databaseMocks.requireDatabase.mockResolvedValue({ select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit }) }) }) });
+
+    await expect(assertFamilyAccess({ user: client } as never, "familia-1")).resolves.toBe(client);
   });
 });

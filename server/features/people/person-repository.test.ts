@@ -22,7 +22,13 @@ vi.mock("../../lib/family-storage-path", () => pathMocks);
 vi.mock("../../lib/family-storage-migration", () => migrationMocks);
 vi.mock("../_shared/ids", () => idMocks);
 
-import { addPersonRecord, setPrimaryContact } from "./person-repository";
+import {
+  addPersonRecord,
+  getPersonRecord,
+  getPrimaryContact,
+  listPeopleByFamily,
+  setPrimaryContact,
+} from "./person-repository";
 
 function transactionDatabase(candidate: unknown) {
   const updateWhere = vi.fn().mockResolvedValue(undefined);
@@ -294,6 +300,239 @@ describe("person-repository", () => {
       "familia-1",
       "cpf-antigo",
       "cpf-novo"
+    );
+  });
+});
+
+describe("consultas de pessoas por família", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function selectDb(rows: Record<string, unknown>[]) {
+    const limit = vi.fn().mockResolvedValue(rows.slice(0, 1));
+    const result = Object.assign(Promise.resolve(rows), { limit });
+    const where = vi.fn().mockReturnValue(result);
+    const from = vi.fn().mockReturnValue({ where });
+    return { db: { select: vi.fn().mockReturnValue({ from }) }, limit, where };
+  }
+
+  it("retorna a pessoa pelo id e null quando ela não existe", async () => {
+    const found = selectDb([{ id: "pessoa-1", fullName: "Ana" }]);
+    databaseMocks.requireDatabase.mockResolvedValue(found.db);
+
+    await expect(getPersonRecord("pessoa-1")).resolves.toEqual({
+      id: "pessoa-1",
+      fullName: "Ana",
+    });
+    expect(found.limit).toHaveBeenCalledWith(1);
+
+    const missing = selectDb([]);
+    databaseMocks.requireDatabase.mockResolvedValue(missing.db);
+    await expect(getPersonRecord("inexistente")).resolves.toBeNull();
+  });
+
+  it("lista todas as pessoas da família sem aplicar limite", async () => {
+    const rows = [{ id: "a" }, { id: "b" }];
+    const listed = selectDb(rows);
+    databaseMocks.requireDatabase.mockResolvedValue(listed.db);
+
+    await expect(listPeopleByFamily("familia-1")).resolves.toEqual(rows);
+    expect(listed.limit).not.toHaveBeenCalled();
+  });
+
+  it("localiza o titular da família ou devolve null", async () => {
+    const primary = selectDb([{ id: "titular", isPrimaryContact: true }]);
+    databaseMocks.requireDatabase.mockResolvedValue(primary.db);
+
+    await expect(getPrimaryContact("familia-1")).resolves.toEqual({
+      id: "titular",
+      isPrimaryContact: true,
+    });
+    expect(primary.limit).toHaveBeenCalledWith(1);
+
+    const none = selectDb([]);
+    databaseMocks.requireDatabase.mockResolvedValue(none.db);
+    await expect(getPrimaryContact("familia-2")).resolves.toBeNull();
+  });
+});
+
+describe("validações de vínculo e campos opcionais", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("cria NETO sem parentPersonId e normaliza regime para NA em estado civil não casado", async () => {
+    const insertValues = vi.fn().mockResolvedValue(undefined);
+    const tx = {
+      insert: vi.fn().mockReturnValue({ values: insertValues }),
+      update: vi.fn(),
+    };
+    databaseMocks.requireDatabase.mockResolvedValue({
+      transaction: vi.fn(
+        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
+      ),
+    });
+    idMocks.createId.mockReturnValue("pessoa-neto");
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Neto",
+        vinculo: "NETO",
+        civilStatus: "SOLTEIRO",
+        maritalRegime: "CPB",
+      } as never)
+    ).resolves.toBe("pessoa-neto");
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maritalRegime: "NA",
+        isPrimaryContact: false,
+        email: null,
+        taxId: null,
+        birthDate: null,
+        parentPersonId: null,
+        spouseName: null,
+      })
+    );
+  });
+
+  it("exige que o pai/mãe de um neto exista na família", async () => {
+    databaseMocks.requireDatabase.mockResolvedValue(transactionDatabase(undefined));
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Neto",
+        vinculo: "NETO",
+        parentPersonId: "pessoa-sumida",
+        civilStatus: "SOLTEIRO",
+        maritalRegime: "NA",
+      } as never)
+    ).rejects.toThrow("Pai/mãe não encontrado nesta família.");
+  });
+
+  it("exige vínculo Neto para o pai/mãe de um bisneto", async () => {
+    databaseMocks.requireDatabase.mockResolvedValue(
+      transactionDatabase({
+        id: "pessoa-filha",
+        vinculo: "FILHO",
+        familyId: "familia-1",
+        fullName: "Filha",
+      })
+    );
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Bisneto",
+        vinculo: "BISNETO",
+        parentPersonId: "pessoa-filha",
+        civilStatus: "SOLTEIRO",
+        maritalRegime: "NA",
+      } as never)
+    ).rejects.toThrow("O pai/mãe de um bisneto(a) deve ter vínculo Neto(a).");
+  });
+
+  it("falha quando o cônjuge aponta para família inexistente", async () => {
+    familyMocks.getFamilyRecord.mockResolvedValue(null);
+    databaseMocks.requireDatabase.mockResolvedValue(transactionDatabase(undefined));
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-fantasma",
+        fullName: "Cônjuge",
+        vinculo: "CONJUGE",
+      } as never)
+    ).rejects.toThrow("Família não encontrada.");
+  });
+
+  function parentAndInsertDb(parent: Record<string, unknown> | undefined) {
+    const parentLimit = vi.fn().mockResolvedValue(parent ? [parent] : []);
+    const parentWhere = vi.fn().mockReturnValue({ limit: parentLimit });
+    const insertValues = vi.fn().mockResolvedValue(undefined);
+    const tx = {
+      insert: vi.fn().mockReturnValue({ values: insertValues }),
+      update: vi.fn(),
+      select: vi.fn(),
+    };
+    const db = {
+      select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: parentWhere }) }),
+      transaction: vi.fn(
+        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
+      ),
+    };
+    return { db, insertValues, parentLimit };
+  }
+
+  it("cria NETO com pai de vínculo Filho válido e apelido do cônjuge normalizado", async () => {
+    const { db, insertValues, parentLimit } = parentAndInsertDb({
+      id: "pessoa-filha",
+      vinculo: "FILHO",
+      familyId: "familia-1",
+      fullName: "Filha",
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idMocks.createId.mockReturnValue("pessoa-neto");
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Neto",
+        vinculo: "NETO",
+        parentPersonId: "pessoa-filha",
+        civilStatus: "SOLTEIRO",
+        maritalRegime: "NA",
+        spouseName: "  Maria  ",
+      } as never)
+    ).resolves.toBe("pessoa-neto");
+
+    expect(parentLimit).toHaveBeenCalledWith(1);
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ vinculo: "NETO", parentPersonId: "pessoa-filha", spouseName: "Maria" })
+    );
+  });
+
+  it("cria BISNETO com pai de vínculo Neto válido", async () => {
+    const { db, insertValues } = parentAndInsertDb({
+      id: "pessoa-neta",
+      vinculo: "NETO",
+      familyId: "familia-1",
+      fullName: "Neta",
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idMocks.createId.mockReturnValue("pessoa-bisneto");
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Bisneto",
+        vinculo: "BISNETO",
+        parentPersonId: "pessoa-neta",
+        civilStatus: "SOLTEIRO",
+        maritalRegime: "NA",
+      } as never)
+    ).resolves.toBe("pessoa-bisneto");
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ vinculo: "BISNETO", parentPersonId: "pessoa-neta" })
+    );
+  });
+
+  it("usa o id da família como rótulo quando o CPF conflitante não tem nome cadastrado", async () => {
+    pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue("familia-desconhecida");
+    familyMocks.getFamilyRecord.mockResolvedValue(null);
+    databaseMocks.requireDatabase.mockResolvedValue(transactionDatabase(undefined));
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Titular",
+        vinculo: "TITULAR",
+        taxId: "11122233344",
+        civilStatus: "SOLTEIRO",
+        maritalRegime: "NA",
+        isPrimaryContact: true,
+      } as never)
+    ).rejects.toThrow(
+      "Este CPF já é o titular de outra família (família familia-desconhecida)."
     );
   });
 });

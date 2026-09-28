@@ -93,4 +93,35 @@ describe("storage proxy", () => {
     expect(res.set).toHaveBeenCalledWith("Cache-Control", "no-store");
     expect(res.send).toHaveBeenCalledWith(Buffer.from("pdf"));
   });
+
+  it("responde 404 quando o arquivo autorizado não existe fisicamente", async () => {
+    authMocks.authenticateRequest.mockResolvedValue({ id: 1, role: "CLIENTE" });
+    documentMocks.getDocumentVersionByStorageKey.mockResolvedValue({ familyId: "familia-1" });
+    accessMocks.userHasFamilyAccess.mockResolvedValue(true);
+    storageMocks.storedFileExists.mockResolvedValue(false);
+
+    const res = response();
+    await handler()({ params: { 0: "familia-1/sumiu.pdf" } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.send).toHaveBeenCalledWith("Arquivo não encontrado.");
+    expect(storageMocks.readStoredFile).not.toHaveBeenCalled();
+  });
+
+  it("responde 500 sem vazar detalhes quando a leitura do arquivo falha", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    authMocks.authenticateRequest.mockResolvedValue({ id: 1, role: "CLIENTE" });
+    documentMocks.getDocumentVersionByStorageKey.mockResolvedValue({ familyId: "familia-1" });
+    accessMocks.userHasFamilyAccess.mockResolvedValue(true);
+    storageMocks.storedFileExists.mockResolvedValue(true);
+    storageMocks.readStoredFile.mockRejectedValue(new Error("disco indisponível"));
+
+    const res = response();
+    await handler()({ params: { 0: "familia-1/doc.pdf" } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.send).toHaveBeenCalledWith("Erro ao ler arquivo.");
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
 });

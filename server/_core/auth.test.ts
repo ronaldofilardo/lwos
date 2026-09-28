@@ -19,8 +19,10 @@ vi.mock("../db", () => dbMocks);
 vi.mock("bcryptjs", () => ({ default: bcryptMocks }));
 vi.mock("./env", () => ({ ENV: { cookieSecret: "teste-seguro" } }));
 
-import { loginWithPassword, registerAuthRoutes, registerUser } from "./auth";
+import { loginWithPassword, registerAuthRoutes, registerUser, authenticateRequest } from "./auth";
 import { resetRateLimits } from "./rateLimit";
+import { SignJWT } from "jose";
+import { COOKIE_NAME } from "../../shared/const";
 
 const user = {
   id: 7,
@@ -190,5 +192,202 @@ describe("auth rotas rate limit", () => {
     await register(req, blocked);
     expect(blocked.status).toHaveBeenCalledWith(429);
     expect(blocked.json).toHaveBeenCalledWith({ error: "Muitas tentativas. Tente novamente mais tarde." });
+  });
+});
+
+describe("auth rotas com sucesso", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetRateLimits();
+  });
+
+  it("valida os campos obrigatórios do cadastro antes de tocar na base", async () => {
+    const { register } = handlers();
+    const res = response();
+
+    await register(request("5.5.5.5", { name: "Ana" }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: "Nome, e-mail e senha são obrigatórios." });
+    expect(dbMocks.createUser).not.toHaveBeenCalled();
+  });
+
+  it("emite cookie de sessão utilizável no login e no cadastro", async () => {
+    const { login, register } = handlers();
+
+    dbMocks.getUserByEmail.mockResolvedValue(user);
+    bcryptMocks.compare.mockResolvedValue(true);
+    const loginRes = response();
+    await login(request("6.6.6.6", { email: "ana@exemplo.com", password: "senha123" }), loginRes);
+
+    expect(loginRes.json).toHaveBeenCalledWith({ success: true });
+    const [cookieName, token] = loginRes.cookie.mock.calls[0];
+    expect(cookieName).toBe(COOKIE_NAME);
+    expect(typeof token).toBe("string");
+    dbMocks.getUserById.mockResolvedValue(user);
+    await expect(
+      authenticateRequest({ headers: { cookie: `${COOKIE_NAME}=${token}` } } as never)
+    ).resolves.toBe(user);
+
+    dbMocks.getUserByEmail.mockResolvedValue(undefined);
+    bcryptMocks.hash.mockResolvedValue("hash-novo");
+    dbMocks.createUser.mockResolvedValue(user);
+    const registerRes = response();
+    await register(
+      request("6.6.6.6", { name: "Ana", email: "ana@exemplo.com", password: "senha123" }),
+      registerRes
+    );
+
+    expect(registerRes.json).toHaveBeenCalledWith({ success: true });
+    expect(registerRes.cookie.mock.calls[0][0]).toBe(COOKIE_NAME);
+    expect(registerRes.status).not.toHaveBeenCalled();
+  });
+
+  it("valida o corpo ausente no login e no cadastro antes de qualquer consulta", async () => {
+    const { login, register } = handlers();
+    const bareReq = { headers: {}, hostname: "localhost", protocol: "http" } as never;
+
+    const loginRes = response();
+    await login(bareReq, loginRes);
+    expect(loginRes.status).toHaveBeenCalledWith(400);
+    expect(loginRes.json).toHaveBeenCalledWith({ error: "E-mail e senha são obrigatórios." });
+
+    const registerRes = response();
+    await register(bareReq, registerRes);
+    expect(registerRes.status).toHaveBeenCalledWith(400);
+    expect(registerRes.json).toHaveBeenCalledWith({ error: "Nome, e-mail e senha são obrigatórios." });
+    expect(dbMocks.getUserByEmail).not.toHaveBeenCalled();
+  });
+
+  it("usa ip padrão quando ausente e responde 'Falha no login' para erro não-Error", async () => {
+    const { login } = handlers();
+    dbMocks.getUserByEmail.mockRejectedValue("erro-opaco");
+    const res = response();
+
+    await login(
+      { headers: {}, hostname: "localhost", protocol: "http", body: { email: "a@b.com", password: "senha123" } } as never,
+      res
+    );
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: "Falha no login." });
+  });
+
+  it("usa ip padrão no cadastro e responde 'Falha no cadastro' para erro não-Error", async () => {
+    const { register } = handlers();
+    dbMocks.getUserByEmail.mockRejectedValue("erro-opaco");
+    const res = response();
+
+    await register(
+      { headers: {}, hostname: "localhost", protocol: "http", body: { name: "Ana", email: "a@b.com", password: "senha123" } } as never,
+      res
+    );
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: "Falha no cadastro." });
+  });
+
+  it("provisiona admin@adv.com sem usuário e sobrevive à corrida de inserção", async () => {
+    const admin = {
+      id: 11,
+      name: "Administrador",
+      email: "admin@adv.com",
+      role: "ADMIN",
+      passwordHash: "hash-admin",
+    };
+
+    dbMocks.getUserByEmail.mockResolvedValue(undefined);
+    bcryptMocks.hash.mockResolvedValue("hash-admin");
+    dbMocks.createUser.mockResolvedValue(admin);
+    bcryptMocks.compare.mockResolvedValue(true);
+    await expect(loginWithPassword("admin@adv.com", "123456")).resolves.toBe(admin);
+    expect(dbMocks.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Administrador", role: "ADMIN", email: "admin@adv.com" })
+    );
+
+    dbMocks.getUserByEmail.mockReset().mockResolvedValueOnce(undefined).mockResolvedValueOnce(admin);
+    dbMocks.createUser.mockReset().mockRejectedValueOnce(new Error("chave duplicada"));
+    await expect(loginWithPassword("admin@adv.com", "123456")).resolves.toBe(admin);
+    expect(dbMocks.getUserByEmail).toHaveBeenLastCalledWith("admin@adv.com");
+  });
+
+  it("sincroniza o hash antigo também para admin@adv.com com a senha bootstrap", async () => {
+    const staleAdmin = {
+      id: 12,
+      name: "Administrador",
+      email: "admin@adv.com",
+      role: "ADMIN",
+      passwordHash: "hash-velho",
+    };
+    dbMocks.getUserByEmail.mockResolvedValue(staleAdmin);
+    bcryptMocks.compare.mockResolvedValue(false);
+    bcryptMocks.hash.mockResolvedValue("hash-novo");
+
+    await expect(loginWithPassword("admin@adv.com", "123456")).resolves.toBe(staleAdmin);
+    expect(dbMocks.updateUserPassword).toHaveBeenCalledWith(12, "hash-novo");
+  });
+});
+
+async function sessionCookie(
+  payload: Record<string, unknown>,
+  options: { secret?: string; expiresInSec?: number } = {}
+) {
+  const key = new TextEncoder().encode(options.secret ?? "teste-seguro");
+  const token = await new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setExpirationTime(Math.floor(Date.now() / 1000) + (options.expiresInSec ?? 60))
+    .sign(key);
+  return `${COOKIE_NAME}=${token}`;
+}
+
+function sessionRequest(cookieHeader?: string) {
+  return { headers: cookieHeader ? { cookie: cookieHeader } : {} } as never;
+}
+
+describe("authenticateRequest", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetRateLimits();
+  });
+
+  it("rejeita requisição sem cookie, com token corrompido ou assinado por outra chave", async () => {
+    await expect(authenticateRequest(sessionRequest())).rejects.toMatchObject({
+      statusCode: 403,
+      message: "Sessão inválida ou ausente",
+    });
+    await expect(authenticateRequest(sessionRequest(`${COOKIE_NAME}=lixo`))).rejects.toMatchObject({
+      statusCode: 403,
+    });
+
+    const forged = await sessionCookie({ userId: 7 }, { secret: "outra-chave" });
+    await expect(authenticateRequest(sessionRequest(forged))).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(dbMocks.getUserById).not.toHaveBeenCalled();
+  });
+
+  it("rejeita sessão expirada e payload cujo userId não é numérico", async () => {
+    const expired = await sessionCookie({ userId: 7 }, { expiresInSec: -60 });
+    await expect(authenticateRequest(sessionRequest(expired))).rejects.toMatchObject({ statusCode: 403 });
+
+    const wrongPayload = await sessionCookie({ userId: "7" });
+    await expect(authenticateRequest(sessionRequest(wrongPayload))).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("resolve o usuário da sessão válida ignorando os demais cookies do cabeçalho", async () => {
+    dbMocks.getUserById.mockResolvedValue(user);
+    const cookieHeader = `${await sessionCookie({ userId: 7 })}; outro=valor; app_session_id_extra=x`;
+
+    await expect(authenticateRequest(sessionRequest(cookieHeader))).resolves.toBe(user);
+    expect(dbMocks.getUserById).toHaveBeenCalledWith(7);
+  });
+
+  it("rejeita sessão válida quando o usuário já não existe", async () => {
+    dbMocks.getUserById.mockResolvedValue(undefined);
+    const cookie = await sessionCookie({ userId: 999 });
+
+    await expect(authenticateRequest(sessionRequest(cookie))).rejects.toMatchObject({
+      statusCode: 403,
+      message: "Usuário não encontrado",
+    });
   });
 });

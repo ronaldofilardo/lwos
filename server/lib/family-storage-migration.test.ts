@@ -42,4 +42,59 @@ describe("migrateFamilyStorageFolder", () => {
     expect(db.update).toHaveBeenCalledTimes(2);
     expect(updateWhere).toHaveBeenCalledTimes(2);
   });
+
+  function failingUpdateDb() {
+    const updateWhere = vi.fn().mockRejectedValue(new Error("banco fora do ar"));
+    return {
+      select: vi
+        .fn()
+        .mockReturnValueOnce({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([{ id: "doc-1" }]) }) })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([{ id: "v-1", storageKey: "cpf-antigo/a.pdf" }]),
+          }),
+        }),
+      update: vi.fn().mockReturnValue({ set: vi.fn().mockReturnValue({ where: updateWhere }) }),
+    };
+  }
+
+  it("compensa revertendo o moveFolder quando os UPDATEs falham", async () => {
+    const db = failingUpdateDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    storageMocks.moveFolder.mockResolvedValue({ moved: true });
+
+    await expect(migrateFamilyStorageFolder("familia-1", "cpf-antigo", "cpf-novo")).rejects.toThrow(
+      "Migração de storage falhou após mover arquivos. 0/1 registros atualizados. Pasta revertida."
+    );
+
+    expect(storageMocks.moveFolder).toHaveBeenNthCalledWith(1, "cpf-antigo", "cpf-novo");
+    expect(storageMocks.moveFolder).toHaveBeenNthCalledWith(2, "cpf-novo", "cpf-antigo");
+  });
+
+  it("mantém o mesmo erro mesmo quando a compensação também falha", async () => {
+    const db = failingUpdateDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    storageMocks.moveFolder
+      .mockResolvedValueOnce({ moved: true })
+      .mockRejectedValueOnce(new Error("fs indisponível"));
+
+    await expect(migrateFamilyStorageFolder("familia-1", "cpf-antigo", "cpf-novo")).rejects.toThrow(
+      "Migração de storage falhou após mover arquivos. 0/1 registros atualizados. Pasta revertida."
+    );
+    expect(storageMocks.moveFolder).toHaveBeenCalledTimes(2);
+  });
+
+  it("não move nada quando a família ainda não tem documentos", async () => {
+    const db = {
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }),
+      }),
+    };
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(migrateFamilyStorageFolder("familia-1", "cpf-antigo", "cpf-novo")).resolves.toEqual({
+      migratedFiles: 0,
+    });
+    expect(storageMocks.moveFolder).not.toHaveBeenCalled();
+  });
 });
