@@ -33,10 +33,10 @@ export default mergeConfig(
           "server/api.ts",
         ],
         thresholds: {
-          lines: 79,
-          statements: 79,
+          lines: 81,
+          statements: 81,
           branches: 92,
-          functions: 77,
+          functions: 80,
         },
       },
     },
