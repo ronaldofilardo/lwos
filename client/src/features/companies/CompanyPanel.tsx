@@ -183,7 +183,7 @@ function StakeholderManager({
               companyId,
               personId: personId || undefined,
               externalName: externalName.trim() || undefined,
-              percentage: Number(percentage),
+              percentage: Number(percentage.replace(',', '.')),
             })
           }
         >
@@ -355,7 +355,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
               contribution.mutate({
                 companyId,
                 propertyId,
-                percentage: Number(contributionPercentage),
+                percentage: Number(contributionPercentage.replace(',', '.')),
               })
             }
           >

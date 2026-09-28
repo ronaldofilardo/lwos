@@ -138,7 +138,7 @@ export function PropertyOwnerForm({
                         updateOwner.mutate({
                           propertyId,
                           ownerId: row.id,
-                          ownershipPercentage: Number(editPercentage),
+                          ownershipPercentage: Number(editPercentage.replace(',', '.')),
                           rightType: editRightType,
                         })
                       }
@@ -234,7 +234,7 @@ export function PropertyOwnerForm({
             addOwner.mutate({
               propertyId,
               personId,
-              ownershipPercentage: Number(percentage),
+              ownershipPercentage: Number(percentage.replace(',', '.')),
               rightType,
             })
           }
