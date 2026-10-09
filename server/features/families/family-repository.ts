@@ -1,5 +1,13 @@
 import { desc, eq, count, inArray, and } from "drizzle-orm";
-import { families as familiesTable, projects, people, documents, familyAccess, fileBlobs } from "../../../drizzle/schema";
+import {
+  families as familiesTable,
+  projects,
+  projectObjectives,
+  people,
+  documents,
+  familyAccess,
+  fileBlobs,
+} from "../../../drizzle/schema";
 import { createId } from "../_shared/ids";
 import { requireDatabase } from "../_shared/database";
 import { readdir, stat } from "node:fs/promises";
@@ -15,8 +23,18 @@ export async function createFamilyRecord(
   const familyId = createId();
   const projectId = createId();
   await db.transaction(async tx => {
-    await tx.insert(familiesTable).values({ ...input, id: familyId, createdBy: String(createdBy) });
+    await tx.insert(familiesTable).values({
+      id: familyId,
+      name: input.name,
+      notes: input.notes,
+      createdBy: String(createdBy),
+    });
     await tx.insert(projects).values({ id: projectId, familyId, title: input.name });
+    // Objetivos múltiplos (Fase 3): uma linha por opção marcada. O schema zod
+    // já exige ao menos uma — o servidor recusa a criação sem objetivo.
+    await tx.insert(projectObjectives).values(
+      input.objectives.map(objective => ({ id: createId(), projectId, objective }))
+    );
   });
   return { familyId, projectId };
 }
@@ -26,6 +44,8 @@ export async function listFamilyRecords() {
   const records = await db.select().from(familiesTable).orderBy(desc(familiesTable.updatedAt));
   if (!records.length) return [];
 
+  const familyIds = records.map(r => r.id);
+
   // Famílias que já têm pelo menos um usuário CLIENTE vinculado (ou seja, o
   // titular já concluiu o primeiro acesso) — usado pra esconder o botão
   // "1º acesso" na tela de famílias, já que gerar um novo link não faz
@@ -33,16 +53,64 @@ export async function listFamilyRecords() {
   const accessRows = await db
     .select({ familyId: familyAccess.familyId })
     .from(familyAccess)
-    .where(and(inArray(familyAccess.familyId, records.map(r => r.id)), eq(familyAccess.accessRole, "CLIENTE")));
+    .where(and(inArray(familyAccess.familyId, familyIds), eq(familyAccess.accessRole, "CLIENTE")));
   const familyIdsWithAccess = new Set(accessRows.map(r => r.familyId));
 
-  return records.map(record => ({ ...record, hasClientAccess: familyIdsWithAccess.has(record.id) }));
+  // Status do projeto (Fase 3): a lista exibe Ativo/Suspenso/Concluído/Cancelado.
+  const projectRows = await db
+    .select({ familyId: projects.familyId, status: projects.status })
+    .from(projects)
+    .where(inArray(projects.familyId, familyIds));
+  const statusByFamily = new Map(projectRows.map(r => [r.familyId, r.status]));
+
+  // Contato do titular (Fase 3): nome, telefone e e-mail na lista de projetos.
+  const titularRows = await db
+    .select({
+      familyId: people.familyId,
+      fullName: people.fullName,
+      email: people.email,
+      phone: people.phone,
+    })
+    .from(people)
+    .where(and(inArray(people.familyId, familyIds), eq(people.isPrimaryContact, true)));
+  const titularByFamily = new Map(titularRows.map(r => [r.familyId, r]));
+
+  return records.map(record => {
+    const titular = titularByFamily.get(record.id);
+    return {
+      ...record,
+      hasClientAccess: familyIdsWithAccess.has(record.id),
+      status: statusByFamily.get(record.id) ?? "ATIVO",
+      titularName: titular?.fullName ?? null,
+      titularEmail: titular?.email ?? null,
+      titularPhone: titular?.phone ?? null,
+    };
+  });
 }
 
 export async function getFamilyRecord(familyId: string) {
   const db = await requireDatabase();
   const result = await db.select().from(familiesTable).where(eq(familiesTable.id, familyId)).limit(1);
-  return result[0] ?? null;
+  const family = result[0] ?? null;
+  if (!family) return null;
+
+  // Status e objetivos do projeto (Fase 3): o subtítulo da Área de Trabalho
+  // mostra os objetivos marcados na criação.
+  const projectRows = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.familyId, familyId))
+    .limit(1);
+  const project = projectRows[0] ?? null;
+  const objectiveRows = project
+    ? await db.select().from(projectObjectives).where(eq(projectObjectives.projectId, project.id))
+    : [];
+
+  return {
+    ...family,
+    status: project?.status ?? "ATIVO",
+    objectives: objectiveRows.map(row => row.objective),
+  };
 }
 
 export interface DashboardData {

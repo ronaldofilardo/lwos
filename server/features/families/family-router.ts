@@ -38,7 +38,9 @@ export const familyRouter = router({
     const records = await Promise.all(
       access.map(item => getFamilyRecord(item.familyId))
     );
-    return records.filter(Boolean);
+    return records.filter(
+      (record): record is NonNullable<typeof record> => record !== null
+    );
   }),
   get: protectedProcedure
     .input(z.object({ familyId: z.string().min(1) }))

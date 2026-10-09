@@ -24,6 +24,20 @@ import { PortalPanel } from "@/features/portal/PortalPanel";
 import { AuditPanel } from "@/features/audit/AuditPanel";
 import { ProcessTimeline } from "./common/ProcessTimeline";
 import { UnifiedRequirementsMap } from "./common/UnifiedRequirementsMap";
+import {
+  projectObjectiveLabels,
+  type ProjectObjective,
+} from "./types";
+
+/** Subtítulo da Área de Trabalho: dois primeiros objetivos + «+N». */
+function formatObjectives(objectives: string[]): string {
+  const labels = objectives.map(
+    objective => projectObjectiveLabels[objective as ProjectObjective] ?? objective
+  );
+  if (labels.length === 0) return "Sem objetivos registrados.";
+  if (labels.length <= 2) return labels.join(" · ");
+  return `${labels.slice(0, 2).join(" · ")} +${labels.length - 2}`;
+}
 
 export function FamilyWorkspacePage() {
   const [, params] = useRoute("/familias/:familyId");
@@ -71,7 +85,7 @@ export function FamilyWorkspacePage() {
         className="-ml-3 text-lucathi-gray hover:text-lucathi-navy"
       >
         <Link href="/familias">
-          <ArrowLeft className="mr-2 size-4" /> Voltar para famílias
+          <ArrowLeft className="mr-2 size-4" /> Voltar para Projetos
         </Link>
       </Button>
 
@@ -80,11 +94,11 @@ export function FamilyWorkspacePage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65">
-              Área de Trabalho do Caso / Projeto Familiar
+              Área de Trabalho - Projeto
             </p>
             <h1 className="mt-2 font-display text-4xl">{family.data.name}</h1>
             <p className="mt-2 text-sm text-white/80">
-              Título do projeto sincronizado com a família.
+              {formatObjectives(family.data.objectives ?? [])}
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 backdrop-blur-sm">

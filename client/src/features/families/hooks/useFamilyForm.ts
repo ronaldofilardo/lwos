@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FamilyFormData } from "../types";
 
-const initial: FamilyFormData = { name: "", notes: "" };
+const initial: FamilyFormData = { name: "", notes: "", objectives: [] };
 
 export function useFamilyForm(onSubmit: (data: FamilyFormData) => Promise<unknown>) {
   const [data, setData] = useState(initial);

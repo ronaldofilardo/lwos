@@ -19,7 +19,9 @@ import {
   families,
   familyAccess,
   fileBlobs,
+  people,
   projects,
+  projectObjectives,
 } from "../../../drizzle/schema";
 import {
   createFamilyRecord,
@@ -41,6 +43,9 @@ type Scenario = {
   documentsTotal?: number;
   accessRows?: { familyId: string }[];
   blobs?: { key: string; sizeBytes: number | null }[];
+  projectRows?: Record<string, unknown>[];
+  titularRows?: { familyId: string; fullName: string; email: string | null; phone: string | null }[];
+  objectiveRows?: { objective: string }[];
 };
 
 function repoDb(scenario: Scenario) {
@@ -54,6 +59,11 @@ function repoDb(scenario: Scenario) {
     }
     if (table === familyAccess) return scenario.accessRows ?? [];
     if (table === fileBlobs) return scenario.blobs ?? [];
+    if (table === projects) return scenario.projectRows ?? [];
+    // O dashboard consulta people como count; a listagem lê o titular.
+    if (table === people)
+      return scenario.titularRows ?? [{ count: scenario.peoplePerFamily ?? 0 }];
+    if (table === projectObjectives) return scenario.objectiveRows ?? [];
     const perFamily = table === documentsTable ? scenario.documentsPerFamily ?? 0 : scenario.peoplePerFamily ?? 0;
     const total = table === documentsTable ? scenario.documentsTotal ?? 0 : scenario.peopleTotal ?? 0;
     if (kind === "where") return [{ count: perFamily }];
@@ -95,36 +105,45 @@ function repoDb(scenario: Scenario) {
 const familyRow = {
   id: "fam-1",
   name: "Família Silva",
-  civilStatus: "CASADO",
-  maritalRegime: "CPB",
   updatedAt: new Date("2026-01-01T10:00:00.000Z"),
 };
 
 describe("family-repository escrita", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("cria família e projeto na mesma transação", async () => {
+  it("cria família, projeto e objetivos na mesma transação", async () => {
     const { db, insertCalls, transaction } = repoDb({});
     databaseMocks.requireDatabase.mockResolvedValue(db);
-    idsMocks.createId.mockReturnValueOnce("fam-9").mockReturnValueOnce("proj-9");
+    idsMocks.createId
+      .mockReturnValueOnce("fam-9")
+      .mockReturnValueOnce("proj-9")
+      .mockReturnValue("obj-id");
 
     await expect(
       createFamilyRecord(
-        { name: "Família Nova", civilStatus: "CASADO", maritalRegime: "CPB" } as never,
+        {
+          name: "Projeto Novo",
+          objectives: ["PROTECAO_PATRIMONIAL", "FILANTROPIA"],
+        } as never,
         7
       )
     ).resolves.toEqual({ familyId: "fam-9", projectId: "proj-9" });
 
     expect(transaction).toHaveBeenCalledTimes(1);
-    expect(insertCalls).toHaveLength(2);
+    expect(insertCalls).toHaveLength(3);
     expect(insertCalls[0].table).toBe(families);
     expect(insertCalls[0].payload).toEqual(
-      expect.objectContaining({ id: "fam-9", name: "Família Nova", createdBy: "7" })
+      expect.objectContaining({ id: "fam-9", name: "Projeto Novo", createdBy: "7" })
     );
     expect(insertCalls[1].table).toBe(projects);
     expect(insertCalls[1].payload).toEqual(
-      expect.objectContaining({ id: "proj-9", familyId: "fam-9", title: "Família Nova" })
+      expect.objectContaining({ id: "proj-9", familyId: "fam-9", title: "Projeto Novo" })
     );
+    expect(insertCalls[2].table).toBe(projectObjectives);
+    expect(insertCalls[2].payload).toEqual([
+      expect.objectContaining({ projectId: "proj-9", objective: "PROTECAO_PATRIMONIAL" }),
+      expect.objectContaining({ projectId: "proj-9", objective: "FILANTROPIA" }),
+    ]);
   });
 });
 
@@ -138,24 +157,53 @@ describe("family-repository listagem", () => {
     expect(db.select).toHaveBeenCalledTimes(1);
   });
 
-  it("marca as famílias que já têm acesso de cliente", async () => {
+  it("marca as famílias que já têm acesso de cliente e traz status/titular", async () => {
     const { db } = repoDb({
       familyList: [familyRow, { ...familyRow, id: "fam-2" }],
       accessRows: [{ familyId: "fam-2" }],
+      projectRows: [
+        { familyId: "fam-1", status: "ATIVO" },
+        { familyId: "fam-2", status: "SUSPENSO" },
+      ],
+      titularRows: [
+        { familyId: "fam-1", fullName: "Ana Silva", email: "ana@exemplo.com", phone: "11999998888" },
+      ],
     });
     databaseMocks.requireDatabase.mockResolvedValue(db);
 
     const records = await listFamilyRecords();
 
     expect(records).toHaveLength(2);
-    expect(records[0]).toMatchObject({ id: "fam-1", hasClientAccess: false });
-    expect(records[1]).toMatchObject({ id: "fam-2", hasClientAccess: true });
+    expect(records[0]).toMatchObject({
+      id: "fam-1",
+      hasClientAccess: false,
+      status: "ATIVO",
+      titularName: "Ana Silva",
+      titularEmail: "ana@exemplo.com",
+      titularPhone: "11999998888",
+    });
+    expect(records[1]).toMatchObject({
+      id: "fam-2",
+      hasClientAccess: true,
+      status: "SUSPENSO",
+      titularName: null,
+      titularEmail: null,
+      titularPhone: null,
+    });
   });
 
-  it("lê uma família específica ou devolve null", async () => {
-    const found = repoDb({ familyGet: [familyRow] });
+  it("lê uma família específica com status e objetivos, ou devolve null", async () => {
+    const found = repoDb({
+      familyGet: [familyRow],
+      projectRows: [{ id: "proj-1", familyId: "fam-1", status: "ATIVO" }],
+      objectiveRows: [{ objective: "PROTECAO_PATRIMONIAL" }, { objective: "FILANTROPIA" }],
+    });
     databaseMocks.requireDatabase.mockResolvedValue(found.db);
-    await expect(getFamilyRecord("fam-1")).resolves.toMatchObject({ id: "fam-1" });
+    await expect(getFamilyRecord("fam-1")).resolves.toMatchObject({
+      id: "fam-1",
+      status: "ATIVO",
+      objectives: ["PROTECAO_PATRIMONIAL", "FILANTROPIA"],
+    });
 
     const missing = repoDb({ familyGet: [] });
     databaseMocks.requireDatabase.mockResolvedValue(missing.db);

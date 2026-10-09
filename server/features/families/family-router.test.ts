@@ -134,7 +134,8 @@ describe("family-router consultas", () => {
 
 describe("family-router criação e acesso do cliente", () => {
   const input = {
-    name: "Família Nova",
+    name: "Projeto Novo",
+    objectives: ["PROTECAO_PATRIMONIAL"],
   };
 
   beforeEach(() => {

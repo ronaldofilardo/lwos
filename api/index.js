@@ -1587,6 +1587,7 @@ async function updateCertidaoRecord(input) {
 import { z as z4 } from "zod";
 
 // server/features/families/family-types.ts
+init_schema();
 import { z as z3 } from "zod";
 var civilStatusSchema = z3.enum([
   "SOLTEIRO",
@@ -1596,9 +1597,11 @@ var civilStatusSchema = z3.enum([
   "UNIAO_ESTAVEL"
 ]);
 var maritalRegimeSchema = z3.enum(["CPB", "CUB", "STB", "STOB", "NA"]);
+var projectObjectiveSchema = z3.enum(projectObjectiveValues);
 var familyInputSchema = z3.object({
-  name: z3.string().min(3).max(160),
-  notes: z3.string().max(2e3).optional()
+  name: z3.string().trim().min(3, "O nome do projeto precisa de ao menos 3 caracteres.").max(160),
+  notes: z3.string().max(2e3).optional(),
+  objectives: z3.array(projectObjectiveSchema).min(1, "Selecione ao menos um objetivo para o projeto.")
 });
 
 // server/features/leads/lead-types.ts
@@ -2069,8 +2072,16 @@ async function createFamilyRecord(input, createdBy) {
   const familyId = createId();
   const projectId = createId();
   await db.transaction(async (tx) => {
-    await tx.insert(families).values({ ...input, id: familyId, createdBy: String(createdBy) });
+    await tx.insert(families).values({
+      id: familyId,
+      name: input.name,
+      notes: input.notes,
+      createdBy: String(createdBy)
+    });
     await tx.insert(projects).values({ id: projectId, familyId, title: input.name });
+    await tx.insert(projectObjectives).values(
+      input.objectives.map((objective) => ({ id: createId(), projectId, objective }))
+    );
   });
   return { familyId, projectId };
 }
@@ -2078,14 +2089,43 @@ async function listFamilyRecords() {
   const db = await requireDatabase();
   const records = await db.select().from(families).orderBy(desc3(families.updatedAt));
   if (!records.length) return [];
-  const accessRows = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(and6(inArray2(familyAccess.familyId, records.map((r) => r.id)), eq9(familyAccess.accessRole, "CLIENTE")));
+  const familyIds = records.map((r) => r.id);
+  const accessRows = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(and6(inArray2(familyAccess.familyId, familyIds), eq9(familyAccess.accessRole, "CLIENTE")));
   const familyIdsWithAccess = new Set(accessRows.map((r) => r.familyId));
-  return records.map((record) => ({ ...record, hasClientAccess: familyIdsWithAccess.has(record.id) }));
+  const projectRows = await db.select({ familyId: projects.familyId, status: projects.status }).from(projects).where(inArray2(projects.familyId, familyIds));
+  const statusByFamily = new Map(projectRows.map((r) => [r.familyId, r.status]));
+  const titularRows = await db.select({
+    familyId: people.familyId,
+    fullName: people.fullName,
+    email: people.email,
+    phone: people.phone
+  }).from(people).where(and6(inArray2(people.familyId, familyIds), eq9(people.isPrimaryContact, true)));
+  const titularByFamily = new Map(titularRows.map((r) => [r.familyId, r]));
+  return records.map((record) => {
+    const titular = titularByFamily.get(record.id);
+    return {
+      ...record,
+      hasClientAccess: familyIdsWithAccess.has(record.id),
+      status: statusByFamily.get(record.id) ?? "ATIVO",
+      titularName: titular?.fullName ?? null,
+      titularEmail: titular?.email ?? null,
+      titularPhone: titular?.phone ?? null
+    };
+  });
 }
 async function getFamilyRecord(familyId) {
   const db = await requireDatabase();
   const result = await db.select().from(families).where(eq9(families.id, familyId)).limit(1);
-  return result[0] ?? null;
+  const family = result[0] ?? null;
+  if (!family) return null;
+  const projectRows = await db.select().from(projects).where(eq9(projects.familyId, familyId)).limit(1);
+  const project = projectRows[0] ?? null;
+  const objectiveRows = project ? await db.select().from(projectObjectives).where(eq9(projectObjectives.projectId, project.id)) : [];
+  return {
+    ...family,
+    status: project?.status ?? "ATIVO",
+    objectives: objectiveRows.map((row) => row.objective)
+  };
 }
 async function getClientFamilyIds(userId) {
   const db = await requireDatabase();
@@ -3315,7 +3355,9 @@ var familyRouter = router({
     const records = await Promise.all(
       access.map((item) => getFamilyRecord(item.familyId))
     );
-    return records.filter(Boolean);
+    return records.filter(
+      (record) => record !== null
+    );
   }),
   get: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
