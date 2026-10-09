@@ -2061,7 +2061,7 @@ async function ensureFamilyDocumentRequirements(familyId) {
 
 // server/features/people/person-repository.ts
 init_schema();
-import { and as and7, eq as eq11 } from "drizzle-orm";
+import { and as and7, eq as eq11, ne } from "drizzle-orm";
 
 // server/features/families/family-repository.ts
 init_schema();
@@ -2245,6 +2245,149 @@ init_database();
 
 // server/features/people/person-types.ts
 import { z as z6 } from "zod";
+
+// shared/validation/digitos.ts
+function onlyDigits2(value) {
+  return value.replace(/\D/g, "");
+}
+
+// shared/validation/cpf.ts
+function normalizarCpf(value) {
+  return onlyDigits2(value);
+}
+function isCpfValido(value) {
+  const cpf = onlyDigits2(value);
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  let soma = 0;
+  for (let i = 0; i < 9; i += 1) soma += Number(cpf[i]) * (10 - i);
+  let resto = soma * 10 % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== Number(cpf[9])) return false;
+  soma = 0;
+  for (let i = 0; i < 10; i += 1) soma += Number(cpf[i]) * (11 - i);
+  resto = soma * 10 % 11;
+  if (resto === 10) resto = 0;
+  return resto === Number(cpf[10]);
+}
+
+// shared/validation/index.ts
+init_uf();
+
+// shared/validation/telefone.ts
+var DDDS_VALIDOS = [
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  21,
+  22,
+  24,
+  27,
+  28,
+  31,
+  32,
+  33,
+  34,
+  35,
+  37,
+  38,
+  41,
+  42,
+  43,
+  44,
+  45,
+  46,
+  47,
+  48,
+  49,
+  51,
+  53,
+  54,
+  55,
+  61,
+  62,
+  63,
+  64,
+  65,
+  66,
+  67,
+  68,
+  69,
+  71,
+  73,
+  74,
+  75,
+  77,
+  79,
+  81,
+  82,
+  83,
+  84,
+  85,
+  86,
+  87,
+  88,
+  89,
+  91,
+  92,
+  93,
+  94,
+  95,
+  96,
+  97,
+  98,
+  99
+];
+function normalizarTelefone(value) {
+  return onlyDigits2(value);
+}
+function isTelefoneValido(value) {
+  let tel = onlyDigits2(value);
+  if (tel.length === 12 && tel.startsWith("55")) tel = tel.slice(2);
+  if (tel.length === 13 && tel.startsWith("55")) tel = tel.slice(2);
+  if (tel.length !== 10 && tel.length !== 11) return false;
+  if (!DDDS_VALIDOS.includes(Number(tel.slice(0, 2)))) {
+    return false;
+  }
+  if (tel.length === 11 && tel[2] !== "9") return false;
+  return true;
+}
+
+// shared/validation/datas.ts
+var FUSO_PADRAO = "America/Sao_Paulo";
+var IDADE_MAXIMA_ANOS = 120;
+var RE_DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+function isDataIsoValida(value) {
+  if (!RE_DATA_ISO.test(value)) return false;
+  const [ano, mes, dia] = value.split("-").map(Number);
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  return data.getUTCFullYear() === ano && data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia;
+}
+function hoje() {
+  return (/* @__PURE__ */ new Date()).toLocaleDateString("en-CA", { timeZone: FUSO_PADRAO });
+}
+function idadeEmAnosCompletos(nascimento, ref = hoje()) {
+  if (!isDataIsoValida(nascimento) || !isDataIsoValida(ref)) return NaN;
+  const [anoNasc, mesNasc, diaNasc] = nascimento.split("-").map(Number);
+  const [anoRef, mesRef, diaRef] = ref.split("-").map(Number);
+  let anos = anoRef - anoNasc;
+  if (mesRef < mesNasc || mesRef === mesNasc && diaRef < diaNasc) anos -= 1;
+  return anos;
+}
+function isNascimentoValido(value, ref = hoje()) {
+  if (!isDataIsoValida(value)) return false;
+  if (value > ref) return false;
+  const anos = idadeEmAnosCompletos(value, ref);
+  return anos >= 0 && anos <= IDADE_MAXIMA_ANOS;
+}
+
+// server/features/people/person-types.ts
 var vinculoSchema = z6.enum([
   "TITULAR",
   "CONJUGE",
@@ -2253,57 +2396,129 @@ var vinculoSchema = z6.enum([
   "BISNETO"
 ]);
 var marriedStatuses = /* @__PURE__ */ new Set(["CASADO", "UNIAO_ESTAVEL"]);
-var personInputSchema = z6.object({
+function collectPersonIssues(data) {
+  const issues = [];
+  if ((data.vinculo === "NETO" || data.vinculo === "BISNETO") && !data.parentPersonId) {
+    issues.push({
+      path: ["parentPersonId"],
+      message: data.vinculo === "NETO" ? "Neto(a) precisa de um filho(a) como pai/m\xE3e." : "Bisneto(a) precisa de um neto(a) como pai/m\xE3e."
+    });
+  }
+  if (!data.taxId || !isCpfValido(data.taxId)) {
+    issues.push({ path: ["taxId"], message: "CPF inv\xE1lido." });
+  }
+  if (!data.birthDate || !isNascimentoValido(data.birthDate)) {
+    issues.push({
+      path: ["birthDate"],
+      message: "Data de nascimento inv\xE1lida."
+    });
+  }
+  if (data.phone && !isTelefoneValido(data.phone)) {
+    issues.push({
+      path: ["phone"],
+      message: "Telefone inv\xE1lido. Use DDD + n\xFAmero."
+    });
+  }
+  if (data.vinculo === "TITULAR") {
+    if (!data.email?.trim()) {
+      issues.push({
+        path: ["email"],
+        message: "E-mail obrigat\xF3rio para o titular."
+      });
+    }
+    if (!data.phone || !isTelefoneValido(data.phone)) {
+      issues.push({
+        path: ["phone"],
+        message: "Telefone obrigat\xF3rio para o titular (DDD + n\xFAmero)."
+      });
+    }
+  }
+  if (!data.addressSameAsPrimary && (!data.city?.trim() || !data.uf)) {
+    issues.push({
+      path: ["city"],
+      message: "Informe a cidade e a UF do endere\xE7o."
+    });
+  }
+  const menor = Boolean(data.birthDate) && isNascimentoValido(data.birthDate) && idadeEmAnosCompletos(data.birthDate) < 18;
+  if (menor) {
+    if (data.civilStatus && data.civilStatus !== "SOLTEIRO") {
+      issues.push({
+        path: ["civilStatus"],
+        message: "Menores de 18 anos s\xE3o sempre solteiros."
+      });
+    }
+    if (data.maritalRegime && data.maritalRegime !== "NA") {
+      issues.push({
+        path: ["maritalRegime"],
+        message: "Menores de 18 anos n\xE3o t\xEAm regime de bens."
+      });
+    }
+    if (data.spouseName?.trim()) {
+      issues.push({
+        path: ["spouseName"],
+        message: "Menores de 18 anos n\xE3o t\xEAm c\xF4njuge."
+      });
+    }
+  } else if (data.vinculo !== "CONJUGE") {
+    if (!data.civilStatus) {
+      issues.push({ path: ["civilStatus"], message: "Informe o estado civil." });
+      return issues;
+    }
+    if (marriedStatuses.has(data.civilStatus)) {
+      if (!data.maritalRegime) {
+        issues.push({
+          path: ["maritalRegime"],
+          message: "Informe o regime de bens."
+        });
+      }
+      if (!data.spouseName?.trim()) {
+        issues.push({
+          path: ["spouseName"],
+          message: "Informe o nome do c\xF4njuge."
+        });
+      }
+    }
+  }
+  return issues;
+}
+var personBaseSchema = z6.object({
   familyId: z6.string().min(1),
-  fullName: z6.string().min(3).max(160),
-  email: z6.string().email().optional().or(z6.literal("")),
-  taxId: z6.string().max(20).optional(),
-  birthDate: z6.string().optional(),
+  fullName: z6.string().trim().min(3).max(160),
+  email: z6.string().email("E-mail inv\xE1lido.").optional().or(z6.literal("")),
+  taxId: z6.string().transform((value) => normalizarCpf(value)).refine((value) => isCpfValido(value), "CPF inv\xE1lido."),
+  birthDate: z6.string().min(1, "Informe a data de nascimento."),
+  phone: z6.string().optional().or(z6.literal("")).transform((value) => value ? normalizarTelefone(value) : ""),
   vinculo: vinculoSchema,
   parentPersonId: z6.string().min(1).optional(),
   spouseName: z6.string().max(160).optional(),
   civilStatus: civilStatusSchema.optional(),
   maritalRegime: maritalRegimeSchema.optional(),
   exSpouseNote: z6.string().max(1e3).optional(),
-  // Fase 3: marca esta pessoa como titular/responsável da família — usado
-  // pra nomear a pasta de storage local (CPF do titular). Opcional; se
-  // omitido, a pessoa não vira titular automaticamente.
-  isPrimaryContact: z6.boolean().optional()
-}).superRefine((data, ctx) => {
-  if ((data.vinculo === "NETO" || data.vinculo === "BISNETO") && !data.parentPersonId) {
+  isPrimaryContact: z6.boolean().optional(),
+  addressSameAsPrimary: z6.boolean().optional(),
+  cep: z6.string().max(8).optional().or(z6.literal("")),
+  street: z6.string().max(160).optional().or(z6.literal("")),
+  number: z6.string().max(20).optional().or(z6.literal("")),
+  complement: z6.string().max(80).optional().or(z6.literal("")),
+  district: z6.string().max(80).optional().or(z6.literal("")),
+  city: z6.string().max(120).optional().or(z6.literal("")),
+  uf: ufSchema.optional()
+});
+var personInputSchema = personBaseSchema.superRefine((data, ctx) => {
+  for (const issue of collectPersonIssues(data)) {
     ctx.addIssue({
       code: "custom",
-      path: ["parentPersonId"],
-      message: data.vinculo === "NETO" ? "Neto(a) precisa de um filho(a) como pai/m\xE3e." : "Bisneto(a) precisa de um neto(a) como pai/m\xE3e."
+      path: issue.path,
+      message: issue.message
     });
-  }
-  if (data.vinculo === "CONJUGE") return;
-  if (!data.civilStatus) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["civilStatus"],
-      message: "Informe o estado civil."
-    });
-    return;
-  }
-  if (marriedStatuses.has(data.civilStatus)) {
-    if (!data.maritalRegime) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["maritalRegime"],
-        message: "Informe o regime de bens."
-      });
-    }
-    if (!data.spouseName?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["spouseName"],
-        message: "Informe o nome do c\xF4njuge."
-      });
-    }
   }
 });
+var personUpdateSchema = personBaseSchema.omit({ vinculo: true, parentPersonId: true, isPrimaryContact: true }).extend({ personId: z6.string().min(1) });
 var setPrimaryContactSchema = z6.object({
+  familyId: z6.string().min(1),
+  personId: z6.string().min(1)
+});
+var removePersonSchema = z6.object({
   familyId: z6.string().min(1),
   personId: z6.string().min(1)
 });
@@ -2350,23 +2565,85 @@ async function assertParentMatches(familyId, parentPersonId, expectedVinculo) {
   }
   return parent;
 }
+function isMinor(birthDate) {
+  return Boolean(
+    birthDate && isNascimentoValido(birthDate) && idadeEmAnosCompletos(birthDate) < 18
+  );
+}
+function resolveCivilFields(input) {
+  let civilStatus = input.civilStatus ?? void 0;
+  let maritalRegime = input.maritalRegime ?? void 0;
+  if (isMinor(input.birthDate)) {
+    civilStatus = "SOLTEIRO";
+    maritalRegime = "NA";
+  } else if (input.vinculo === "CONJUGE") {
+    civilStatus = civilStatus ?? "CASADO";
+    maritalRegime = maritalRegime ?? "CPB";
+  } else if (civilStatus && !isMarriedStatus(civilStatus)) {
+    maritalRegime = "NA";
+  }
+  return {
+    civilStatus,
+    maritalRegime
+  };
+}
+async function assertCpfNotDuplicatedInFamily(familyId, taxId, excludePersonId) {
+  const db = await requireDatabase();
+  const query = excludePersonId ? and7(
+    eq11(people.familyId, familyId),
+    eq11(people.taxId, taxId),
+    ne(people.id, excludePersonId)
+  ) : and7(eq11(people.familyId, familyId), eq11(people.taxId, taxId));
+  const [duplicate] = await db.select({ id: people.id, fullName: people.fullName }).from(people).where(query).limit(1);
+  if (duplicate) {
+    throw new Error(
+      `Este CPF j\xE1 est\xE1 cadastrado neste projeto (${duplicate.fullName}).`
+    );
+  }
+}
+async function assertConjugeNotDuplicated(familyId) {
+  const db = await requireDatabase();
+  const [existing] = await db.select({ id: people.id }).from(people).where(and7(eq11(people.familyId, familyId), eq11(people.vinculo, "CONJUGE"))).limit(1);
+  if (existing) {
+    throw new Error(
+      "Este projeto j\xE1 possui um c\xF4njuge. Edite o registro existente."
+    );
+  }
+}
+async function assertBirthAfterParent(familyId, parentPersonId, birthDate) {
+  const db = await requireDatabase();
+  const [parent] = await db.select({ birthDate: people.birthDate, fullName: people.fullName }).from(people).where(
+    and7(eq11(people.id, parentPersonId), eq11(people.familyId, familyId))
+  ).limit(1);
+  if (parent?.birthDate && birthDate < parent.birthDate) {
+    throw new Error(
+      `Data de nascimento anterior \xE0 do pai/m\xE3e (${parent.fullName}). Confira as datas.`
+    );
+  }
+}
 async function addPersonRecord(input) {
   const db = await requireDatabase();
   const id = createId();
+  const issues = collectPersonIssues(input);
+  if (issues.length) throw new Error(issues[0].message);
   if (input.vinculo === "NETO" && input.parentPersonId) {
     await assertParentMatches(input.familyId, input.parentPersonId, "FILHO");
   }
   if (input.vinculo === "BISNETO" && input.parentPersonId) {
     await assertParentMatches(input.familyId, input.parentPersonId, "NETO");
   }
-  let civilStatus = input.civilStatus;
-  let maritalRegime = input.maritalRegime;
-  if (input.vinculo === "CONJUGE") {
-    civilStatus = civilStatus ?? "CASADO";
-    maritalRegime = maritalRegime ?? "CPB";
-  } else if (civilStatus && !isMarriedStatus(civilStatus)) {
-    maritalRegime = "NA";
+  if (input.parentPersonId && input.birthDate) {
+    await assertBirthAfterParent(
+      input.familyId,
+      input.parentPersonId,
+      input.birthDate
+    );
   }
+  await assertCpfNotDuplicatedInFamily(input.familyId, input.taxId);
+  if (input.vinculo === "CONJUGE") {
+    await assertConjugeNotDuplicated(input.familyId);
+  }
+  const { civilStatus, maritalRegime } = resolveCivilFields(input);
   await db.transaction(async (tx) => {
     if (input.isPrimaryContact && input.taxId) {
       await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
@@ -2385,7 +2662,16 @@ async function addPersonRecord(input) {
       vinculo: input.vinculo,
       parentPersonId: input.parentPersonId || null,
       spouseName: input.spouseName?.trim() || null,
-      isPrimaryContact: input.isPrimaryContact ?? false
+      isPrimaryContact: input.isPrimaryContact ?? false,
+      phone: input.phone || null,
+      addressSameAsPrimary: input.addressSameAsPrimary ?? false,
+      cep: input.addressSameAsPrimary ? null : input.cep || null,
+      street: input.addressSameAsPrimary ? null : input.street || null,
+      number: input.addressSameAsPrimary ? null : input.number || null,
+      complement: input.addressSameAsPrimary ? null : input.complement || null,
+      district: input.addressSameAsPrimary ? null : input.district || null,
+      city: input.addressSameAsPrimary ? null : input.city || null,
+      uf: input.addressSameAsPrimary ? null : input.uf || null
     });
     await tx.insert(documents).values(
       documentCategoriesForVinculo(input.vinculo).map((category) => ({
@@ -2402,6 +2688,117 @@ async function addPersonRecord(input) {
     );
   });
   return id;
+}
+async function updatePersonRecord(input) {
+  const db = await requireDatabase();
+  const [person] = await db.select().from(people).where(
+    and7(eq11(people.id, input.personId), eq11(people.familyId, input.familyId))
+  ).limit(1);
+  if (!person) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
+  const issues = collectPersonIssues({ ...input, vinculo: person.vinculo ?? "" });
+  if (issues.length) throw new Error(issues[0].message);
+  if (person.parentPersonId && input.birthDate) {
+    await assertBirthAfterParent(
+      input.familyId,
+      person.parentPersonId,
+      input.birthDate
+    );
+  }
+  if (input.taxId && input.taxId !== person.taxId) {
+    await assertCpfNotDuplicatedInFamily(
+      input.familyId,
+      input.taxId,
+      input.personId
+    );
+  }
+  const { civilStatus, maritalRegime } = resolveCivilFields({
+    vinculo: person.vinculo ?? "",
+    civilStatus: input.civilStatus ?? person.civilStatus,
+    maritalRegime: input.maritalRegime ?? person.maritalRegime,
+    birthDate: input.birthDate
+  });
+  const taxChanged = Boolean(input.taxId) && input.taxId !== person.taxId;
+  const needsMigration = taxChanged && person.isPrimaryContact && Boolean(input.taxId);
+  let oldFolder = "";
+  let migratedFiles = 0;
+  await db.transaction(async (tx) => {
+    if (needsMigration && input.taxId) {
+      await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
+      oldFolder = await resolveFamilyStorageFolder(input.familyId);
+    }
+    await tx.update(people).set({
+      fullName: input.fullName,
+      email: input.email || null,
+      taxId: input.taxId || null,
+      birthDate: input.birthDate || null,
+      civilStatus,
+      maritalRegime,
+      exSpouseNote: input.exSpouseNote || null,
+      spouseName: input.spouseName?.trim() || null,
+      phone: input.phone || null,
+      addressSameAsPrimary: input.addressSameAsPrimary ?? false,
+      cep: input.addressSameAsPrimary ? null : input.cep || null,
+      street: input.addressSameAsPrimary ? null : input.street || null,
+      number: input.addressSameAsPrimary ? null : input.number || null,
+      complement: input.addressSameAsPrimary ? null : input.complement || null,
+      district: input.addressSameAsPrimary ? null : input.district || null,
+      city: input.addressSameAsPrimary ? null : input.city || null,
+      uf: input.addressSameAsPrimary ? null : input.uf || null
+    }).where(eq11(people.id, input.personId));
+  });
+  if (needsMigration) {
+    const newFolder = await resolveFamilyStorageFolder(input.familyId);
+    migratedFiles = (await migrateFamilyStorageFolder(
+      input.familyId,
+      oldFolder,
+      newFolder
+    )).migratedFiles;
+  }
+  return { personId: input.personId, migratedFiles };
+}
+async function removePersonRecord(familyId, personId) {
+  const db = await requireDatabase();
+  const [person] = await db.select().from(people).where(and7(eq11(people.id, personId), eq11(people.familyId, familyId))).limit(1);
+  if (!person) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
+  if (person.isPrimaryContact) {
+    throw new Error(
+      "N\xE3o \xE9 poss\xEDvel excluir o titular do projeto. Defina outro titular antes."
+    );
+  }
+  const [child] = await db.select({ id: people.id }).from(people).where(eq11(people.parentPersonId, personId)).limit(1);
+  if (child) {
+    throw new Error(
+      "N\xE3o \xE9 poss\xEDvel excluir: existem filhos/netos dependentes desta pessoa na \xE1rvore."
+    );
+  }
+  const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq11(propertyOwners.personId, personId)).limit(1);
+  if (owner) {
+    throw new Error(
+      "N\xE3o \xE9 poss\xEDvel excluir: a pessoa \xE9 titular de im\xF3vel."
+    );
+  }
+  const [stakeholder] = await db.select({ id: companyStakeholders.id }).from(companyStakeholders).where(eq11(companyStakeholders.personId, personId)).limit(1);
+  if (stakeholder) {
+    throw new Error(
+      "N\xE3o \xE9 poss\xEDvel excluir: a pessoa tem participa\xE7\xE3o em sociedade."
+    );
+  }
+  const [asset] = await db.select({ id: otherAssets.id }).from(otherAssets).where(eq11(otherAssets.ownerPersonId, personId)).limit(1);
+  if (asset) {
+    throw new Error(
+      "N\xE3o \xE9 poss\xEDvel excluir: a pessoa \xE9 respons\xE1vel por ativos."
+    );
+  }
+  const documentsToArchive = await db.select({ id: documents.id }).from(documents).where(
+    and7(eq11(documents.familyId, familyId), eq11(documents.entityId, personId))
+  );
+  if (documentsToArchive.length) {
+    await db.update(documents).set({ status: "DISPENSADO" }).where(
+      and7(eq11(documents.familyId, familyId), eq11(documents.entityId, personId))
+    );
+  }
+  await db.delete(people).where(eq11(people.id, personId));
+  return { archivedDocuments: documentsToArchive.length };
 }
 async function getPersonRecord(personId) {
   const db = await requireDatabase();
@@ -2832,7 +3229,7 @@ import { eq as eq15 } from "drizzle-orm";
 // server/features/documents/couple-docs.ts
 init_schema();
 init_database();
-import { and as and8, eq as eq14, inArray as inArray4, ne } from "drizzle-orm";
+import { and as and8, eq as eq14, inArray as inArray4, ne as ne2 } from "drizzle-orm";
 async function releaseSpouseCoupleDocs(sourceDocument) {
   if (sourceDocument.entityType !== "PESSOA") return 0;
   if (!isCoupleSharedCategory(sourceDocument.category)) return 0;
@@ -2841,7 +3238,7 @@ async function releaseSpouseCoupleDocs(sourceDocument) {
     and8(
       eq14(people.familyId, sourceDocument.familyId),
       eq14(people.vinculo, "CONJUGE"),
-      ne(people.id, sourceDocument.entityId)
+      ne2(people.id, sourceDocument.entityId)
     )
   ).limit(1);
   if (!spouse) return 0;
@@ -3570,6 +3967,34 @@ var personRouter = router({
       familyId: input.familyId
     });
     return { personId };
+  }),
+  update: protectedProcedure.input(personUpdateSchema).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    await assertFamilyAccess(ctx, input.familyId);
+    const result = await updatePersonRecord(input);
+    await recordAudit({
+      action: "PESSOA_ATUALIZADA",
+      entityType: "PESSOA",
+      entityId: input.personId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: { migratedFiles: result.migratedFiles }
+    });
+    return result;
+  }),
+  remove: protectedProcedure.input(removePersonSchema).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    await assertFamilyAccess(ctx, input.familyId);
+    const result = await removePersonRecord(input.familyId, input.personId);
+    await recordAudit({
+      action: "PESSOA_EXCLUIDA",
+      entityType: "PESSOA",
+      entityId: input.personId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: { archivedDocuments: result.archivedDocuments }
+    });
+    return result;
   }),
   attachDocuments: protectedProcedure.input(attachDocumentsSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);

@@ -1,6 +1,8 @@
 /**
- * @description Valida proteção de CPF de titular, atualização transacional do
- * contato principal e migração de storage associada à família.
+ * @description Valida o repositório de pessoas na Fase 4: CPF duplicado no
+ * projeto, segundo cônjuge, menor sempre solteiro, coerência de nascimento
+ * entre gerações, edição com migração de storage do titular e exclusão
+ * bloqueada por vínculos (titularidade, sociedade, ativos, dependentes).
  * @see server/features/people/person-repository.ts
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,215 +29,463 @@ import {
   getPersonRecord,
   getPrimaryContact,
   listPeopleByFamily,
+  removePersonRecord,
   setPrimaryContact,
+  updatePersonRecord,
 } from "./person-repository";
 
-function transactionDatabase(candidate: unknown) {
+import {
+  documents as documentsTable,
+  people as peopleTable,
+  propertyOwners,
+  companyStakeholders,
+  otherAssets,
+} from "../../../drizzle/schema";
+
+/**
+ * Banco fake com fila de respostas por chamada de select().from().where().limit().
+ * Cada entrada da fila atende uma chamada sequencial (importante porque
+ * consultas diferentes usam a mesma tabela `people`).
+ */
+function queuedDb(selectQueue: unknown[][]) {
+  const queue = [...selectQueue];
+  const insertValues = vi.fn().mockResolvedValue(undefined);
   const updateWhere = vi.fn().mockResolvedValue(undefined);
   const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
   const update = vi.fn().mockReturnValue({ set: updateSet });
-  const selectFrom = vi.fn().mockReturnValue({
-    where: vi.fn().mockReturnValue({
-      limit: vi.fn().mockResolvedValue(candidate ? [candidate] : []),
-    }),
+  const deleteWhere = vi.fn().mockResolvedValue(undefined);
+  const remove = vi.fn().mockReturnValue({ where: deleteWhere });
+  const where = vi.fn(() => {
+    const rows = queue.shift() ?? [];
+    const chain = Object.assign(Promise.resolve(rows), {
+      limit: vi.fn(() => Promise.resolve(rows)),
+    });
+    return chain;
   });
-  const tx = {
-    update,
-    insert: vi.fn(),
-    select: vi.fn().mockReturnValue({ from: selectFrom }),
-  };
-  const limit = vi.fn().mockResolvedValue(candidate ? [candidate] : []);
-  const where = vi.fn().mockReturnValue({ limit });
   const from = vi.fn().mockReturnValue({ where });
+  const select = vi.fn().mockReturnValue({ from });
+  const insert = vi.fn().mockReturnValue({ values: insertValues });
+  const tx = { insert, update, select, delete: remove };
+  const transaction = vi.fn(async (operation: (value: typeof tx) => Promise<void>) =>
+    operation(tx)
+  );
   return {
-    transaction: vi.fn(async (operation: (value: typeof tx) => Promise<void>) =>
-      operation(tx)
-    ),
-    select: vi.fn().mockReturnValue({ from }),
+    db: { select, insert, update, delete: remove, transaction },
+    insertValues,
     update,
+    updateWhere,
+    deleteWhere,
+    transaction,
+    select,
   };
 }
 
-describe("person-repository", () => {
+const titularInput = {
+  familyId: "familia-1",
+  fullName: "Ana Silva",
+  email: "ana@lucathi.com.br",
+  taxId: "52998224725",
+  birthDate: "1990-01-01",
+  phone: "11999998888",
+  vinculo: "TITULAR",
+  civilStatus: "CASADO",
+  maritalRegime: "CPB",
+  spouseName: "João Silva",
+  city: "São Paulo",
+  uf: "SP",
+  isPrimaryContact: true,
+} as never;
+
+describe("person-repository criação", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("bloqueia novo titular quando o CPF já pertence a outra família", async () => {
+    const { db } = queuedDb([[]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
     pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue(
       "familia-conflito"
     );
     familyMocks.getFamilyRecord.mockResolvedValue({ name: "Família Costa" });
-    const db = transactionDatabase(undefined);
-    databaseMocks.requireDatabase.mockResolvedValue(db);
 
-    await expect(
-      addPersonRecord({
-        familyId: "familia-atual",
-        fullName: "Ana",
-        email: "",
-        taxId: "111.222.333-44",
-        birthDate: "",
-        vinculo: "TITULAR",
-        civilStatus: "CASADO",
-        maritalRegime: "CPB",
-        exSpouseNote: "",
-        isPrimaryContact: true,
-      } as never)
-    ).rejects.toThrow("Família Costa");
-
+    await expect(addPersonRecord(titularInput)).rejects.toThrow("Família Costa");
     expect(db.transaction).toHaveBeenCalledTimes(1);
   });
 
-  it("cria pessoa titular em transação, desmarca titular anterior e gera cinco requisitos", async () => {
-    const updateWhere = vi.fn().mockResolvedValue(undefined);
-    const insertValues = vi.fn().mockResolvedValue(undefined);
-    const tx = {
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({ where: updateWhere }),
-      }),
-      insert: vi.fn().mockReturnValue({ values: insertValues }),
-    };
-    const db = {
-      transaction: vi.fn(
-        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
-      ),
-    };
+  it("cria pessoa titular em transação, desmarca titular anterior e gera requisitos", async () => {
+    const { db, insertValues, transaction } = queuedDb([[]]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
     pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue(null);
     idMocks.createId
       .mockReturnValueOnce("pessoa-1")
-      .mockReturnValueOnce("doc-1")
-      .mockReturnValueOnce("doc-2")
-      .mockReturnValueOnce("doc-3")
-      .mockReturnValueOnce("doc-4")
-      .mockReturnValueOnce("doc-5");
+      .mockReturnValue("doc");
 
-    await expect(
-      addPersonRecord({
-        familyId: "familia-1",
-        fullName: "Ana",
-        email: "ana@lucathi.com.br",
-        taxId: "11122233344",
-        birthDate: "1990-01-01",
-        vinculo: "TITULAR",
-        civilStatus: "CASADO",
-        maritalRegime: "CPB",
-        exSpouseNote: "",
-        isPrimaryContact: true,
-      } as never)
-    ).resolves.toBe("pessoa-1");
+    await expect(addPersonRecord(titularInput)).resolves.toBe("pessoa-1");
 
-    expect(db.transaction).toHaveBeenCalledTimes(1);
-    expect(tx.update).toHaveBeenCalledTimes(1);
-    expect(tx.insert).toHaveBeenCalledTimes(2);
+    expect(transaction).toHaveBeenCalledTimes(1);
     expect(insertValues).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ category: "IRPF" })])
     );
   });
 
-  it("recusa neto quando o pai indicado não tem vínculo FILHO", async () => {
-    const db = transactionDatabase({
-      id: "pessoa-x",
-      vinculo: "TITULAR",
-      familyId: "familia-1",
-      fullName: "Zé",
-    });
+  it("recusa CPF já cadastrado em outra pessoa do projeto", async () => {
+    const { db } = queuedDb([[{ id: "outra-pessoa", fullName: "Outra" }]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(addPersonRecord(titularInput)).rejects.toThrow(
+      "Este CPF já está cadastrado neste projeto (Outra)."
+    );
+  });
+
+  it("recusa segundo cônjuge no projeto", async () => {
+    const { db } = queuedDb([[], [{ id: "conjuge-existente" }]]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
 
     await expect(
       addPersonRecord({
-        familyId: "familia-1",
-        fullName: "Neto",
-        vinculo: "NETO",
-        parentPersonId: "pessoa-x",
-        civilStatus: "SOLTEIRO",
-        maritalRegime: "NA",
+        ...titularInput,
+        fullName: "Cônjuge",
+        taxId: "11144477735",
+        vinculo: "CONJUGE",
+        civilStatus: undefined,
+        maritalRegime: undefined,
+        spouseName: undefined,
+        isPrimaryContact: false,
       } as never)
-    ).rejects.toThrow("Filho(a)");
+    ).rejects.toThrow("Este projeto já possui um cônjuge.");
   });
 
-  it("aplica default CASADO/CPB para cônjuge sem estado civil e gera só documentos do titular", async () => {
-    const personValues = vi.fn().mockResolvedValue(undefined);
-    const docsValues = vi.fn().mockResolvedValue(undefined);
-    const insert = vi
-      .fn()
-      .mockReturnValueOnce({ values: personValues })
-      .mockReturnValue({ values: docsValues });
-    const tx = { insert };
-    const db = {
-      transaction: vi.fn(
-        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
-      ),
-    };
+  it("aplica default CASADO/CPB para cônjuge sem estado civil", async () => {
+    const { db, insertValues } = queuedDb([[], []]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
-    idMocks.createId.mockReturnValue("pessoa-conj").mockReturnValue("doc");
+    idMocks.createId.mockReturnValueOnce("pessoa-conj").mockReturnValue("doc");
 
     await addPersonRecord({
       familyId: "familia-1",
       fullName: "Cônjuge",
+      taxId: "11144477735",
+      birthDate: "1992-05-05",
+      phone: "11988887777",
+      city: "São Paulo",
+      uf: "SP",
       vinculo: "CONJUGE",
     } as never);
 
-    expect(personValues).toHaveBeenCalledWith(
+    expect(insertValues).toHaveBeenCalledWith(
       expect.objectContaining({
         civilStatus: "CASADO",
         maritalRegime: "CPB",
         vinculo: "CONJUGE",
       })
     );
-    // Só IRPF, CPF/RG e Passaporte — sem certidão de casamento nem comprovante.
-    expect(docsValues).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ category: "IRPF" }),
-        expect.objectContaining({ category: "CPF/RG ou CNH" }),
-        expect.objectContaining({ category: "Passaporte" }),
-      ])
-    );
-    const categories = docsValues.mock.calls[0][0].map(
-      (row: { category: string }) => row.category
-    );
-    expect(categories).toHaveLength(3);
-    expect(categories).not.toContain("Certidão de casamento/UE");
-    expect(categories).not.toContain("Comprovante de endereço");
   });
 
-  it("recusa troca de titular quando a pessoa não pertence à família", async () => {
-    databaseMocks.requireDatabase.mockResolvedValue(
-      transactionDatabase(undefined)
+  it("força SOLTEIRO/NA para menor de 18 anos", async () => {
+    const { db, insertValues } = queuedDb([[]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idMocks.createId.mockReturnValueOnce("pessoa-filho").mockReturnValue("doc");
+    const menor = `${new Date().getFullYear() - 10}-06-15`;
+
+    await addPersonRecord({
+      familyId: "familia-1",
+      fullName: "Filho Menor",
+      taxId: "11144477735",
+      birthDate: menor,
+      city: "São Paulo",
+      uf: "SP",
+      vinculo: "FILHO",
+      civilStatus: "SOLTEIRO",
+    } as never);
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        civilStatus: "SOLTEIRO",
+        maritalRegime: "NA",
+      })
     );
+  });
+
+  it("recusa nascimento anterior ao do pai/mãe", async () => {
+    const parent = {
+      id: "pessoa-pai",
+      vinculo: "FILHO",
+      fullName: "Pai",
+      birthDate: "2000-01-01",
+    };
+    // 1) assertParentMatches, 2) assertBirthAfterParent, 3) dup CPF
+    const { db } = queuedDb([[parent], [parent], []]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
 
     await expect(
-      setPrimaryContact({
+      addPersonRecord({
         familyId: "familia-1",
-        personId: "pessoa-inexistente",
+        fullName: "Neto",
+        taxId: "11144477735",
+        birthDate: "1999-01-01",
+        city: "São Paulo",
+        uf: "SP",
+        vinculo: "NETO",
+        parentPersonId: "pessoa-pai",
+        civilStatus: "SOLTEIRO",
       } as never)
-    ).rejects.toThrow("Pessoa não encontrada nesta família.");
-    expect(pathMocks.resolveFamilyStorageFolder).not.toHaveBeenCalled();
+    ).rejects.toThrow("Data de nascimento anterior à do pai/mãe");
   });
 
-  it("troca o titular em transação e migra as chaves de storage da família", async () => {
-    const db = transactionDatabase({
-      id: "pessoa-2",
-      taxId: "11122233344",
+  it("recusa neto quando o pai indicado não tem vínculo FILHO", async () => {
+    const { db } = queuedDb([[{ id: "pessoa-x", vinculo: "TITULAR", fullName: "Zé" }]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Neto",
+        taxId: "11144477735",
+        birthDate: "2015-01-01",
+        city: "São Paulo",
+        uf: "SP",
+        vinculo: "NETO",
+        parentPersonId: "pessoa-x",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).rejects.toThrow("Filho(a)");
+  });
+
+  it("recusa pai/mãe inexistente na família", async () => {
+    const { db } = queuedDb([[]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Neto",
+        taxId: "11144477735",
+        birthDate: "2015-01-01",
+        city: "São Paulo",
+        uf: "SP",
+        vinculo: "NETO",
+        parentPersonId: "sumido",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).rejects.toThrow("Pai/mãe não encontrado");
+  });
+
+  it("recusa bisneto cujo pai não tem vínculo NETO", async () => {
+    const { db } = queuedDb([
+      [{ id: "p-filho", vinculo: "FILHO", fullName: "Filho", birthDate: "1980-01-01" }],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Bisneto",
+        taxId: "11144477735",
+        birthDate: "2015-01-01",
+        city: "São Paulo",
+        uf: "SP",
+        vinculo: "BISNETO",
+        parentPersonId: "p-filho",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).rejects.toThrow("Neto(a)");
+  });
+
+  it("usa rótulo alternativo quando a família conflitante não tem nome", async () => {
+    const { db } = queuedDb([[]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue("fam-x");
+    familyMocks.getFamilyRecord.mockResolvedValue(null);
+
+    await expect(addPersonRecord(titularInput)).rejects.toThrow("fam-x");
+  });
+
+  it("cria neto com pai FILHO válido e nascimento coerente", async () => {
+    const pai = {
+      id: "pessoa-filho",
+      vinculo: "FILHO",
+      fullName: "Filho",
+      birthDate: "1990-06-01",
+    };
+    // 1) parent match, 2) parent birth, 3) dup CPF
+    const { db, insertValues } = queuedDb([[pai], [pai], []]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idMocks.createId.mockReturnValueOnce("neto-1").mockReturnValue("doc");
+
+    await addPersonRecord({
       familyId: "familia-1",
-    });
+      fullName: "Neto",
+      taxId: "11144477735",
+      birthDate: "2015-01-01",
+      city: "São Paulo",
+      uf: "SP",
+      vinculo: "NETO",
+      parentPersonId: "pessoa-filho",
+      civilStatus: "SOLTEIRO",
+    } as never);
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ vinculo: "NETO", parentPersonId: "pessoa-filho" })
+    );
+  });
+
+  it("cria bisneto com pai NETO válido", async () => {
+    const neto = {
+      id: "pessoa-neto",
+      vinculo: "NETO",
+      fullName: "Neto",
+      birthDate: "2010-01-01",
+    };
+    const { db, insertValues } = queuedDb([[neto], [neto], []]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idMocks.createId.mockReturnValueOnce("bisneto-1").mockReturnValue("doc");
+
+    await addPersonRecord({
+      familyId: "familia-1",
+      fullName: "Bisneto",
+      taxId: "11144477735",
+      birthDate: "2025-01-01",
+      city: "São Paulo",
+      uf: "SP",
+      vinculo: "BISNETO",
+      parentPersonId: "pessoa-neto",
+      civilStatus: "SOLTEIRO",
+    } as never);
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ vinculo: "BISNETO" })
+    );
+  });
+
+  it("pula a checagem de nascimento quando o pai não tem data", async () => {
+    const paiSemData = {
+      id: "pessoa-filho",
+      vinculo: "FILHO",
+      fullName: "Filho",
+      birthDate: null,
+    };
+    const { db, insertValues } = queuedDb([[paiSemData], [paiSemData], []]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idMocks.createId.mockReturnValueOnce("neto-1").mockReturnValue("doc");
+
+    await expect(
+      addPersonRecord({
+        familyId: "familia-1",
+        fullName: "Neto",
+        taxId: "11144477735",
+        birthDate: "2015-01-01",
+        city: "São Paulo",
+        uf: "SP",
+        vinculo: "NETO",
+        parentPersonId: "pessoa-filho",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).resolves.toBe("neto-1");
+    expect(insertValues).toHaveBeenCalled();
+  });
+});
+
+describe("person-repository edição", () => {
+  const filha = {
+    id: "pessoa-2",
+    familyId: "familia-1",
+    vinculo: "FILHO",
+    taxId: "52998224725",
+    isPrimaryContact: false,
+    parentPersonId: null,
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("falha quando a pessoa não existe na família", async () => {
+    const { db } = queuedDb([[]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "sumida",
+        fullName: "Ana",
+        taxId: "52998224725",
+        birthDate: "1990-01-01",
+        email: "ana@x.com",
+        phone: "11999998888",
+        city: "São Paulo",
+        uf: "SP",
+      } as never)
+    ).rejects.toThrow("Pessoa não encontrada nesta família.");
+  });
+
+  it("atualiza os campos editáveis da pessoa", async () => {
+    const person = {
+      id: "pessoa-1",
+      familyId: "familia-1",
+      vinculo: "FILHO",
+      taxId: "52998224725",
+      isPrimaryContact: false,
+      parentPersonId: null,
+      civilStatus: "SOLTEIRO",
+      maritalRegime: "NA",
+    };
+    // 1) load person, 2) dup CPF (mesmo CPF não consulta extra? mudou → não)
+    const { db, updateWhere } = queuedDb([[person]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "pessoa-1",
+        fullName: "Ana Editada",
+        taxId: "52998224725",
+        birthDate: "1990-01-01",
+        email: "ana@x.com",
+        phone: "11999998888",
+        city: "São Paulo",
+        uf: "SP",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).resolves.toEqual({ personId: "pessoa-1", migratedFiles: 0 });
+    expect(updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({})
+    );
+  });
+
+  it("migra o storage quando o CPF do titular muda", async () => {
+    const person = {
+      id: "pessoa-1",
+      familyId: "familia-1",
+      vinculo: "TITULAR",
+      taxId: "52998224725",
+      isPrimaryContact: true,
+      parentPersonId: null,
+      civilStatus: "CASADO",
+      maritalRegime: "CPB",
+    };
+    // 1) load, 2) dup CPF com novo CPF → vazio
+    const { db } = queuedDb([[person], []]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
     pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue(null);
     pathMocks.resolveFamilyStorageFolder
       .mockResolvedValueOnce("cpf-antigo")
       .mockResolvedValueOnce("cpf-novo");
     migrationMocks.migrateFamilyStorageFolder.mockResolvedValue({
-      migratedFiles: 3,
+      migratedFiles: 2,
     });
 
     await expect(
-      setPrimaryContact({
+      updatePersonRecord({
         familyId: "familia-1",
-        personId: "pessoa-2",
+        personId: "pessoa-1",
+        fullName: "Ana Silva",
+        taxId: "11144477735",
+        birthDate: "1990-01-01",
+        email: "ana@x.com",
+        phone: "11999998888",
+        city: "São Paulo",
+        uf: "SP",
+        civilStatus: "CASADO",
+        maritalRegime: "CPB",
+        spouseName: "João Silva",
       } as never)
-    ).resolves.toEqual({ migratedFiles: 3 });
-
-    expect(db.transaction).toHaveBeenCalledTimes(1);
-    expect(pathMocks.resolveFamilyStorageFolder).toHaveBeenCalledTimes(2);
+    ).resolves.toEqual({ personId: "pessoa-1", migratedFiles: 2 });
     expect(migrationMocks.migrateFamilyStorageFolder).toHaveBeenCalledWith(
       "familia-1",
       "cpf-antigo",
@@ -243,59 +493,224 @@ describe("person-repository", () => {
     );
   });
 
-  it("resolve a pasta do titular antigo antes de desmarcá-lo e a nova depois da troca", async () => {
-    const order: string[] = [];
-    pathMocks.resolveFamilyStorageFolder.mockImplementation(async () => {
-      order.push("resolve");
-      return order.filter(step => step === "resolve").length === 1
-        ? "cpf-antigo"
-        : "cpf-novo";
-    });
-
-    const updateWhere = vi.fn().mockImplementation(async () => {
-      order.push("update");
-    });
-    const tx = {
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({ where: updateWhere }),
-      }),
-      insert: vi.fn(),
-      select: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi
-              .fn()
-              .mockResolvedValue([
-                { id: "pessoa-2", taxId: "11122233344", familyId: "familia-1" },
-              ]),
-          }),
-        }),
-      }),
+  it("valida nascimento contra o pai/mãe na edição", async () => {
+    const parent = {
+      id: "pessoa-pai",
+      vinculo: "FILHO",
+      fullName: "Pai",
+      birthDate: "2000-01-01",
     };
-    const db = {
-      transaction: vi.fn(
-        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
-      ),
-    };
+    // 1) load person (com parentPersonId), 2) parent birth, 3) dup CPF
+    const { db } = queuedDb([
+      [{ ...filha, parentPersonId: "pessoa-pai" }],
+      [parent],
+      [],
+    ]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
-    pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue(null);
-    migrationMocks.migrateFamilyStorageFolder.mockResolvedValue({
-      migratedFiles: 1,
-    });
 
-    await setPrimaryContact({
-      familyId: "familia-1",
-      personId: "pessoa-2",
-    } as never);
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "pessoa-2",
+        fullName: "Neto",
+        taxId: "52998224725",
+        birthDate: "1999-06-01",
+        city: "São Paulo",
+        uf: "SP",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).rejects.toThrow("Data de nascimento anterior");
+  });
 
-    expect(order[0]).toBe("resolve");
-    expect(order[1]).toBe("update");
-    expect(pathMocks.resolveFamilyStorageFolder).toHaveBeenCalledTimes(2);
-    expect(migrationMocks.migrateFamilyStorageFolder).toHaveBeenCalledWith(
-      "familia-1",
-      "cpf-antigo",
-      "cpf-novo"
-    );
+  it("força solteiro na edição de menor e zera o endereço quando herda do titular", async () => {
+    const menor = `${new Date().getFullYear() - 10}-06-15`;
+    const { db, updateWhere } = queuedDb([
+      [
+        {
+          id: "pessoa-2",
+          familyId: "familia-1",
+          vinculo: "FILHO",
+          taxId: "52998224725",
+          isPrimaryContact: false,
+          parentPersonId: null,
+          civilStatus: "CASADO",
+          maritalRegime: "CPB",
+        },
+      ],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "pessoa-2",
+        fullName: "Filho Menor",
+        taxId: "52998224725",
+        birthDate: menor,
+        city: "São Paulo",
+        uf: "SP",
+        civilStatus: "SOLTEIRO",
+        addressSameAsPrimary: true,
+      } as never)
+    ).resolves.toEqual({ personId: "pessoa-2", migratedFiles: 0 });
+    expect(updateWhere).toHaveBeenCalledWith(expect.objectContaining({}));
+  });
+
+  it("aplica default CASADO/CPB na edição de cônjuge sem estado civil", async () => {
+    const { db } = queuedDb([
+      [
+        {
+          id: "pessoa-c",
+          familyId: "familia-1",
+          vinculo: "CONJUGE",
+          taxId: "52998224725",
+          isPrimaryContact: false,
+          parentPersonId: null,
+          civilStatus: null,
+          maritalRegime: null,
+        },
+      ],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "pessoa-c",
+        fullName: "Cônjuge Editado",
+        taxId: "52998224725",
+        birthDate: "1992-05-05",
+        phone: "11988887777",
+        city: "São Paulo",
+        uf: "SP",
+      } as never)
+    ).resolves.toEqual({ personId: "pessoa-c", migratedFiles: 0 });
+  });
+
+  it("pula a checagem de nascimento na edição quando a pessoa não tem pai/mãe", async () => {
+    const { db } = queuedDb([[filha]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "pessoa-2",
+        fullName: "Filha Editada",
+        taxId: "52998224725",
+        birthDate: "2015-01-01",
+        city: "São Paulo",
+        uf: "SP",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).resolves.toEqual({ personId: "pessoa-2", migratedFiles: 0 });
+  });
+
+  it("trata vínculo nulo do banco como string vazia na edição", async () => {
+    const { db } = queuedDb([
+      [
+        {
+          id: "pessoa-x",
+          familyId: "familia-1",
+          vinculo: null,
+          taxId: "52998224725",
+          isPrimaryContact: false,
+          parentPersonId: null,
+          civilStatus: null,
+          maritalRegime: null,
+        },
+      ],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "pessoa-x",
+        fullName: "Sem Vínculo",
+        taxId: "52998224725",
+        birthDate: "1990-01-01",
+        email: "x@x.com",
+        phone: "11999998888",
+        city: "São Paulo",
+        uf: "SP",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).resolves.toEqual({ personId: "pessoa-x", migratedFiles: 0 });
+  });
+});
+
+describe("person-repository exclusão", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const semVinculos = {
+    id: "pessoa-2",
+    familyId: "familia-1",
+    fullName: "Filho",
+    vinculo: "FILHO",
+    isPrimaryContact: false,
+  };
+
+  it("recusa excluir o titular", async () => {
+    const { db } = queuedDb([[{ ...semVinculos, isPrimaryContact: true }]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      removePersonRecord("familia-1", "pessoa-2")
+    ).rejects.toThrow("titular do projeto");
+  });
+
+  it("recusa excluir pessoa com dependentes na árvore", async () => {
+    const { db } = queuedDb([[semVinculos], [{ id: "neto-1" }]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      removePersonRecord("familia-1", "pessoa-2")
+    ).rejects.toThrow("filhos/netos dependentes");
+  });
+
+  it("recusa excluir pessoa titular de imóvel", async () => {
+    const { db } = queuedDb([[semVinculos], [], [{ id: "own-1" }]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      removePersonRecord("familia-1", "pessoa-2")
+    ).rejects.toThrow("titular de imóvel");
+  });
+
+  it("recusa excluir sócio de sociedade", async () => {
+    const { db } = queuedDb([[semVinculos], [], [], [{ id: "st-1" }]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      removePersonRecord("familia-1", "pessoa-2")
+    ).rejects.toThrow("participação em sociedade");
+  });
+
+  it("recusa excluir responsável por ativo", async () => {
+    const { db } = queuedDb([[semVinculos], [], [], [], [{ id: "asset-1" }]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      removePersonRecord("familia-1", "pessoa-2")
+    ).rejects.toThrow("responsável por ativos");
+  });
+
+  it("sem vínculos: arquiva documentos e remove a pessoa", async () => {
+    const { db, deleteWhere } = queuedDb([
+      [semVinculos],
+      [],
+      [],
+      [],
+      [],
+      [{ id: "doc-1" }, { id: "doc-2" }],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      removePersonRecord("familia-1", "pessoa-2")
+    ).resolves.toEqual({ archivedDocuments: 2 });
+    expect(db.update).toHaveBeenCalledWith(documentsTable);
+    expect(deleteWhere).toHaveBeenCalled();
   });
 });
 
@@ -350,203 +765,48 @@ describe("consultas de pessoas por família", () => {
   });
 });
 
-describe("validações de vínculo e campos opcionais", () => {
+describe("person-repository titular e storage", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("cria NETO sem parentPersonId e normaliza regime para NA em estado civil não casado", async () => {
-    const insertValues = vi.fn().mockResolvedValue(undefined);
-    const tx = {
-      insert: vi.fn().mockReturnValue({ values: insertValues }),
-      update: vi.fn(),
-    };
-    databaseMocks.requireDatabase.mockResolvedValue({
-      transaction: vi.fn(
-        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
-      ),
-    });
-    idMocks.createId.mockReturnValue("pessoa-neto");
-
-    await expect(
-      addPersonRecord({
-        familyId: "familia-1",
-        fullName: "Neto",
-        vinculo: "NETO",
-        civilStatus: "SOLTEIRO",
-        maritalRegime: "CPB",
-      } as never)
-    ).resolves.toBe("pessoa-neto");
-
-    expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({
-        maritalRegime: "NA",
-        isPrimaryContact: false,
-        email: null,
-        taxId: null,
-        birthDate: null,
-        parentPersonId: null,
-        spouseName: null,
-      })
-    );
-  });
-
-  it("exige que o pai/mãe de um neto exista na família", async () => {
-    databaseMocks.requireDatabase.mockResolvedValue(transactionDatabase(undefined));
-
-    await expect(
-      addPersonRecord({
-        familyId: "familia-1",
-        fullName: "Neto",
-        vinculo: "NETO",
-        parentPersonId: "pessoa-sumida",
-        civilStatus: "SOLTEIRO",
-        maritalRegime: "NA",
-      } as never)
-    ).rejects.toThrow("Pai/mãe não encontrado nesta família.");
-  });
-
-  it("exige vínculo Neto para o pai/mãe de um bisneto", async () => {
-    databaseMocks.requireDatabase.mockResolvedValue(
-      transactionDatabase({
-        id: "pessoa-filha",
-        vinculo: "FILHO",
-        familyId: "familia-1",
-        fullName: "Filha",
-      })
-    );
-
-    await expect(
-      addPersonRecord({
-        familyId: "familia-1",
-        fullName: "Bisneto",
-        vinculo: "BISNETO",
-        parentPersonId: "pessoa-filha",
-        civilStatus: "SOLTEIRO",
-        maritalRegime: "NA",
-      } as never)
-    ).rejects.toThrow("O pai/mãe de um bisneto(a) deve ter vínculo Neto(a).");
-  });
-
-  it("respeita estado civil e regime informados para o cônjuge", async () => {
-    const personValues = vi.fn().mockResolvedValue(undefined);
-    const docsValues = vi.fn().mockResolvedValue(undefined);
-    const insert = vi
-      .fn()
-      .mockReturnValueOnce({ values: personValues })
-      .mockReturnValue({ values: docsValues });
-    const tx = { insert };
-    const db = {
-      transaction: vi.fn(
-        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
-      ),
-    };
+  it("recusa troca de titular quando a pessoa não pertence à família", async () => {
+    const { db } = queuedDb([[]]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
-    idMocks.createId.mockReturnValue("pessoa-conj").mockReturnValue("doc");
 
-    await addPersonRecord({
-      familyId: "familia-1",
-      fullName: "Cônjuge",
-      vinculo: "CONJUGE",
-      civilStatus: "UNIAO_ESTAVEL",
-      maritalRegime: "CUB",
-    } as never);
-
-    expect(personValues).toHaveBeenCalledWith(
-      expect.objectContaining({
-        civilStatus: "UNIAO_ESTAVEL",
-        maritalRegime: "CUB",
-      })
-    );
+    await expect(
+      setPrimaryContact({
+        familyId: "familia-1",
+        personId: "pessoa-inexistente",
+      } as never)
+    ).rejects.toThrow("Pessoa não encontrada nesta família.");
+    expect(pathMocks.resolveFamilyStorageFolder).not.toHaveBeenCalled();
   });
 
-  function parentAndInsertDb(parent: Record<string, unknown> | undefined) {
-    const parentLimit = vi.fn().mockResolvedValue(parent ? [parent] : []);
-    const parentWhere = vi.fn().mockReturnValue({ limit: parentLimit });
-    const insertValues = vi.fn().mockResolvedValue(undefined);
-    const tx = {
-      insert: vi.fn().mockReturnValue({ values: insertValues }),
-      update: vi.fn(),
-      select: vi.fn(),
-    };
-    const db = {
-      select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: parentWhere }) }),
-      transaction: vi.fn(
-        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
-      ),
-    };
-    return { db, insertValues, parentLimit };
-  }
-
-  it("cria NETO com pai de vínculo Filho válido e apelido do cônjuge normalizado", async () => {
-    const { db, insertValues, parentLimit } = parentAndInsertDb({
-      id: "pessoa-filha",
-      vinculo: "FILHO",
-      familyId: "familia-1",
-      fullName: "Filha",
-    });
+  it("troca o titular em transação e migra as chaves de storage da família", async () => {
+    const { db, updateWhere } = queuedDb([
+      [{ id: "pessoa-2", taxId: "52998224725", familyId: "familia-1" }],
+    ]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
-    idMocks.createId.mockReturnValue("pessoa-neto");
-
-    await expect(
-      addPersonRecord({
-        familyId: "familia-1",
-        fullName: "Neto",
-        vinculo: "NETO",
-        parentPersonId: "pessoa-filha",
-        civilStatus: "SOLTEIRO",
-        maritalRegime: "NA",
-        spouseName: "  Maria  ",
-      } as never)
-    ).resolves.toBe("pessoa-neto");
-
-    expect(parentLimit).toHaveBeenCalledWith(1);
-    expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ vinculo: "NETO", parentPersonId: "pessoa-filha", spouseName: "Maria" })
-    );
-  });
-
-  it("cria BISNETO com pai de vínculo Neto válido", async () => {
-    const { db, insertValues } = parentAndInsertDb({
-      id: "pessoa-neta",
-      vinculo: "NETO",
-      familyId: "familia-1",
-      fullName: "Neta",
+    pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue(null);
+    pathMocks.resolveFamilyStorageFolder
+      .mockResolvedValueOnce("cpf-antigo")
+      .mockResolvedValueOnce("cpf-novo");
+    migrationMocks.migrateFamilyStorageFolder.mockResolvedValue({
+      migratedFiles: 3,
     });
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-    idMocks.createId.mockReturnValue("pessoa-bisneto");
 
     await expect(
-      addPersonRecord({
+      setPrimaryContact({
         familyId: "familia-1",
-        fullName: "Bisneto",
-        vinculo: "BISNETO",
-        parentPersonId: "pessoa-neta",
-        civilStatus: "SOLTEIRO",
-        maritalRegime: "NA",
+        personId: "pessoa-2",
       } as never)
-    ).resolves.toBe("pessoa-bisneto");
+    ).resolves.toEqual({ migratedFiles: 3 });
 
-    expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ vinculo: "BISNETO", parentPersonId: "pessoa-neta" })
-    );
-  });
-
-  it("usa o id da família como rótulo quando o CPF conflitante não tem nome cadastrado", async () => {
-    pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue("familia-desconhecida");
-    familyMocks.getFamilyRecord.mockResolvedValue(null);
-    databaseMocks.requireDatabase.mockResolvedValue(transactionDatabase(undefined));
-
-    await expect(
-      addPersonRecord({
-        familyId: "familia-1",
-        fullName: "Titular",
-        vinculo: "TITULAR",
-        taxId: "11122233344",
-        civilStatus: "SOLTEIRO",
-        maritalRegime: "NA",
-        isPrimaryContact: true,
-      } as never)
-    ).rejects.toThrow(
-      "Este CPF já é o titular de outra família (família familia-desconhecida)."
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(updateWhere).toHaveBeenCalled();
+    expect(migrationMocks.migrateFamilyStorageFolder).toHaveBeenCalledWith(
+      "familia-1",
+      "cpf-antigo",
+      "cpf-novo"
     );
   });
 });

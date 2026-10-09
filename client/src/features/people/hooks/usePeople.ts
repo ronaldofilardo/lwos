@@ -1,10 +1,6 @@
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { readAsBase64 } from "@/lib/file";
-import type {
-  PersonAttachment,
-  PersonFormSubmit,
-} from "@/features/people/common/PersonForm";
+import type { PersonFormSubmit } from "@/features/people/common/PersonForm";
 
 export function usePeople(familyId: string) {
   const utils = trpc.useUtils();
@@ -20,39 +16,38 @@ export function usePeople(familyId: string) {
     onError: error => toast.error(error.message),
   });
 
-  const attach = trpc.people.attachDocuments.useMutation({
+  const addPerson = async (data: PersonFormSubmit) =>
+    create.mutateAsync({ familyId, ...data });
+
+  const update = trpc.people.update.useMutation({
     onSuccess: result => {
+      utils.people.list.invalidate({ familyId });
       utils.documents.list.invalidate({ familyId });
       toast.success(
-        `${result.stored.length} anexo(s) enviado(s) para análise.`
+        result.migratedFiles > 0
+          ? `Pessoa atualizada. ${result.migratedFiles} arquivo(s) movido(s) de pasta.`
+          : "Pessoa atualizada."
       );
     },
     onError: error => toast.error(error.message),
   });
+  const updatePerson = async (data: PersonFormSubmit & { personId: string }) =>
+    update.mutateAsync({ familyId, ...data });
 
-  const addPerson = async (
-    data: PersonFormSubmit,
-    attachments: PersonAttachment[] = []
-  ) => {
-    const result = await create.mutateAsync({ familyId, ...data });
-    if (attachments.length) {
-      const payload = [];
-      for (const attachment of attachments) {
-        payload.push({
-          category: attachment.category,
-          fileName: attachment.file.name,
-          mimeType: attachment.file.type,
-          base64Data: await readAsBase64(attachment.file),
-        });
-      }
-      await attach.mutateAsync({
-        familyId,
-        personId: result.personId,
-        attachments: payload,
-      });
-    }
-    return result;
-  };
+  const remove = trpc.people.remove.useMutation({
+    onSuccess: result => {
+      utils.people.list.invalidate({ familyId });
+      utils.documents.list.invalidate({ familyId });
+      toast.success(
+        result.archivedDocuments > 0
+          ? `Pessoa excluída. ${result.archivedDocuments} documento(s) arquivado(s).`
+          : "Pessoa excluída."
+      );
+    },
+    onError: error => toast.error(error.message),
+  });
+  const removePerson = (personId: string) =>
+    remove.mutateAsync({ familyId, personId });
 
   const setPrimary = trpc.people.setPrimaryContact.useMutation({
     onSuccess: result => {
@@ -73,7 +68,11 @@ export function usePeople(familyId: string) {
     people: list.data ?? [],
     loading: list.isLoading,
     addPerson,
-    creating: create.isPending || attach.isPending,
+    creating: create.isPending,
+    updatePerson,
+    updating: update.isPending,
+    removePerson,
+    removing: remove.isPending,
     markPrimary,
     markingPrimary: setPrimary.isPending,
   };

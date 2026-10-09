@@ -11,9 +11,17 @@ import {
   addPersonRecord,
   getPersonRecord,
   listPeopleByFamily,
+  removePersonRecord,
   setPrimaryContact,
+  updatePersonRecord,
 } from "./person-repository";
-import { attachDocumentsSchema, personInputSchema, setPrimaryContactSchema } from "./person-types";
+import {
+  attachDocumentsSchema,
+  personInputSchema,
+  personUpdateSchema,
+  removePersonSchema,
+  setPrimaryContactSchema,
+} from "./person-types";
 
 export const personRouter = router({
   list: protectedProcedure
@@ -40,6 +48,38 @@ export const personRouter = router({
         familyId: input.familyId,
       });
       return { personId };
+    }),
+  update: protectedProcedure
+    .input(personUpdateSchema)
+    .mutation(async ({ ctx, input }) => {
+      const user = requireRole(ctx, TEAM_ROLES);
+      await assertFamilyAccess(ctx, input.familyId);
+      const result = await updatePersonRecord(input);
+      await recordAudit({
+        action: "PESSOA_ATUALIZADA",
+        entityType: "PESSOA",
+        entityId: input.personId,
+        actorUserId: user.id,
+        familyId: input.familyId,
+        metadata: { migratedFiles: result.migratedFiles },
+      });
+      return result;
+    }),
+  remove: protectedProcedure
+    .input(removePersonSchema)
+    .mutation(async ({ ctx, input }) => {
+      const user = requireRole(ctx, TEAM_ROLES);
+      await assertFamilyAccess(ctx, input.familyId);
+      const result = await removePersonRecord(input.familyId, input.personId);
+      await recordAudit({
+        action: "PESSOA_EXCLUIDA",
+        entityType: "PESSOA",
+        entityId: input.personId,
+        actorUserId: user.id,
+        familyId: input.familyId,
+        metadata: { archivedDocuments: result.archivedDocuments },
+      });
+      return result;
     }),
   attachDocuments: protectedProcedure
     .input(attachDocumentsSchema)

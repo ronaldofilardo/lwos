@@ -1,6 +1,7 @@
 /**
- * @description Valida o fluxo idempotente do setPassword: conta existente ou
- * corrida de criação concede o vínculo e consome o link sem redefinir senha.
+ * @description Valida o verifyToken (link válido, inválido e pessoa ausente) e o
+ * fluxo idempotente do setPassword: conta existente ou corrida de criação
+ * concede o vínculo e consome o link sem redefinir senha.
  * @see server/features/people/first-access-router.ts
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,12 +14,14 @@ const dbMocks = vi.hoisted(() => ({
 const personMocks = vi.hoisted(() => ({ getPersonRecord: vi.fn() }));
 const bcryptMocks = vi.hoisted(() => ({ default: { hash: vi.fn() } }));
 const idMocks = vi.hoisted(() => ({ createId: vi.fn() }));
+const rateLimitMocks = vi.hoisted(() => ({ checkRateLimit: vi.fn() }));
 
 vi.mock("../_shared/database", () => databaseMocks);
 vi.mock("../../db", () => dbMocks);
 vi.mock("./person-repository", () => personMocks);
 vi.mock("bcryptjs", () => bcryptMocks);
 vi.mock("../_shared/ids", () => idMocks);
+vi.mock("../../_core/rateLimit", () => rateLimitMocks);
 
 import { firstAccessRouter } from "./first-access-router";
 
@@ -30,12 +33,11 @@ const person = {
 };
 const link = { id: "link-1", personId: "pessoa-1", consumedAt: null };
 
-function firstAccessDb() {
+function firstAccessDb(linkRows: Record<string, unknown>[] = [link]) {
+  const limit = vi.fn().mockResolvedValue(linkRows);
   const select = vi.fn().mockReturnValue({
     from: vi.fn().mockReturnValue({
-      where: vi.fn().mockReturnValue({
-        limit: vi.fn().mockResolvedValue([link]),
-      }),
+      where: vi.fn().mockReturnValue({ limit }),
     }),
   });
   const onConflictDoNothing = vi.fn().mockResolvedValue(undefined);
@@ -46,7 +48,7 @@ function firstAccessDb() {
     .fn()
     .mockReturnValue({ set: vi.fn().mockReturnValue({ where: updateWhere }) });
   const db = { select, insert, update };
-  return { db, insertValues, onConflictDoNothing, updateWhere };
+  return { db, insertValues, onConflictDoNothing, updateWhere, limit };
 }
 
 function caller() {
@@ -56,6 +58,68 @@ function caller() {
     user: null,
   });
 }
+
+describe("first-access verifyToken", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rateLimitMocks.checkRateLimit.mockReturnValue(undefined);
+    personMocks.getPersonRecord.mockResolvedValue(person);
+  });
+
+  it("retorna os dados da pessoa para um link válido", async () => {
+    const { db } = firstAccessDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      caller().verifyToken({ token: "token-valido-0001" })
+    ).resolves.toEqual({
+      personId: "pessoa-1",
+      fullName: "Ana Silva",
+      email: "ana@exemplo.com",
+    });
+    expect(rateLimitMocks.checkRateLimit).toHaveBeenCalledWith(
+      "verify:token-valido-0001"
+    );
+    expect(personMocks.getPersonRecord).toHaveBeenCalledWith("pessoa-1");
+  });
+
+  it("retorna null no e-mail quando a pessoa não tem e-mail", async () => {
+    personMocks.getPersonRecord.mockResolvedValue({
+      ...person,
+      email: null,
+    });
+    const { db } = firstAccessDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      caller().verifyToken({ token: "token-sememail-002" })
+    ).resolves.toEqual({
+      personId: "pessoa-1",
+      fullName: "Ana Silva",
+      email: null,
+    });
+  });
+
+  it("rejeita link inválido, expirado ou já utilizado", async () => {
+    const { db } = firstAccessDb([]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      caller().verifyToken({ token: "token-invalido-099" })
+    ).rejects.toThrow("Link inválido, expirado ou já utilizado.");
+    expect(personMocks.getPersonRecord).not.toHaveBeenCalled();
+  });
+
+  it("rejeita quando a pessoa do link não existe mais", async () => {
+    personMocks.getPersonRecord.mockResolvedValue(null);
+    const { db } = firstAccessDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      caller().verifyToken({ token: "token-sem-pessoa-3" })
+    ).rejects.toThrow("Pessoa não encontrada.");
+  });
+});
 
 describe("first-access setPassword", () => {
   beforeEach(() => {
@@ -140,6 +204,25 @@ describe("first-access setPassword", () => {
     expect(updateWhere).toHaveBeenCalledTimes(1);
   });
 
+  it("omite o nome na criação quando a pessoa não tem fullName", async () => {
+    personMocks.getPersonRecord.mockResolvedValue({
+      ...person,
+      fullName: null,
+    });
+    const { db } = firstAccessDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    dbMocks.getUserByEmail.mockResolvedValue(undefined);
+    bcryptMocks.default.hash.mockResolvedValue("hash-novo");
+    dbMocks.createUser.mockResolvedValue({ id: 4 });
+
+    await expect(
+      caller().setPassword({ token: "token-novo-00004", password: "senha123" })
+    ).resolves.toEqual({ success: true });
+    expect(dbMocks.createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ name: undefined })
+    );
+  });
+
   it("propaga erro inesperado do createUser sem consumir o link", async () => {
     const { db, updateWhere } = firstAccessDb();
     databaseMocks.requireDatabase.mockResolvedValue(db);
@@ -152,6 +235,54 @@ describe("first-access setPassword", () => {
     await expect(
       caller().setPassword({ token: "token-falha-0004", password: "senha123" })
     ).rejects.toThrow("Banco de dados indisponível.");
+    expect(updateWhere).not.toHaveBeenCalled();
+  });
+
+  it("rejeita setPassword com link inválido", async () => {
+    const { db } = firstAccessDb([]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      caller().setPassword({ token: "token-invalido-099", password: "senha123" })
+    ).rejects.toThrow("Link inválido, expirado ou já utilizado.");
+    expect(dbMocks.getUserByEmail).not.toHaveBeenCalled();
+  });
+
+  it("rejeita setPassword quando a pessoa não existe", async () => {
+    personMocks.getPersonRecord.mockResolvedValue(null);
+    const { db } = firstAccessDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      caller().setPassword({ token: "token-sem-pessoa-1", password: "senha123" })
+    ).rejects.toThrow("Pessoa não encontrada.");
+  });
+
+  it("rejeita setPassword quando a pessoa não tem e-mail", async () => {
+    personMocks.getPersonRecord.mockResolvedValue({
+      ...person,
+      email: null,
+    });
+    const { db } = firstAccessDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      caller().setPassword({ token: "token-sem-email-01", password: "senha123" })
+    ).rejects.toThrow("Pessoa sem e-mail cadastrado.");
+  });
+
+  it("repropaga o erro da corrida quando o re-lookup não encontra o usuário", async () => {
+    const { db, updateWhere } = firstAccessDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    dbMocks.getUserByEmail.mockResolvedValue(undefined);
+    bcryptMocks.default.hash.mockResolvedValue("hash-novo");
+    dbMocks.createUser.mockRejectedValue(
+      new Error("Já existe um usuário com este e-mail.")
+    );
+
+    await expect(
+      caller().setPassword({ token: "token-corrida-0009", password: "senha123" })
+    ).rejects.toThrow("Já existe um usuário com este e-mail.");
     expect(updateWhere).not.toHaveBeenCalled();
   });
 });
