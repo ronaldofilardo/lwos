@@ -1,16 +1,36 @@
-import { KeyRound, ShieldAlert, Sparkles, UserCheck } from "lucide-react";
+import { useState } from "react";
+import {
+  KeyRound,
+  Pencil,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+  UserCheck,
+  Circle,
+  TriangleAlert,
+  OctagonAlert,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { PropertyOwnerForm } from "./PropertyOwnerForm";
 import {
+  PropertyFormModal,
+  toPropertyFormValues,
+} from "./PropertyFormModal";
+import {
+  encumbranceSeverity,
   encumbranceTypeLabels,
-  inactiveEncumbranceValues,
   type EncumbranceType,
+  type EncumbranceSeverity,
 } from "./types";
 
 type Property = {
   id: string;
   description: string;
   propertyCity: string;
+  uf?: string | null;
+  kind?: string | null;
   hasRegistration?: boolean;
   registrationNumber: string | null;
   alternativeDocType?: string | null;
@@ -22,6 +42,38 @@ type Property = {
   encumbranceNote?: string | null;
 };
 
+const severityStyles: Record<
+  EncumbranceSeverity,
+  { badge: string; Icon: typeof ShieldAlert }
+> = {
+  verde: { badge: "bg-emerald-100 text-emerald-800 border-emerald-200", Icon: Circle },
+  amarelo: { badge: "bg-amber-100 text-amber-800 border-amber-200", Icon: TriangleAlert },
+  vermelho: { badge: "bg-red-100 text-red-800 border-red-200", Icon: OctagonAlert },
+};
+
+function EncumbranceBadge({
+  value,
+  note,
+}: {
+  value: string | null | undefined;
+  note?: string | null;
+}) {
+  const severity = encumbranceSeverity(value);
+  if (!severity) {
+    return <span className="text-xs text-lucathi-gray">Sem gravame informado</span>;
+  }
+  const { badge, Icon } = severityStyles[severity];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm ${badge}`}
+    >
+      <Icon className="size-3.5" />
+      {encumbranceTypeLabels[value as EncumbranceType] ?? value}
+      {note ? ` · ${note}` : ""}
+    </span>
+  );
+}
+
 export function PropertyRow({
   familyId,
   property,
@@ -29,16 +81,35 @@ export function PropertyRow({
   familyId: string;
   property: Property;
 }) {
+  const utils = trpc.useUtils();
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const owners = trpc.properties.owners.useQuery({ propertyId: property.id });
   const people = trpc.people.list.useQuery({ familyId });
 
-  const encumbranceType = property.encumbranceType as EncumbranceType | null;
-  const hasEncumbranceAlert =
-    Boolean(encumbranceType) &&
-    !inactiveEncumbranceValues.includes(encumbranceType as EncumbranceType);
+  const update = trpc.properties.update.useMutation({
+    onSuccess: () => {
+      utils.properties.list.invalidate({ familyId });
+      setEditing(false);
+      toast.success("Imóvel atualizado.");
+    },
+    onError: e => toast.error(e.message),
+  });
+  const remove = trpc.properties.remove.useMutation({
+    onSuccess: () => {
+      utils.properties.list.invalidate({ familyId });
+      setConfirmDelete(false);
+      toast.success("Imóvel excluído.");
+    },
+    onError: e => toast.error(e.message),
+  });
 
-  const hasUsufruto = owners.data?.some((o) => o.rightType === "USUFRUTO");
-  const hasNuaPropriedade = owners.data?.some((o) => o.rightType === "NUA_PROPRIEDADE");
+  const severity = encumbranceSeverity(property.encumbranceType);
+  const hasUsufruto = owners.data?.some(o => o.rightType === "USUFRUTO");
+  const hasNuaPropriedade = owners.data?.some(
+    o => o.rightType === "NUA_PROPRIEDADE"
+  );
 
   const docTypeLabels: Record<string, string> = {
     ESCRITURA_PUBLICA: "Escritura Pública",
@@ -46,32 +117,41 @@ export function PropertyRow({
   };
 
   return (
-    <div className="rounded-xl border border-lucathi-line/70 bg-lucathi-mist/60 px-4 py-3 transition-all space-y-3">
+    <div className="space-y-3 rounded-xl border border-lucathi-line/70 bg-lucathi-mist/60 px-4 py-3 transition-all">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-lucathi-navy">{property.description}</p>
-            {/* Destaque Visual Imediato para Usufruto / Nua-Propriedade */}
-            {hasUsufruto && (
+            <p className="text-sm font-semibold text-lucathi-navy">
+              {property.description}
+            </p>
+            {hasUsufruto ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800">
                 <Sparkles className="size-3" /> Usufruto Declarado
               </span>
-            )}
-            {hasNuaPropriedade && (
+            ) : null}
+            {hasNuaPropriedade ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-800">
                 <KeyRound className="size-3" /> Nua-Propriedade
               </span>
-            )}
+            ) : null}
           </div>
 
-          <p className="text-xs text-lucathi-gray mt-0.5">
+          <p className="mt-0.5 text-xs text-lucathi-gray">
+            {property.uf ? `${property.uf} · ` : ""}
             {property.propertyCity} ·{" "}
             {property.hasRegistration !== false ? (
               <span>Matrícula: {property.registrationNumber || "Em análise"}</span>
             ) : (
-              <span className="text-amber-800 font-medium">
-                Sem Matrícula (Doc: {property.alternativeDocType ? (docTypeLabels[property.alternativeDocType] || property.alternativeDocType) : "Doc Alternativo"}
-                {property.noRegistrationReason ? ` · Motivo: ${property.noRegistrationReason}` : ""})
+              <span className="font-medium text-amber-800">
+                Sem Matrícula (Doc:{" "}
+                {property.alternativeDocType
+                  ? docTypeLabels[property.alternativeDocType] ||
+                    property.alternativeDocType
+                  : "Doc Alternativo"}
+                {property.noRegistrationReason
+                  ? ` · Motivo: ${property.noRegistrationReason}`
+                  : ""}
+                )
               </span>
             )}
           </p>
@@ -79,67 +159,173 @@ export function PropertyRow({
           <div className="mt-1 flex flex-wrap gap-3 text-xs text-lucathi-gray">
             {property.acquisitionDate ? (
               <span>
-                Aquisição: {new Date(property.acquisitionDate).toLocaleDateString("pt-BR")}
+                Aquisição:{" "}
+                {new Date(property.acquisitionDate).toLocaleDateString("pt-BR")}
               </span>
             ) : null}
             {property.marketValue ? (
-              <span>Mercado: R$ {Number(property.marketValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+              <span>
+                Mercado: R${" "}
+                {Number(property.marketValue).toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
             ) : null}
             {property.irpfBalanceValue ? (
-              <span>IRPF: R$ {Number(property.irpfBalanceValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+              <span>
+                IRPF: R${" "}
+                {Number(property.irpfBalanceValue).toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
             ) : null}
           </div>
         </div>
 
-        {/* Alerta Visual de Gravame (coluna única encumbranceType) */}
-        {hasEncumbranceAlert ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 shadow-sm border border-red-200">
-            <ShieldAlert className="size-3.5" />
-            {encumbranceTypeLabels[encumbranceType as EncumbranceType] ?? encumbranceType}
-            {property.encumbranceNote ? ` · ${property.encumbranceNote}` : ""}
-          </span>
-        ) : (
-          <span className="text-xs text-lucathi-gray">Sem gravame ativo</span>
-        )}
+        <div className="flex items-center gap-2">
+          <EncumbranceBadge
+            value={property.encumbranceType}
+            note={property.encumbranceNote}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditing(true)}
+            aria-label={`Editar imóvel ${property.description}`}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+            aria-label={`Excluir imóvel ${property.description}`}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
       </div>
 
-      {/* Lista de Titulares & Direitos com Destaque */}
-      {owners.data && owners.data.length > 0 ? (
-        <div className="rounded-lg bg-white/70 p-2.5 text-xs border border-lucathi-line/40">
-          <p className="font-semibold text-lucathi-navy mb-1 flex items-center gap-1">
-            <UserCheck className="size-3.5 text-lucathi-navy" /> Titularidade e Direitos Registrados:
+      {confirmDelete ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs">
+          <p className="font-semibold text-red-800">
+            Excluir o imóvel «{property.description}»? Documentos enviados
+            permanecem arquivados (nada é apagado do disco).
           </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmDelete(false)}
+              disabled={remove.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() =>
+                remove.mutate({ familyId, propertyId: property.id })
+              }
+              disabled={remove.isPending}
+            >
+              Confirmar exclusão
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {editing ? (
+        <PropertyFormModal
+          title="Editar Imóvel"
+          familyId={familyId}
+          submitLabel="Salvar alterações"
+          initial={toPropertyFormValues(property as Record<string, unknown>)}
+          isPending={update.isPending}
+          onClose={() => setEditing(false)}
+          onSubmit={payload => {
+            const { familyId: _ignored, ...rest } = payload;
+            update.mutate({ ...rest, propertyId: property.id });
+          }}
+        />
+      ) : null}
+
+      <div className="rounded-lg border border-lucathi-line/40 bg-white/70 p-2.5 text-xs">
+        <p className="mb-1 flex items-center gap-1 font-semibold text-lucathi-navy">
+          <UserCheck className="size-3.5 text-lucathi-navy" /> Titularidade do
+          Imóvel
+        </p>
+        {owners.data && owners.data.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {owners.data.map((owner) => {
-              const person = people.data?.find((p) => p.id === owner.personId);
+            {owners.data.map(owner => {
+              const person = people.data?.find(p => p.id === owner.personId);
               const rightLabel =
                 owner.rightType === "USUFRUTO"
                   ? "Usufrutuário(a)"
                   : owner.rightType === "NUA_PROPRIEDADE"
-                  ? "Nu-proprietário(a)"
-                  : "Proprietário(a)";
+                    ? "Nu-proprietário(a)"
+                    : "Proprietário(a)";
               const badgeBg =
                 owner.rightType === "USUFRUTO"
                   ? "bg-purple-50 text-purple-900 border-purple-200"
                   : owner.rightType === "NUA_PROPRIEDADE"
-                  ? "bg-indigo-50 text-indigo-900 border-indigo-200"
-                  : "bg-slate-50 text-slate-900 border-slate-200";
-
+                    ? "bg-indigo-50 text-indigo-900 border-indigo-200"
+                    : "bg-slate-50 text-slate-900 border-slate-200";
               return (
                 <span
                   key={owner.id}
                   className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${badgeBg}`}
                 >
-                  <span className="font-medium">{person?.fullName || "Pessoa"}</span>
-                  <span>({owner.ownershipPercentage}% — {rightLabel})</span>
+                  <span className="font-medium">
+                    {person?.fullName || "Pessoa"}
+                  </span>
+                  <span>
+                    ({owner.ownershipPercentage}% — {rightLabel})
+                  </span>
                 </span>
               );
             })}
           </div>
-        </div>
-      ) : null}
+        ) : (
+          <p className="text-lucathi-gray">Nenhuma titularidade registrada.</p>
+        )}
+      </div>
 
-      <PropertyOwnerForm familyId={familyId} propertyId={property.id} />
+      <PropertyOwnerForm
+        familyId={familyId}
+        propertyId={property.id}
+        encumbranceSeverity={severity}
+      />
+
+      <div className="rounded-lg border border-lucathi-line/40 bg-white/70 p-2.5 text-xs">
+        <p className="mb-1 flex items-center gap-1 font-semibold text-lucathi-navy">
+          <ShieldAlert
+            className={`size-3.5 ${
+              severity === "vermelho"
+                ? "text-red-600"
+                : severity === "amarelo"
+                  ? "text-amber-600"
+                  : "text-lucathi-navy"
+            }`}
+          />{" "}
+          Gravames
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <EncumbranceBadge
+            value={property.encumbranceType}
+            note={property.encumbranceNote}
+          />
+          {severity === "amarelo" ? (
+            <span className="text-amber-800">
+              Em verificação — não trava a movimentação.
+            </span>
+          ) : null}
+          {severity === "vermelho" ? (
+            <span className="font-medium text-red-800">
+              Trava a movimentação do imóvel (vincular a sociedade e concluir).
+            </span>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

@@ -11,15 +11,18 @@ const idMocks = vi.hoisted(() => ({ createId: vi.fn() }));
 vi.mock("../_shared/database", () => databaseMocks);
 vi.mock("../_shared/ids", () => idMocks);
 
-import { properties, propertyOwners } from "../../../drizzle/schema";
+import { documents, properties, propertyOwners } from "../../../drizzle/schema";
 import {
   addPropertyOwnerRecord,
+  assertCompanyOwnershipAllowed,
   createPropertyRecord,
   getPropertyRecord,
   listPropertyOwners,
   listPropertyRecords,
   removePropertyOwnerRecord,
+  removePropertyRecord,
   updatePropertyOwnerRecord,
+  updatePropertyRecord,
 } from "./property-repository";
 
 type OwnerRow = {
@@ -149,6 +152,7 @@ type PropertyDbConfig = {
   propertyRows?: Record<string, unknown>[];
   ownerRows?: OwnerRow[];
   currentOwnerRows?: OwnerRow[];
+  documentRows?: { id: string }[];
   removedRows?: { id: string; propertyId: string }[];
 };
 
@@ -165,6 +169,7 @@ function propertyDb(config: PropertyDbConfig = {}) {
       const baseRows = (): unknown[] => {
         if (table === properties) return config.propertyRows ?? [];
         if (table === propertyOwners) return config.ownerRows ?? [];
+        if (table === documents) return config.documentRows ?? [];
         return [];
       };
       const limit = vi.fn(async () => {
@@ -307,6 +312,7 @@ describe("property-repository — atualização e remoção de titularidades", (
     await updatePropertyOwnerRecord({ propertyId: "imovel-1", ownerId: "own-p1" } as never);
     expect(setValues.mock.calls[0][0]).toEqual({
       personId: "p1",
+      companyId: null,
       ownershipPercentage: "40.00",
       rightType: "PROPRIEDADE",
     });
@@ -320,6 +326,7 @@ describe("property-repository — atualização e remoção de titularidades", (
     } as never);
     expect(setValues.mock.calls[1][0]).toEqual({
       personId: "p2",
+      companyId: null,
       ownershipPercentage: "25.00",
       rightType: "USUFRUTO",
     });
@@ -369,6 +376,35 @@ describe("property-repository — atualização e remoção de titularidades", (
     ).rejects.toThrow("soma das titularidades não pode passar de 100%");
   });
 
+  it("rejeita atualização que deixa a titularidade sem dono ou com dois donos", async () => {
+    const none = propertyDb({
+      currentOwnerRows: [owner("p1", "10.00")],
+      ownerRows: [owner("p1", "10.00")],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(none.db);
+    await expect(
+      updatePropertyOwnerRecord({
+        propertyId: "imovel-1",
+        ownerId: "own-p1",
+        personId: "",
+      } as never)
+    ).rejects.toThrow("exatamente um dono");
+
+    const two = propertyDb({
+      currentOwnerRows: [owner("p1", "10.00")],
+      ownerRows: [owner("p1", "10.00")],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(two.db);
+    await expect(
+      updatePropertyOwnerRecord({
+        propertyId: "imovel-1",
+        ownerId: "own-p1",
+        personId: "p1",
+        companyId: "hold-1",
+      } as never)
+    ).rejects.toThrow("exatamente um dono");
+  });
+
   it("remove a titularidade ou falha quando não confere com o imóvel", async () => {
     const ok = propertyDb({ removedRows: [{ id: "own-p1", propertyId: "imovel-1" }] });
     databaseMocks.requireDatabase.mockResolvedValue(ok.db);
@@ -389,6 +425,175 @@ describe("property-repository — atualização e remoção de titularidades", (
     await expect(
       removePropertyOwnerRecord({ propertyId: "imovel-1", ownerId: "own-p1" } as never)
     ).rejects.toThrow("Titularidade não encontrada.");
+  });
+
+  it("rejeita a mesma sociedade vinculada duas vezes ao imóvel", async () => {
+    const { db, insertValues } = mockDb([]);
+    // ownerRows do mockDb é usado como existing — simular row de empresa
+    (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([
+          {
+            id: "own-hold",
+            propertyId: "imovel-1",
+            personId: null,
+            companyId: "hold-1",
+            ownershipPercentage: "40.00",
+            rightType: "PROPRIEDADE",
+          },
+        ]),
+        limit: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      addPropertyOwnerRecord({
+        propertyId: "imovel-1",
+        companyId: "hold-1",
+        ownershipPercentage: 10,
+        rightType: "PROPRIEDADE",
+      } as never)
+    ).rejects.toThrow("já está vinculado");
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("aceita titular sociedade quando não há duplicidade", async () => {
+    const { db, insertValues } = mockDb([]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await addPropertyOwnerRecord({
+      propertyId: "imovel-1",
+      companyId: "hold-1",
+      ownershipPercentage: 100,
+      rightType: "PROPRIEDADE",
+    } as never);
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: "hold-1", personId: null })
+    );
+  });
+});
+
+describe("property-repository — edição e exclusão do imóvel", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("atualiza os campos do imóvel e falha quando não existe", async () => {
+    const found = propertyDb({ propertyLimitQueue: [[{ id: "imovel-1" }]] });
+    const setValues = found.setValues;
+    databaseMocks.requireDatabase.mockResolvedValue(found.db);
+
+    await expect(
+      updatePropertyRecord({
+        propertyId: "imovel-1",
+        description: "Casa Editada",
+        propertyCity: "São Paulo",
+        hasRegistration: true,
+        hasLaudemio: false,
+        utility: "PENDENTE",
+        encumbranceType: "PENDENTE",
+        declaredValue: 250000,
+        kind: "URBANO",
+        inscricaoImobiliaria: "12345",
+        registryOfficeNumber: 12,
+        registryUf: "SP",
+        itbiRate: 3,
+        rentValue: undefined,
+      } as never)
+    ).resolves.toEqual({ propertyId: "imovel-1" });
+    expect(setValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "Casa Editada",
+        irpfBalanceValue: "250000.00",
+        kind: "URBANO",
+        inscricaoImobiliaria: "12345",
+        registryOfficeNumber: 12,
+        registryUf: "SP",
+        itbiRate: "3.00",
+        laudemioRate: null,
+        rentValue: null,
+      })
+    );
+
+    const missing = propertyDb({ propertyLimitQueue: [[]] });
+    databaseMocks.requireDatabase.mockResolvedValue(missing.db);
+    await expect(
+      updatePropertyRecord({
+        propertyId: "sumido",
+        description: "X",
+        propertyCity: "Y",
+        hasRegistration: true,
+        hasLaudemio: false,
+        utility: "PENDENTE",
+        encumbranceType: "PENDENTE",
+      } as never)
+    ).rejects.toThrow("Imóvel não encontrado.");
+  });
+
+  it("bloqueia exclusão enquanto houver titularidade", async () => {
+    const { db } = propertyDb({
+      propertyLimitQueue: [[{ id: "imovel-1", familyId: "fam-1" }]],
+      currentOwnerRows: [owner("p1", "100.00")],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      removePropertyRecord("fam-1", "imovel-1")
+    ).rejects.toThrow("titularidades");
+  });
+
+  it("sem titularidade: arquiva documentos e exclui o imóvel", async () => {
+    const docs = propertyDb({
+      propertyLimitQueue: [[{ id: "imovel-1", familyId: "fam-1" }]],
+      currentOwnerRows: [],
+      documentRows: [{ id: "doc-1" }, { id: "doc-2" }],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(docs.db);
+
+    await expect(
+      removePropertyRecord("fam-1", "imovel-1")
+    ).resolves.toEqual({ archivedDocuments: 2 });
+    expect(docs.remove).toHaveBeenCalled();
+    expect(docs.setValues).toHaveBeenCalledWith({ status: "DISPENSADO" });
+  });
+
+  it("falha ao excluir imóvel de outra família ou inexistente", async () => {
+    const missing = propertyDb({ propertyLimitQueue: [[]] });
+    databaseMocks.requireDatabase.mockResolvedValue(missing.db);
+    await expect(
+      removePropertyRecord("fam-1", "sumido")
+    ).rejects.toThrow("Imóvel não encontrado nesta família.");
+  });
+});
+
+describe("property-repository — trava de sociedade por gravame vermelho", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("bloqueia quando o gravame é vermelho", async () => {
+    const { db } = propertyDb({
+      propertyLimitQueue: [[{ id: "imovel-1", encumbranceType: "HIPOTECA" }]],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    await expect(
+      assertCompanyOwnershipAllowed("imovel-1")
+    ).rejects.toThrow("gravame ativo");
+  });
+
+  it("permite quando o gravame é amarelo (Pendente) ou verde (Não há)", async () => {
+    const yellow = propertyDb({
+      propertyLimitQueue: [[{ id: "imovel-1", encumbranceType: "PENDENTE" }]],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(yellow.db);
+    await expect(
+      assertCompanyOwnershipAllowed("imovel-1")
+    ).resolves.toBeUndefined();
+
+    const green = propertyDb({
+      propertyLimitQueue: [[{ id: "imovel-1", encumbranceType: "NAO_HA" }]],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(green.db);
+    await expect(
+      assertCompanyOwnershipAllowed("imovel-1")
+    ).resolves.toBeUndefined();
   });
 });
 

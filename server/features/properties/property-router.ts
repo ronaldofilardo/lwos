@@ -7,18 +7,23 @@ import { recordAudit } from "../audit/audit-repository";
 import { ensureDocumentRequirements, PROPERTY_DOCUMENT_CATEGORIES } from "../documents/document-requirements";
 import {
   addPropertyOwnerRecord,
+  assertCompanyOwnershipAllowed,
   createPropertyRecord,
   getPropertyRecord,
   listPropertyOwners,
   listPropertyRecords,
+  removePropertyRecord,
   removePropertyOwnerRecord,
   updatePropertyOwnerRecord,
+  updatePropertyRecord,
 } from "./property-repository";
 import {
   propertyInputSchema,
   propertyOwnerDeleteSchema,
   propertyOwnerInputSchema,
   propertyOwnerUpdateSchema,
+  propertyUpdateSchema,
+  removePropertySchema,
 } from "./property-types";
 
 export const propertyRouter = router({
@@ -53,13 +58,43 @@ export const propertyRouter = router({
     });
     return { propertyId };
   }),
+  update: protectedProcedure.input(propertyUpdateSchema).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    const property = await getPropertyRecord(input.propertyId);
+    if (!property) throw new Error("Imóvel não encontrado.");
+    await assertFamilyAccess(ctx, property.familyId);
+    const result = await updatePropertyRecord(input);
+    await recordAudit({
+      action: "IMOVEL_ATUALIZADO",
+      entityType: "IMOVEL",
+      entityId: input.propertyId,
+      actorUserId: user.id,
+      familyId: property.familyId,
+    });
+    return result;
+  }),
+  remove: protectedProcedure.input(removePropertySchema).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    await assertFamilyAccess(ctx, input.familyId);
+    const result = await removePropertyRecord(input.familyId, input.propertyId);
+    await recordAudit({
+      action: "IMOVEL_EXCLUIDO",
+      entityType: "IMOVEL",
+      entityId: input.propertyId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: { archivedDocuments: result.archivedDocuments },
+    });
+    return result;
+  }),
   addOwner: protectedProcedure.input(propertyOwnerInputSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
+    if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
     const ownerId = await addPropertyOwnerRecord(input);
-    await recordAudit({ action: "TITULARIDADE_REGISTRADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId, personId: input.personId, ownershipPercentage: input.ownershipPercentage } });
+    await recordAudit({ action: "TITULARIDADE_REGISTRADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId, personId: input.personId ?? "", companyId: input.companyId ?? "", ownershipPercentage: input.ownershipPercentage } });
     return { ownerId };
   }),
   updateOwner: protectedProcedure.input(propertyOwnerUpdateSchema).mutation(async ({ ctx, input }) => {
@@ -67,6 +102,7 @@ export const propertyRouter = router({
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
+    if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
     await updatePropertyOwnerRecord(input);
     await recordAudit({ action: "TITULARIDADE_ATUALIZADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId: input.ownerId } });
     return { success: true };

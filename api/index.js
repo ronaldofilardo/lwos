@@ -4126,9 +4126,172 @@ init_roles();
 init_schema();
 init_database();
 import { desc as desc7, eq as eq21, and as and12 } from "drizzle-orm";
+
+// server/features/properties/property-types.ts
+import { z as z18 } from "zod";
+init_schema();
+var propertyKindSchema = z18.enum(propertyKindValues);
+var propertyUtilitySchema = z18.enum(propertyUtilityValues);
+var encumbranceTypeSchema = z18.enum(encumbranceTypeValues);
+var moneySchema = z18.number().nonnegative();
+var propertyInputSchema = z18.object({
+  familyId: z18.string().min(1),
+  description: z18.string().min(3).max(240),
+  kind: propertyKindSchema.optional(),
+  uf: ufSchema.optional(),
+  hasRegistration: z18.boolean().default(true),
+  registrationNumber: z18.string().max(120).optional(),
+  alternativeDocType: z18.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
+  noRegistrationReason: z18.string().max(1e3).optional(),
+  registryOfficeNumber: z18.number().int().min(1).max(55).optional(),
+  registryUf: ufSchema.optional(),
+  registryCity: z18.string().max(120).optional(),
+  propertyCity: z18.string().min(2).max(120),
+  inscricaoImobiliaria: z18.string().max(120).optional(),
+  ccir: z18.string().max(40).optional(),
+  nirf: z18.string().max(40).optional(),
+  notes: z18.string().max(4e3).optional(),
+  acquisitionDate: z18.string().optional(),
+  declaredValue: moneySchema.optional(),
+  marketValue: moneySchema.optional(),
+  venalValue: moneySchema.optional(),
+  irGcapValue: moneySchema.optional(),
+  emolumentsValue: moneySchema.optional(),
+  itbiRate: z18.number().min(0).max(100).optional(),
+  hasLaudemio: z18.boolean().default(false),
+  laudemioRate: z18.number().min(0).max(100).optional(),
+  utility: propertyUtilitySchema.default("PENDENTE"),
+  rentValue: moneySchema.optional(),
+  encumbranceType: encumbranceTypeSchema.default("PENDENTE"),
+  encumbranceNote: z18.string().max(1e3).optional()
+}).refine(
+  (data) => {
+    if (!data.hasRegistration) {
+      return Boolean(
+        data.alternativeDocType && data.noRegistrationReason && data.noRegistrationReason.trim().length >= 3
+      );
+    }
+    return true;
+  },
+  {
+    message: "Im\xF3veis sem matr\xEDcula exigem documento alternativo (Escritura P\xFAblica ou Contrato de Compra e Venda) e justificativa.",
+    path: ["alternativeDocType"]
+  }
+).refine(
+  (data) => {
+    if (data.kind === "RURAL") {
+      return Boolean(data.ccir?.trim() && data.nirf?.trim());
+    }
+    return true;
+  },
+  {
+    message: "Im\xF3vel rural exige CCIR e NIRF.",
+    path: ["ccir"]
+  }
+).refine(
+  (data) => {
+    if (data.hasLaudemio) {
+      return data.laudemioRate !== void 0 && data.laudemioRate > 0;
+    }
+    return true;
+  },
+  {
+    message: "Laud\xEAmio confirmado exige al\xEDquota maior que zero.",
+    path: ["laudemioRate"]
+  }
+).refine(
+  (data) => {
+    if (data.utility === "LOCACAO_ARRENDAMENTO") {
+      return data.rentValue !== void 0 && data.rentValue > 0;
+    }
+    return true;
+  },
+  {
+    message: "Loca\xE7\xE3o/Arrendamento exige valor de loca\xE7\xE3o maior que zero.",
+    path: ["rentValue"]
+  }
+);
+var propertyUpdateSchema = propertyInputSchema.omit({ familyId: true }).extend({ propertyId: z18.string().min(1) });
+var propertyOwnerInputSchema = z18.object({
+  propertyId: z18.string().min(1),
+  personId: z18.string().min(1).optional(),
+  companyId: z18.string().min(1).optional(),
+  ownershipPercentage: z18.number().positive().max(100),
+  rightType: z18.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
+}).refine((data) => Boolean(data.personId) !== Boolean(data.companyId), {
+  message: "A titularidade exige exatamente um dono: pessoa ou sociedade.",
+  path: ["personId"]
+});
+var propertyOwnerUpdateSchema = z18.object({
+  propertyId: z18.string().min(1),
+  ownerId: z18.string().min(1),
+  personId: z18.string().min(1).optional(),
+  companyId: z18.string().min(1).optional(),
+  ownershipPercentage: z18.number().positive().max(100).optional(),
+  rightType: z18.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
+}).refine(
+  (data) => {
+    if (data.personId === void 0 && data.companyId === void 0) {
+      return true;
+    }
+    return Boolean(data.personId) !== Boolean(data.companyId);
+  },
+  {
+    message: "A titularidade exige exatamente um dono: pessoa ou sociedade.",
+    path: ["personId"]
+  }
+);
+var propertyOwnerDeleteSchema = z18.object({
+  propertyId: z18.string().min(1),
+  ownerId: z18.string().min(1)
+});
+var removePropertySchema = z18.object({
+  familyId: z18.string().min(1),
+  propertyId: z18.string().min(1)
+});
+function isEncumbranceRed(value) {
+  return Boolean(value) && value !== "PENDENTE" && value !== "NA" && value !== "NAO_HA";
+}
+
+// server/features/properties/property-repository.ts
 var PCT_EPSILON2 = 1e-3;
 function totalOwnership(rows) {
   return rows.reduce((sum, row) => sum + Number(row.ownershipPercentage ?? 0), 0);
+}
+function money2(value) {
+  return value === void 0 ? null : value.toFixed(2);
+}
+function propertyValues(input) {
+  return {
+    description: input.description,
+    kind: input.kind ?? null,
+    uf: input.uf ?? null,
+    hasRegistration: input.hasRegistration,
+    registrationNumber: input.hasRegistration ? input.registrationNumber || null : null,
+    alternativeDocType: input.hasRegistration ? null : input.alternativeDocType || null,
+    noRegistrationReason: input.hasRegistration ? null : input.noRegistrationReason || null,
+    registryOfficeNumber: input.registryOfficeNumber ?? null,
+    registryUf: input.registryUf ?? null,
+    registryCity: input.registryCity || null,
+    propertyCity: input.propertyCity,
+    inscricaoImobiliaria: input.inscricaoImobiliaria || null,
+    ccir: input.ccir || null,
+    nirf: input.nirf || null,
+    notes: input.notes || null,
+    acquisitionDate: input.acquisitionDate || null,
+    irpfBalanceValue: money2(input.declaredValue),
+    marketValue: money2(input.marketValue),
+    venalValue: money2(input.venalValue),
+    irGcapValue: money2(input.irGcapValue),
+    emolumentsValue: money2(input.emolumentsValue),
+    itbiRate: money2(input.itbiRate),
+    hasLaudemio: input.hasLaudemio,
+    laudemioRate: input.hasLaudemio ? money2(input.laudemioRate) : null,
+    utility: input.utility,
+    rentValue: input.utility === "LOCACAO_ARRENDAMENTO" ? money2(input.rentValue) : null,
+    encumbranceType: input.encumbranceType,
+    encumbranceNote: input.encumbranceNote || null
+  };
 }
 async function createPropertyRecord(input) {
   const db = await requireDatabase();
@@ -4144,18 +4307,42 @@ async function createPropertyRecord(input) {
     return existingProperty[0].id;
   }
   await db.insert(properties).values({
-    ...input,
+    ...propertyValues(input),
     id,
-    hasRegistration: input.hasRegistration,
-    registrationNumber: input.hasRegistration ? input.registrationNumber || null : null,
-    alternativeDocType: input.hasRegistration ? null : input.alternativeDocType || null,
-    noRegistrationReason: input.hasRegistration ? null : input.noRegistrationReason || null,
-    registryCity: input.registryCity || null,
-    acquisitionDate: input.acquisitionDate || null,
-    irpfBalanceValue: input.declaredValue?.toFixed(2) ?? null,
-    marketValue: input.marketValue?.toFixed(2) ?? null
+    familyId: input.familyId
   });
   return id;
+}
+async function updatePropertyRecord(input) {
+  const db = await requireDatabase();
+  const [current] = await db.select().from(properties).where(eq21(properties.id, input.propertyId)).limit(1);
+  if (!current) throw new Error("Im\xF3vel n\xE3o encontrado.");
+  await db.update(properties).set({ ...propertyValues(input), updatedAt: /* @__PURE__ */ new Date() }).where(eq21(properties.id, input.propertyId));
+  return { propertyId: input.propertyId };
+}
+async function removePropertyRecord(familyId, propertyId) {
+  const db = await requireDatabase();
+  const [property] = await db.select().from(properties).where(and12(eq21(properties.id, propertyId), eq21(properties.familyId, familyId))).limit(1);
+  if (!property) throw new Error("Im\xF3vel n\xE3o encontrado nesta fam\xEDlia.");
+  const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq21(propertyOwners.propertyId, propertyId)).limit(1);
+  if (owner) {
+    throw new Error(
+      "N\xE3o \xE9 poss\xEDvel excluir: remova as titularidades do im\xF3vel antes."
+    );
+  }
+  const documentsToArchive = await db.select({ id: documents.id }).from(documents).where(
+    and12(eq21(documents.familyId, familyId), eq21(documents.entityId, propertyId))
+  );
+  if (documentsToArchive.length) {
+    await db.update(documents).set({ status: "DISPENSADO" }).where(
+      and12(
+        eq21(documents.familyId, familyId),
+        eq21(documents.entityId, propertyId)
+      )
+    );
+  }
+  await db.delete(properties).where(eq21(properties.id, propertyId));
+  return { archivedDocuments: documentsToArchive.length };
 }
 async function listPropertyRecords(familyId) {
   const db = await requireDatabase();
@@ -4171,7 +4358,8 @@ async function addPropertyOwnerRecord(input) {
   const id = createId();
   await db.transaction(async (tx) => {
     const existing = await tx.select().from(propertyOwners).where(eq21(propertyOwners.propertyId, input.propertyId));
-    if (existing.some((row) => row.personId === input.personId)) {
+    const duplicate = input.personId && existing.some((row) => row.personId === input.personId) || input.companyId && existing.some((row) => row.companyId === input.companyId);
+    if (duplicate) {
       throw new Error("Este membro j\xE1 est\xE1 vinculado a este im\xF3vel.");
     }
     const total = totalOwnership(existing) + input.ownershipPercentage;
@@ -4180,9 +4368,23 @@ async function addPropertyOwnerRecord(input) {
         `A soma das titularidades n\xE3o pode passar de 100% (atual ${totalOwnership(existing)}%).`
       );
     }
-    await tx.insert(propertyOwners).values({ ...input, id, ownershipPercentage: input.ownershipPercentage.toFixed(2) });
+    await tx.insert(propertyOwners).values({
+      ...input,
+      id,
+      personId: input.personId ?? null,
+      companyId: input.companyId ?? null,
+      ownershipPercentage: input.ownershipPercentage.toFixed(2)
+    });
   });
   return id;
+}
+async function assertCompanyOwnershipAllowed(propertyId) {
+  const property = await getPropertyRecord(propertyId);
+  if (property && isEncumbranceRed(property.encumbranceType)) {
+    throw new Error(
+      "Im\xF3vel com gravame ativo: remova o gravame (ou marque como N\xE3o h\xE1) antes de vincular a uma sociedade."
+    );
+  }
 }
 async function updatePropertyOwnerRecord(input) {
   const db = await requireDatabase();
@@ -4195,7 +4397,14 @@ async function updatePropertyOwnerRecord(input) {
     const others = await tx.select().from(propertyOwners).where(eq21(propertyOwners.propertyId, input.propertyId));
     const remaining = others.filter((row) => row.id !== input.ownerId);
     const personId = input.personId ?? owner.personId;
-    if (remaining.some((row) => row.personId === personId)) {
+    const companyId = input.companyId ?? owner.companyId;
+    if (Boolean(personId) === Boolean(companyId)) {
+      throw new Error(
+        "A titularidade exige exatamente um dono: pessoa ou sociedade."
+      );
+    }
+    const duplicate = personId && remaining.some((row) => row.personId === personId) || companyId && remaining.some((row) => row.companyId === companyId);
+    if (duplicate) {
       throw new Error("Este membro j\xE1 est\xE1 vinculado a este im\xF3vel.");
     }
     const percentage = input.ownershipPercentage ?? Number(owner.ownershipPercentage);
@@ -4206,7 +4415,8 @@ async function updatePropertyOwnerRecord(input) {
       );
     }
     await tx.update(propertyOwners).set({
-      personId,
+      personId: personId ?? null,
+      companyId: companyId ?? null,
       ownershipPercentage: percentage.toFixed(2),
       rightType: input.rightType ?? owner.rightType
     }).where(eq21(propertyOwners.id, input.ownerId));
@@ -4225,47 +4435,6 @@ async function listPropertyOwners(propertyId) {
   const db = await requireDatabase();
   return db.select().from(propertyOwners).where(eq21(propertyOwners.propertyId, propertyId));
 }
-
-// server/features/properties/property-types.ts
-import { z as z18 } from "zod";
-var propertyInputSchema = z18.object({
-  familyId: z18.string().min(1),
-  description: z18.string().min(3).max(240),
-  hasRegistration: z18.boolean().default(true),
-  registrationNumber: z18.string().max(120).optional(),
-  alternativeDocType: z18.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
-  noRegistrationReason: z18.string().max(1e3).optional(),
-  propertyCity: z18.string().min(2).max(120),
-  registryCity: z18.string().max(120).optional(),
-  acquisitionDate: z18.string().optional(),
-  declaredValue: z18.number().nonnegative().optional(),
-  marketValue: z18.number().nonnegative().optional()
-}).refine((data) => {
-  if (!data.hasRegistration) {
-    return Boolean(data.alternativeDocType && data.noRegistrationReason && data.noRegistrationReason.trim().length >= 3);
-  }
-  return true;
-}, {
-  message: "Im\xF3veis sem matr\xEDcula exigem documento alternativo (Escritura P\xFAblica ou Contrato de Compra e Venda) e justificativa.",
-  path: ["alternativeDocType"]
-});
-var propertyOwnerInputSchema = z18.object({
-  propertyId: z18.string().min(1),
-  personId: z18.string().min(1),
-  ownershipPercentage: z18.number().positive().max(100),
-  rightType: z18.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
-});
-var propertyOwnerUpdateSchema = z18.object({
-  propertyId: z18.string().min(1),
-  ownerId: z18.string().min(1),
-  personId: z18.string().min(1).optional(),
-  ownershipPercentage: z18.number().positive().max(100).optional(),
-  rightType: z18.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
-});
-var propertyOwnerDeleteSchema = z18.object({
-  propertyId: z18.string().min(1),
-  ownerId: z18.string().min(1)
-});
 
 // server/features/properties/property-router.ts
 var propertyRouter = router({
@@ -4298,13 +4467,43 @@ var propertyRouter = router({
     });
     return { propertyId };
   }),
+  update: protectedProcedure.input(propertyUpdateSchema).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    const property = await getPropertyRecord(input.propertyId);
+    if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
+    await assertFamilyAccess(ctx, property.familyId);
+    const result = await updatePropertyRecord(input);
+    await recordAudit({
+      action: "IMOVEL_ATUALIZADO",
+      entityType: "IMOVEL",
+      entityId: input.propertyId,
+      actorUserId: user.id,
+      familyId: property.familyId
+    });
+    return result;
+  }),
+  remove: protectedProcedure.input(removePropertySchema).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    await assertFamilyAccess(ctx, input.familyId);
+    const result = await removePropertyRecord(input.familyId, input.propertyId);
+    await recordAudit({
+      action: "IMOVEL_EXCLUIDO",
+      entityType: "IMOVEL",
+      entityId: input.propertyId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: { archivedDocuments: result.archivedDocuments }
+    });
+    return result;
+  }),
   addOwner: protectedProcedure.input(propertyOwnerInputSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
+    if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
     const ownerId = await addPropertyOwnerRecord(input);
-    await recordAudit({ action: "TITULARIDADE_REGISTRADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId, personId: input.personId, ownershipPercentage: input.ownershipPercentage } });
+    await recordAudit({ action: "TITULARIDADE_REGISTRADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId, personId: input.personId ?? "", companyId: input.companyId ?? "", ownershipPercentage: input.ownershipPercentage } });
     return { ownerId };
   }),
   updateOwner: protectedProcedure.input(propertyOwnerUpdateSchema).mutation(async ({ ctx, input }) => {
@@ -4312,6 +4511,7 @@ var propertyRouter = router({
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
+    if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
     await updatePropertyOwnerRecord(input);
     await recordAudit({ action: "TITULARIDADE_ATUALIZADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId: input.ownerId } });
     return { success: true };

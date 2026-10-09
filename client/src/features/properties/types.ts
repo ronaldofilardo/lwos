@@ -29,9 +29,56 @@ export const encumbranceTypeLabels: Record<EncumbranceType, string> = {
   USUFRUTO: "Usufruto",
 };
 
-/** Valores que não devem acionar o alerta visual de gravame. */
-export const inactiveEncumbranceValues: readonly EncumbranceType[] = [
+/** Semáforo amarelo: Pendente e N/A — só alerta, não trava. */
+export const yellowEncumbranceValues: readonly EncumbranceType[] = [
   "PENDENTE",
   "NA",
-  "NAO_HA",
 ];
+
+/** Semáforo verde: apenas «Não há». */
+export const greenEncumbranceValues: readonly EncumbranceType[] = ["NAO_HA"];
+
+export type EncumbranceSeverity = "verde" | "amarelo" | "vermelho";
+
+/** Regra do semáforo: Não há = verde; Pendente/N/A = amarelo; resto = vermelho. */
+export function encumbranceSeverity(
+  value: string | null | undefined
+): EncumbranceSeverity | null {
+  if (!value) return null;
+  if (greenEncumbranceValues.includes(value as EncumbranceType)) return "verde";
+  if (yellowEncumbranceValues.includes(value as EncumbranceType))
+    return "amarelo";
+  return "vermelho";
+}
+
+/** Vermelho trava a movimentação (vínculo com sociedade, conclusão). */
+export function isEncumbranceRed(value: string | null | undefined): boolean {
+  return encumbranceSeverity(value) === "vermelho";
+}
+
+export const propertyKindLabels = {
+  URBANO: "Urbano",
+  RURAL: "Rural",
+} as const;
+
+export const propertyUtilityValues = [
+  "ATIVIDADE_INDUSTRIAL_COMERCIAL",
+  "ATIVIDADE_RURAL",
+  "INVESTIMENTO",
+  "LAZER",
+  "LOCACAO_ARRENDAMENTO",
+  "OUTRA",
+  "PENDENTE",
+  "RESIDENCIAL",
+] as const;
+
+export const propertyUtilityLabels: Record<(typeof propertyUtilityValues)[number], string> = {
+  ATIVIDADE_INDUSTRIAL_COMERCIAL: "Atividade industrial/comercial",
+  ATIVIDADE_RURAL: "Atividade rural",
+  INVESTIMENTO: "Investimento",
+  LAZER: "Lazer",
+  LOCACAO_ARRENDAMENTO: "Locação / Arrendamento",
+  OUTRA: "Outra",
+  PENDENTE: "Pendente",
+  RESIDENCIAL: "Residencial",
+};

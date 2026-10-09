@@ -1,13 +1,19 @@
 import { desc, eq, and } from "drizzle-orm";
-import { properties, propertyOwners } from "../../../drizzle/schema";
+import {
+  documents,
+  propertyOwners,
+  properties,
+} from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
+import { isEncumbranceRed } from "./property-types";
 import type { z } from "zod";
 import type {
   propertyInputSchema,
   propertyOwnerDeleteSchema,
   propertyOwnerInputSchema,
   propertyOwnerUpdateSchema,
+  propertyUpdateSchema,
 } from "./property-types";
 
 /** Tolerância de fração de centavo na soma das titularidades. */
@@ -17,51 +23,175 @@ function totalOwnership(rows: { ownershipPercentage: string | null }[]) {
   return rows.reduce((sum, row) => sum + Number(row.ownershipPercentage ?? 0), 0);
 }
 
-export async function createPropertyRecord(input: z.infer<typeof propertyInputSchema>) {
+function money(value: number | undefined): string | null {
+  return value === undefined ? null : value.toFixed(2);
+}
+
+/** Normaliza os campos opcionais do imóvel para gravação (create/update). */
+function propertyValues(
+  input:
+    | z.infer<typeof propertyInputSchema>
+    | z.infer<typeof propertyUpdateSchema>
+) {
+  return {
+    description: input.description,
+    kind: input.kind ?? null,
+    uf: input.uf ?? null,
+    hasRegistration: input.hasRegistration,
+    registrationNumber: input.hasRegistration
+      ? input.registrationNumber || null
+      : null,
+    alternativeDocType: input.hasRegistration
+      ? null
+      : input.alternativeDocType || null,
+    noRegistrationReason: input.hasRegistration
+      ? null
+      : input.noRegistrationReason || null,
+    registryOfficeNumber: input.registryOfficeNumber ?? null,
+    registryUf: input.registryUf ?? null,
+    registryCity: input.registryCity || null,
+    propertyCity: input.propertyCity,
+    inscricaoImobiliaria: input.inscricaoImobiliaria || null,
+    ccir: input.ccir || null,
+    nirf: input.nirf || null,
+    notes: input.notes || null,
+    acquisitionDate: input.acquisitionDate || null,
+    irpfBalanceValue: money(input.declaredValue),
+    marketValue: money(input.marketValue),
+    venalValue: money(input.venalValue),
+    irGcapValue: money(input.irGcapValue),
+    emolumentsValue: money(input.emolumentsValue),
+    itbiRate: money(input.itbiRate),
+    hasLaudemio: input.hasLaudemio,
+    laudemioRate: input.hasLaudemio ? money(input.laudemioRate) : null,
+    utility: input.utility,
+    rentValue:
+      input.utility === "LOCACAO_ARRENDAMENTO" ? money(input.rentValue) : null,
+    encumbranceType: input.encumbranceType,
+    encumbranceNote: input.encumbranceNote || null,
+  };
+}
+
+export async function createPropertyRecord(
+  input: z.infer<typeof propertyInputSchema>
+) {
   const db = await requireDatabase();
   const id = createId();
 
-  // Verificar se já existe um imóvel com mesma descrição e cidade para esta família
-  const existingProperty = await db.select().from(properties).where(
-    and(
-      eq(properties.familyId, input.familyId),
-      eq(properties.description, input.description),
-      eq(properties.propertyCity, input.propertyCity)
+  const existingProperty = await db
+    .select()
+    .from(properties)
+    .where(
+      and(
+        eq(properties.familyId, input.familyId),
+        eq(properties.description, input.description),
+        eq(properties.propertyCity, input.propertyCity)
+      )
     )
-  ).limit(1);
+    .limit(1);
 
   if (existingProperty.length > 0) {
-    // Já existe este imóvel integralizado - retornar o ID existente
     return existingProperty[0].id;
   }
 
   await db.insert(properties).values({
-    ...input,
+    ...propertyValues(input),
     id,
-    hasRegistration: input.hasRegistration,
-    registrationNumber: input.hasRegistration ? (input.registrationNumber || null) : null,
-    alternativeDocType: input.hasRegistration ? null : (input.alternativeDocType || null),
-    noRegistrationReason: input.hasRegistration ? null : (input.noRegistrationReason || null),
-    registryCity: input.registryCity || null,
-    acquisitionDate: input.acquisitionDate || null,
-    irpfBalanceValue: input.declaredValue?.toFixed(2) ?? null,
-    marketValue: input.marketValue?.toFixed(2) ?? null,
+    familyId: input.familyId,
   });
   return id;
 }
 
+export async function updatePropertyRecord(
+  input: z.infer<typeof propertyUpdateSchema>
+) {
+  const db = await requireDatabase();
+  const [current] = await db
+    .select()
+    .from(properties)
+    .where(eq(properties.id, input.propertyId))
+    .limit(1);
+  if (!current) throw new Error("Imóvel não encontrado.");
+
+  await db
+    .update(properties)
+    .set({ ...propertyValues(input), updatedAt: new Date() })
+    .where(eq(properties.id, input.propertyId));
+  return { propertyId: input.propertyId };
+}
+
+/**
+ * Exclui o imóvel quando não há titularidade. Documentos e arquivos enviados
+ * permanecem no sistema (arquivados) — nada é apagado do disco.
+ */
+export async function removePropertyRecord(
+  familyId: string,
+  propertyId: string
+): Promise<{ archivedDocuments: number }> {
+  const db = await requireDatabase();
+
+  const [property] = await db
+    .select()
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), eq(properties.familyId, familyId)))
+    .limit(1);
+  if (!property) throw new Error("Imóvel não encontrado nesta família.");
+
+  const [owner] = await db
+    .select({ id: propertyOwners.id })
+    .from(propertyOwners)
+    .where(eq(propertyOwners.propertyId, propertyId))
+    .limit(1);
+  if (owner) {
+    throw new Error(
+      "Não é possível excluir: remova as titularidades do imóvel antes."
+    );
+  }
+
+  const documentsToArchive = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(eq(documents.familyId, familyId), eq(documents.entityId, propertyId))
+    );
+  if (documentsToArchive.length) {
+    await db
+      .update(documents)
+      .set({ status: "DISPENSADO" })
+      .where(
+        and(
+          eq(documents.familyId, familyId),
+          eq(documents.entityId, propertyId)
+        )
+      );
+  }
+
+  await db.delete(properties).where(eq(properties.id, propertyId));
+  return { archivedDocuments: documentsToArchive.length };
+}
+
 export async function listPropertyRecords(familyId: string) {
   const db = await requireDatabase();
-  return db.select().from(properties).where(eq(properties.familyId, familyId)).orderBy(desc(properties.updatedAt));
+  return db
+    .select()
+    .from(properties)
+    .where(eq(properties.familyId, familyId))
+    .orderBy(desc(properties.updatedAt));
 }
 
 export async function getPropertyRecord(propertyId: string) {
   const db = await requireDatabase();
-  const result = await db.select().from(properties).where(eq(properties.id, propertyId)).limit(1);
+  const result = await db
+    .select()
+    .from(properties)
+    .where(eq(properties.id, propertyId))
+    .limit(1);
   return result[0] ?? null;
 }
 
-export async function addPropertyOwnerRecord(input: z.infer<typeof propertyOwnerInputSchema>) {
+export async function addPropertyOwnerRecord(
+  input: z.infer<typeof propertyOwnerInputSchema>
+) {
   const db = await requireDatabase();
   const id = createId();
   await db.transaction(async tx => {
@@ -69,7 +199,10 @@ export async function addPropertyOwnerRecord(input: z.infer<typeof propertyOwner
       .select()
       .from(propertyOwners)
       .where(eq(propertyOwners.propertyId, input.propertyId));
-    if (existing.some(row => row.personId === input.personId)) {
+    const duplicate =
+      (input.personId && existing.some(row => row.personId === input.personId)) ||
+      (input.companyId && existing.some(row => row.companyId === input.companyId));
+    if (duplicate) {
       throw new Error("Este membro já está vinculado a este imóvel.");
     }
     const total = totalOwnership(existing) + input.ownershipPercentage;
@@ -78,11 +211,25 @@ export async function addPropertyOwnerRecord(input: z.infer<typeof propertyOwner
         `A soma das titularidades não pode passar de 100% (atual ${totalOwnership(existing)}%).`
       );
     }
-    await tx
-      .insert(propertyOwners)
-      .values({ ...input, id, ownershipPercentage: input.ownershipPercentage.toFixed(2) });
+    await tx.insert(propertyOwners).values({
+      ...input,
+      id,
+      personId: input.personId ?? null,
+      companyId: input.companyId ?? null,
+      ownershipPercentage: input.ownershipPercentage.toFixed(2),
+    });
   });
   return id;
+}
+
+/** Bloqueia vínculo com sociedade enquanto o gravame estiver vermelho. */
+export async function assertCompanyOwnershipAllowed(propertyId: string) {
+  const property = await getPropertyRecord(propertyId);
+  if (property && isEncumbranceRed(property.encumbranceType)) {
+    throw new Error(
+      "Imóvel com gravame ativo: remova o gravame (ou marque como Não há) antes de vincular a uma sociedade."
+    );
+  }
 }
 
 export async function updatePropertyOwnerRecord(
@@ -106,10 +253,20 @@ export async function updatePropertyOwnerRecord(
     const remaining = others.filter(row => row.id !== input.ownerId);
 
     const personId = input.personId ?? owner.personId;
-    if (remaining.some(row => row.personId === personId)) {
+    const companyId = input.companyId ?? owner.companyId;
+    if (Boolean(personId) === Boolean(companyId)) {
+      throw new Error(
+        "A titularidade exige exatamente um dono: pessoa ou sociedade."
+      );
+    }
+    const duplicate =
+      (personId && remaining.some(row => row.personId === personId)) ||
+      (companyId && remaining.some(row => row.companyId === companyId));
+    if (duplicate) {
       throw new Error("Este membro já está vinculado a este imóvel.");
     }
-    const percentage = input.ownershipPercentage ?? Number(owner.ownershipPercentage);
+    const percentage =
+      input.ownershipPercentage ?? Number(owner.ownershipPercentage);
     const total = totalOwnership(remaining) + percentage;
     if (total > 100 + PCT_EPSILON) {
       throw new Error(
@@ -120,7 +277,8 @@ export async function updatePropertyOwnerRecord(
     await tx
       .update(propertyOwners)
       .set({
-        personId,
+        personId: personId ?? null,
+        companyId: companyId ?? null,
         ownershipPercentage: percentage.toFixed(2),
         rightType: input.rightType ?? owner.rightType,
       })
@@ -145,6 +303,8 @@ export async function removePropertyOwnerRecord(
 
 export async function listPropertyOwners(propertyId: string) {
   const db = await requireDatabase();
-  return db.select().from(propertyOwners).where(eq(propertyOwners.propertyId, propertyId));
+  return db
+    .select()
+    .from(propertyOwners)
+    .where(eq(propertyOwners.propertyId, propertyId));
 }
-
