@@ -4779,7 +4779,7 @@ import { z as z24 } from "zod";
 // server/features/assets/assets-repository.ts
 init_schema();
 init_database();
-import { desc as desc10, eq as eq25 } from "drizzle-orm";
+import { and as and14, desc as desc10, eq as eq25 } from "drizzle-orm";
 async function createAssetRecord(input) {
   const db = await requireDatabase();
   const id = createId();
@@ -4795,6 +4795,38 @@ async function listAssetRecords(familyId) {
   const db = await requireDatabase();
   return db.select().from(otherAssets).where(eq25(otherAssets.familyId, familyId)).orderBy(desc10(otherAssets.updatedAt));
 }
+async function getAssetRecord(assetId) {
+  const db = await requireDatabase();
+  const [result] = await db.select().from(otherAssets).where(eq25(otherAssets.id, assetId)).limit(1);
+  return result ?? null;
+}
+async function updateAssetRecord(input) {
+  const db = await requireDatabase();
+  const existing = await getAssetRecord(input.assetId);
+  if (!existing) throw new Error("Ativo n\xE3o encontrado.");
+  await db.update(otherAssets).set({
+    category: input.category,
+    description: input.description,
+    declaredValue: input.declaredValue.toFixed(2),
+    ownerPersonId: input.ownerPersonId,
+    notes: input.notes || null,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(eq25(otherAssets.id, input.assetId));
+  return { assetId: input.assetId };
+}
+async function removeAssetRecord(familyId, assetId) {
+  const db = await requireDatabase();
+  const [asset] = await db.select().from(otherAssets).where(and14(eq25(otherAssets.id, assetId), eq25(otherAssets.familyId, familyId))).limit(1);
+  if (!asset) throw new Error("Ativo n\xE3o encontrado nesta fam\xEDlia.");
+  const docs = await db.select({ id: documents.id }).from(documents).where(
+    and14(eq25(documents.entityType, "ATIVO"), eq25(documents.entityId, assetId))
+  );
+  for (const doc of docs) {
+    await db.update(documents).set({ status: "DISPENSADO" }).where(eq25(documents.id, doc.id));
+  }
+  await db.delete(otherAssets).where(eq25(otherAssets.id, assetId));
+  return { archivedDocuments: docs.length };
+}
 
 // server/features/assets/assets-types.ts
 init_schema();
@@ -4802,11 +4834,16 @@ import { z as z23 } from "zod";
 var assetCategorySchema = z23.enum(assetCategoryValues);
 var createAssetSchema = z23.object({
   familyId: z23.string().min(1),
-  category: assetCategorySchema.default("OUTROS"),
+  category: assetCategorySchema,
   description: z23.string().min(2).max(240),
-  declaredValue: z23.number().nonnegative(),
-  ownerPersonId: z23.string().min(1),
+  declaredValue: z23.number().positive("Informe o valor declarado (> 0)."),
+  ownerPersonId: z23.string().min(1, "Informe o respons\xE1vel pelo ativo."),
   notes: z23.string().max(1e3).optional()
+});
+var updateAssetSchema = createAssetSchema.omit({ familyId: true }).extend({ assetId: z23.string().min(1) });
+var removeAssetSchema = z23.object({
+  familyId: z23.string().min(1),
+  assetId: z23.string().min(1)
 });
 
 // server/features/assets/assets-router.ts
@@ -4834,6 +4871,36 @@ var assetRouter = router({
       metadata: { category: input.category, description: input.description, requirements: requirements.length }
     });
     return { assetId };
+  }),
+  update: protectedProcedure.input(updateAssetSchema).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    const asset = await getAssetRecord(input.assetId);
+    if (!asset) throw new Error("Ativo n\xE3o encontrado.");
+    await assertFamilyAccess(ctx, asset.familyId);
+    const result = await updateAssetRecord(input);
+    await recordAudit({
+      action: "ATIVO_ATUALIZADO",
+      entityType: "ATIVO",
+      entityId: input.assetId,
+      actorUserId: user.id,
+      familyId: asset.familyId,
+      metadata: { category: input.category, description: input.description }
+    });
+    return result;
+  }),
+  remove: protectedProcedure.input(removeAssetSchema).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    await assertFamilyAccess(ctx, input.familyId);
+    const result = await removeAssetRecord(input.familyId, input.assetId);
+    await recordAudit({
+      action: "ATIVO_EXCLUIDO",
+      entityType: "ATIVO",
+      entityId: input.assetId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: { archivedDocuments: result.archivedDocuments }
+    });
+    return result;
   })
 });
 
