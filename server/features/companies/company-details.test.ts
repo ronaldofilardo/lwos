@@ -96,4 +96,29 @@ describe("companyDetailsUpsertSchema", () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  it("rejeita S/A com Simples Nacional (LC 123/2006, art. 3º, §4º)", () => {
+    const parsed = companyDetailsUpsertSchema.safeParse({
+      companyId: "hold-1",
+      fields: { societaryType: "SA", taxRegime: "SIMPLES_NACIONAL" },
+    });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.error.issues[0].message).toContain("Simples Nacional");
+  });
+
+  it("aceita S/A com Lucro Presumido e LTDA com Simples", () => {
+    expect(
+      companyDetailsUpsertSchema.safeParse({
+        companyId: "hold-1",
+        fields: { societaryType: "SA", taxRegime: "LUCRO_PRESUMIDO" },
+      }).success
+    ).toBe(true);
+    expect(
+      companyDetailsUpsertSchema.safeParse({
+        companyId: "hold-1",
+        fields: { societaryType: "LTDA", taxRegime: "SIMPLES_NACIONAL" },
+      }).success
+    ).toBe(true);
+  });
 });

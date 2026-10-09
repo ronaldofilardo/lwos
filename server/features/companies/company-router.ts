@@ -52,24 +52,29 @@ export const companyRouter = router({
     const user = requireRole(ctx, TEAM_ROLES);
     await assertFamilyAccess(ctx, input.familyId);
     const companyId = await createCompanyRecord(input);
-    await ensureCertidoesForSubject({
-      familyId: input.familyId,
-      scope: "SOCIEDADE",
-      subjectId: companyId,
-    });
-    const requirements = await ensureDocumentRequirements({
-      familyId: input.familyId,
-      entityType: "SOCIEDADE",
-      entityId: companyId,
-      categories: COMPANY_DOCUMENT_CATEGORIES,
-    });
+    // Certidões e requisitos nacionais não se aplicam a offshore.
+    let requirementsCount = 0;
+    if (!input.isOffshore) {
+      await ensureCertidoesForSubject({
+        familyId: input.familyId,
+        scope: "SOCIEDADE",
+        subjectId: companyId,
+      });
+      const requirements = await ensureDocumentRequirements({
+        familyId: input.familyId,
+        entityType: "SOCIEDADE",
+        entityId: companyId,
+        categories: COMPANY_DOCUMENT_CATEGORIES,
+      });
+      requirementsCount = requirements.length;
+    }
     await recordAudit({
       action: "SOCIEDADE_CRIADA",
       entityType: "SOCIEDADE",
       entityId: companyId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { isOffshore: input.isOffshore, requirements: requirements.length },
+      metadata: { isOffshore: input.isOffshore, requirements: requirementsCount },
     });
     return { companyId };
   }),
@@ -152,6 +157,19 @@ export const companyRouter = router({
     const user = requireRole(ctx, TEAM_ROLES);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
+    // Offshore: exige jurisdição e identificador estrangeiro; não usa regime
+    // tributário brasileiro.
+    if (company.isOffshore) {
+      if (!input.fields.jurisdiction) {
+        throw new Error("Informe a jurisdição da sociedade offshore.");
+      }
+      if (!input.fields.companyNumber) {
+        throw new Error("Informe o identificador estrangeiro (company number).");
+      }
+      if (input.fields.taxRegime) {
+        throw new Error("Sociedade offshore não usa regime tributário brasileiro.");
+      }
+    }
     await upsertCompanyDetailsRecord({ companyId: company.id, fields: input.fields });
     await recordAudit({
       action: "DETALHES_HOLDING_SALVOS",

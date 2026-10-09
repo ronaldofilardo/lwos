@@ -235,4 +235,68 @@ describe("document-router upload, revisão e dispensa", () => {
     ).rejects.toThrow("Documento não encontrado.");
     expect(reviewMocks.dispenseDocumentRecord).not.toHaveBeenCalled();
   });
+
+  it("uploadBalance cria/reusa o documento da sociedade, envia versão e audita", async () => {
+    repositoryMocks.findOrCreateDocumentRecord.mockResolvedValue("doc-bal-1");
+    uploadMocks.storeDocumentVersion.mockResolvedValue({ versionNumber: 1 });
+
+    await expect(
+      caller().uploadBalance({
+        familyId: "fam-1",
+        companyId: "soc-1",
+        category: "Balanço fechado",
+        referenceDate: "2025-12-31",
+        fileName: "balanco.pdf",
+        base64Data: "aGVsbG8td29ybGQ=",
+      })
+    ).resolves.toEqual({ documentId: "doc-bal-1", versionNumber: 1 });
+
+    expect(repositoryMocks.findOrCreateDocumentRecord).toHaveBeenCalledWith({
+      familyId: "fam-1",
+      entityType: "SOCIEDADE",
+      entityId: "soc-1",
+      category: "Balanço fechado",
+      referenceDate: "2025-12-31",
+    });
+    expect(uploadMocks.storeDocumentVersion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentId: "doc-bal-1",
+        fileName: "balanco.pdf",
+        userId: 7,
+      })
+    );
+    expect(auditMocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "BALANCO_ENVIADO",
+        entityId: "soc-1",
+        metadata: expect.objectContaining({
+          category: "Balanço fechado",
+          referenceDate: "2025-12-31",
+        }),
+      })
+    );
+  });
+
+  it("uploadBalance recusa data-base inválida e categoria errada", async () => {
+    await expect(
+      caller().uploadBalance({
+        familyId: "fam-1",
+        companyId: "soc-1",
+        category: "Balanço fechado",
+        referenceDate: "31/12/2025",
+        fileName: "b.pdf",
+        base64Data: "aGVsbG8td29ybGQ=",
+      })
+    ).rejects.toThrow();
+    await expect(
+      caller().uploadBalance({
+        familyId: "fam-1",
+        companyId: "soc-1",
+        category: "Relatório" as never,
+        referenceDate: "2025-12-31",
+        fileName: "b.pdf",
+        base64Data: "aGVsbG8td29ybGQ=",
+      })
+    ).rejects.toThrow();
+  });
 });

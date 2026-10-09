@@ -127,4 +127,48 @@ export const documentRouter = router({
       });
       return { success: true };
     }),
+  /** Upload de balanço fechado / balancete de uma sociedade, com data-base. */
+  uploadBalance: protectedProcedure
+    .input(
+      z.object({
+        familyId: z.string().min(1),
+        companyId: z.string().min(1),
+        category: z.enum(["Balanço fechado", "Balancete atualizado"]),
+        referenceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        fileName: z.string().min(1).max(255),
+        mimeType: z.string().min(1).max(120).default("application/pdf"),
+        base64Data: z.string().min(8).max(8_000_000),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = requireRole(ctx, TEAM_ROLES);
+      await assertFamilyAccess(ctx, input.familyId);
+      const documentId = await findOrCreateDocumentRecord({
+        familyId: input.familyId,
+        entityType: "SOCIEDADE",
+        entityId: input.companyId,
+        category: input.category,
+        referenceDate: input.referenceDate,
+      });
+      const result = await storeDocumentVersion({
+        documentId,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        base64Data: input.base64Data,
+        userId: user.id,
+      });
+      await recordAudit({
+        action: "BALANCO_ENVIADO",
+        entityType: "SOCIEDADE",
+        entityId: input.companyId,
+        actorUserId: user.id,
+        familyId: input.familyId,
+        metadata: {
+          category: input.category,
+          referenceDate: input.referenceDate,
+          version: result.versionNumber,
+        },
+      });
+      return { documentId, versionNumber: result.versionNumber };
+    }),
 });

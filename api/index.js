@@ -1398,6 +1398,7 @@ async function findOrCreateDocumentRecord(input) {
     entityType: input.entityType,
     entityId: input.entityId,
     category: input.category,
+    referenceDate: input.referenceDate || null,
     status: "PENDENTE",
     currentVersion: 0,
     createdAt: /* @__PURE__ */ new Date(),
@@ -2271,6 +2272,25 @@ function isCpfValido(value) {
   return resto === Number(cpf[10]);
 }
 
+// shared/validation/cnpj.ts
+var PESOS_DV1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+var PESOS_DV2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+function digitoVerificador(base, pesos) {
+  const soma = base.split("").reduce((acc, digito, i) => acc + Number(digito) * (pesos[i] ?? 0), 0);
+  const resto = soma % 11;
+  return resto < 2 ? 0 : 11 - resto;
+}
+function isCnpjValido(value) {
+  const cnpj = onlyDigits2(value);
+  if (cnpj.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+  const base = cnpj.slice(0, 12);
+  const dv1 = digitoVerificador(base, PESOS_DV1);
+  if (dv1 !== Number(cnpj[12])) return false;
+  const dv2 = digitoVerificador(`${base}${dv1}`, PESOS_DV2);
+  return dv2 === Number(cnpj[13]);
+}
+
 // shared/validation/index.ts
 init_uf();
 
@@ -2846,7 +2866,8 @@ function totalPercentage(rows) {
   return rows.reduce((sum, row) => sum + Number(row.percentage ?? 0), 0);
 }
 function normalizeName(name) {
-  return (name ?? "").trim().toLocaleLowerCase("pt-BR");
+  const withoutAccents = (name ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return withoutAccents.trim().toLocaleLowerCase("pt-BR").replace(/\s+/g, " ");
 }
 async function createCompanyRecord(input) {
   const db = await requireDatabase();
@@ -2861,7 +2882,17 @@ async function getCompanyRecord(companyId) {
 }
 async function listCompanyRecords(familyId) {
   const db = await requireDatabase();
-  return db.select().from(companies).where(eq12(companies.familyId, familyId));
+  return db.select({
+    id: companies.id,
+    familyId: companies.familyId,
+    legalName: companies.legalName,
+    taxNumber: companies.taxNumber,
+    isOffshore: companies.isOffshore,
+    createdAt: companies.createdAt,
+    updatedAt: companies.updatedAt,
+    taxRegime: companyDetails.taxRegime,
+    capitalSocial: companyDetails.capitalSocial
+  }).from(companies).leftJoin(companyDetails, eq12(companyDetails.companyId, companies.id)).where(eq12(companies.familyId, familyId));
 }
 async function listStakeholderRecords(companyId) {
   const db = await requireDatabase();
@@ -2946,6 +2977,33 @@ var companyInputSchema = z7.object({
   legalName: z7.string().min(3).max(180),
   taxNumber: z7.string().max(20).optional(),
   isOffshore: z7.boolean().default(false)
+}).superRefine((data, ctx) => {
+  const taxNumber = data.taxNumber?.trim() || null;
+  if (data.isOffshore) {
+    if (taxNumber) {
+      ctx.addIssue({
+        code: z7.ZodIssueCode.custom,
+        path: ["taxNumber"],
+        message: "Sociedade offshore n\xE3o possui CNPJ."
+      });
+    }
+    return;
+  }
+  if (!taxNumber) {
+    ctx.addIssue({
+      code: z7.ZodIssueCode.custom,
+      path: ["taxNumber"],
+      message: "Informe o CNPJ da sociedade nacional."
+    });
+    return;
+  }
+  if (!isCnpjValido(taxNumber)) {
+    ctx.addIssue({
+      code: z7.ZodIssueCode.custom,
+      path: ["taxNumber"],
+      message: "CNPJ inv\xE1lido."
+    });
+  }
 });
 
 // server/features/companies/company-details.ts
@@ -2980,6 +3038,14 @@ var companyDetailsFieldsSchema = z8.object({
   jurisdiction: z8.enum(companyJurisdictionValues).nullish(),
   residentAgent: text2(120),
   notes: text2(8e3)
+}).superRefine((data, ctx) => {
+  if (data.societaryType === "SA" && data.taxRegime === "SIMPLES_NACIONAL") {
+    ctx.addIssue({
+      code: z8.ZodIssueCode.custom,
+      path: ["taxRegime"],
+      message: "S.A. n\xE3o pode optar pelo Simples Nacional (LC 123/2006, art. 3\xBA, \xA74\xBA)."
+    });
+  }
 });
 var companyDetailsIdSchema = z8.object({
   companyId: z8.string().min(1, "Informe a sociedade.")
@@ -3103,24 +3169,28 @@ var companyRouter = router({
     const user = requireRole(ctx, TEAM_ROLES);
     await assertFamilyAccess(ctx, input.familyId);
     const companyId = await createCompanyRecord(input);
-    await ensureCertidoesForSubject({
-      familyId: input.familyId,
-      scope: "SOCIEDADE",
-      subjectId: companyId
-    });
-    const requirements = await ensureDocumentRequirements({
-      familyId: input.familyId,
-      entityType: "SOCIEDADE",
-      entityId: companyId,
-      categories: COMPANY_DOCUMENT_CATEGORIES
-    });
+    let requirementsCount = 0;
+    if (!input.isOffshore) {
+      await ensureCertidoesForSubject({
+        familyId: input.familyId,
+        scope: "SOCIEDADE",
+        subjectId: companyId
+      });
+      const requirements = await ensureDocumentRequirements({
+        familyId: input.familyId,
+        entityType: "SOCIEDADE",
+        entityId: companyId,
+        categories: COMPANY_DOCUMENT_CATEGORIES
+      });
+      requirementsCount = requirements.length;
+    }
     await recordAudit({
       action: "SOCIEDADE_CRIADA",
       entityType: "SOCIEDADE",
       entityId: companyId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { isOffshore: input.isOffshore, requirements: requirements.length }
+      metadata: { isOffshore: input.isOffshore, requirements: requirementsCount }
     });
     return { companyId };
   }),
@@ -3201,6 +3271,17 @@ var companyRouter = router({
     const user = requireRole(ctx, TEAM_ROLES);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
+    if (company.isOffshore) {
+      if (!input.fields.jurisdiction) {
+        throw new Error("Informe a jurisdi\xE7\xE3o da sociedade offshore.");
+      }
+      if (!input.fields.companyNumber) {
+        throw new Error("Informe o identificador estrangeiro (company number).");
+      }
+      if (input.fields.taxRegime) {
+        throw new Error("Sociedade offshore n\xE3o usa regime tribut\xE1rio brasileiro.");
+      }
+    }
     await upsertCompanyDetailsRecord({ companyId: company.id, fields: input.fields });
     await recordAudit({
       action: "DETALHES_HOLDING_SALVOS",
@@ -3314,7 +3395,9 @@ var createDocumentSchema = z11.object({
   entityType: documentEntitySchema,
   entityId: z11.string().min(1),
   category: z11.string().min(2).max(80),
-  validUntil: z11.string().optional()
+  validUntil: z11.string().optional(),
+  /** Data-base do documento (ex.: balanço fechado / balancete). */
+  referenceDate: z11.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data-base inv\xE1lida (use AAAA-MM-DD).").optional()
 });
 var uploadVersionSchema = z11.object({
   documentId: z11.string().min(1),
@@ -3476,6 +3559,48 @@ var documentRouter = router({
       }
     });
     return { success: true };
+  }),
+  /** Upload de balanço fechado / balancete de uma sociedade, com data-base. */
+  uploadBalance: protectedProcedure.input(
+    z12.object({
+      familyId: z12.string().min(1),
+      companyId: z12.string().min(1),
+      category: z12.enum(["Balan\xE7o fechado", "Balancete atualizado"]),
+      referenceDate: z12.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      fileName: z12.string().min(1).max(255),
+      mimeType: z12.string().min(1).max(120).default("application/pdf"),
+      base64Data: z12.string().min(8).max(8e6)
+    })
+  ).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    await assertFamilyAccess(ctx, input.familyId);
+    const documentId = await findOrCreateDocumentRecord({
+      familyId: input.familyId,
+      entityType: "SOCIEDADE",
+      entityId: input.companyId,
+      category: input.category,
+      referenceDate: input.referenceDate
+    });
+    const result = await storeDocumentVersion({
+      documentId,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      base64Data: input.base64Data,
+      userId: user.id
+    });
+    await recordAudit({
+      action: "BALANCO_ENVIADO",
+      entityType: "SOCIEDADE",
+      entityId: input.companyId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: {
+        category: input.category,
+        referenceDate: input.referenceDate,
+        version: result.versionNumber
+      }
+    });
+    return { documentId, versionNumber: result.versionNumber };
   })
 });
 

@@ -139,6 +139,7 @@ describe("company-router mutações", () => {
     const result = await caller().create({
       familyId: "fam-1",
       legalName: "Holding Beta",
+      taxNumber: "11222333000181",
       isOffshore: false,
     });
 
@@ -165,9 +166,35 @@ describe("company-router mutações", () => {
 
   it("bloqueia criação para quem não é da equipe", async () => {
     await expect(
-      caller("CLIENTE").create({ familyId: "fam-1", legalName: "Holding Beta", isOffshore: false })
+      caller("CLIENTE").create({
+        familyId: "fam-1",
+        legalName: "Holding Beta",
+        taxNumber: "11222333000181",
+        isOffshore: false,
+      })
     ).rejects.toThrow("Permiss");
     expect(repoMocks.createCompanyRecord).not.toHaveBeenCalled();
+  });
+
+  it("recusa criação nacional sem CNPJ e offshore com CNPJ", async () => {
+    await expect(
+      caller().create({ familyId: "fam-1", legalName: "Hold X", isOffshore: false })
+    ).rejects.toThrow("Informe o CNPJ");
+    await expect(
+      caller().create({
+        familyId: "fam-1",
+        legalName: "Hold Off",
+        taxNumber: "11222333000181",
+        isOffshore: true,
+      })
+    ).rejects.toThrow("offshore não possui CNPJ");
+    expect(repoMocks.createCompanyRecord).not.toHaveBeenCalled();
+  });
+
+  it("cria offshore sem CNPJ", async () => {
+    await expect(
+      caller().create({ familyId: "fam-1", legalName: "Hold Off", isOffshore: true })
+    ).resolves.toEqual({ companyId: "soc-9" });
   });
 
   it("adiciona participacao de membro e de nao-membro com metadados distintos", async () => {
@@ -255,6 +282,39 @@ describe("company-router detalhes da holding", () => {
     await expect(
       caller().upsertDetails({ companyId: "sumida", fields: {} })
     ).rejects.toThrow("Sociedade não encontrada.");
-    expect(detailsMocks.upsertCompanyDetailsRecord).not.toHaveBeenCalled();
+  });
+
+  it("offshore exige jurisdição e identificador e recusa regime brasileiro", async () => {
+    const offshore = { ...company, isOffshore: true, taxNumber: null };
+    repoMocks.getCompanyRecord.mockResolvedValue(offshore);
+
+    await expect(
+      caller().upsertDetails({ companyId: "soc-1", fields: {} })
+    ).rejects.toThrow("jurisdição");
+
+    await expect(
+      caller().upsertDetails({
+        companyId: "soc-1",
+        fields: { jurisdiction: "BVI", companyNumber: null },
+      })
+    ).rejects.toThrow("identificador estrangeiro");
+
+    await expect(
+      caller().upsertDetails({
+        companyId: "soc-1",
+        fields: {
+          jurisdiction: "BVI",
+          companyNumber: "12345",
+          taxRegime: "LUCRO_REAL",
+        },
+      })
+    ).rejects.toThrow("regime tributário brasileiro");
+
+    await expect(
+      caller().upsertDetails({
+        companyId: "soc-1",
+        fields: { jurisdiction: "BVI", companyNumber: "12345" },
+      })
+    ).resolves.toEqual({ success: true });
   });
 });

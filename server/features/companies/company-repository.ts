@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { companies, companyStakeholders } from "../../../drizzle/schema";
+import { companyDetails, companies, companyStakeholders } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import type { z } from "zod";
@@ -24,7 +24,13 @@ function totalPercentage(rows: StakeholderRow[]) {
 }
 
 function normalizeName(name: string | null) {
-  return (name ?? "").trim().toLocaleLowerCase("pt-BR");
+  const withoutAccents = (name ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+  return withoutAccents
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .replace(/\s+/g, " ");
 }
 
 export async function createCompanyRecord(input: z.infer<typeof companyInputSchema>) {
@@ -42,7 +48,21 @@ export async function getCompanyRecord(companyId: string) {
 
 export async function listCompanyRecords(familyId: string) {
   const db = await requireDatabase();
-  return db.select().from(companies).where(eq(companies.familyId, familyId));
+  return db
+    .select({
+      id: companies.id,
+      familyId: companies.familyId,
+      legalName: companies.legalName,
+      taxNumber: companies.taxNumber,
+      isOffshore: companies.isOffshore,
+      createdAt: companies.createdAt,
+      updatedAt: companies.updatedAt,
+      taxRegime: companyDetails.taxRegime,
+      capitalSocial: companyDetails.capitalSocial,
+    })
+    .from(companies)
+    .leftJoin(companyDetails, eq(companyDetails.companyId, companies.id))
+    .where(eq(companies.familyId, familyId));
 }
 
 export async function listStakeholderRecords(companyId: string) {

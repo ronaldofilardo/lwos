@@ -18,6 +18,11 @@ export const createDocumentSchema = z.object({
   entityId: z.string().min(1),
   category: z.string().min(2).max(80),
   validUntil: z.string().optional(),
+  /** Data-base do documento (ex.: balanço fechado / balancete). */
+  referenceDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data-base inválida (use AAAA-MM-DD).")
+    .optional(),
 });
 
 export const uploadVersionSchema = z.object({

@@ -144,6 +144,22 @@ describe("company-repository — participações", () => {
 
     expect(parsed.success).toBe(false);
   });
+
+  it("compara não-membro por nome sem acento, minúsculo e espaços únicos", async () => {
+    const { db, insertValues } = mockDb([
+      stakeholder("s1", "10.00", null, "João  da Silva"),
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      createStakeholderRecord({
+        companyId: "hold-1",
+        externalName: "JOAO da Silva",
+        percentage: 10,
+      } as never)
+    ).rejects.toThrow("já participa da sociedade");
+    expect(insertValues).not.toHaveBeenCalled();
+  });
 });
 
 type FullConfig = {
@@ -165,9 +181,13 @@ function fullDb(config: FullConfig = {}) {
       const baseRows = (): unknown[] =>
         table === companies ? config.companyRows ?? [] : config.stakeholderRows ?? [];
       const limit = vi.fn(async () => (table === companies ? baseRows() : config.currentRows ?? []));
+      const leftJoin = vi.fn(() => ({
+        where: vi.fn(() => ({ then: (resolve: (value: unknown) => unknown) => resolve(baseRows()) })),
+      }));
       return {
         limit,
-        where: vi.fn(() => ({ limit, then: (resolve: (value: unknown) => unknown) => resolve(baseRows()) })),
+        leftJoin,
+        where: vi.fn(() => ({ limit, leftJoin, then: (resolve: (value: unknown) => unknown) => resolve(baseRows()) })),
         then: (resolve: (value: unknown) => unknown) => resolve(baseRows()),
       };
     }),

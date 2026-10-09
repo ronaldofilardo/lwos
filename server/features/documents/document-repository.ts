@@ -15,6 +15,7 @@ export async function createDocumentRecord(
     ...input,
     id,
     validUntil: input.validUntil || null,
+    referenceDate: input.referenceDate || null,
   });
   return id;
 }
@@ -29,6 +30,7 @@ export async function findOrCreateDocumentRecord(input: {
   entityType: z.infer<typeof documentEntitySchema>;
   entityId: string;
   category: string;
+  referenceDate?: string;
 }) {
   const db = await requireDatabase();
   const existing = await db
@@ -52,6 +54,7 @@ export async function findOrCreateDocumentRecord(input: {
     entityType: input.entityType,
     entityId: input.entityId,
     category: input.category,
+    referenceDate: input.referenceDate || null,
     status: "PENDENTE",
     currentVersion: 0,
     createdAt: new Date(),

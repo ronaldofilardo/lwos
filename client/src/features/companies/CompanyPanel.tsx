@@ -12,10 +12,12 @@ function StakeholderManager({
   companyId,
   familyId,
   people,
+  capitalSocial,
 }: {
   companyId: string;
   familyId: string;
   people: Person[];
+  capitalSocial: string | null;
 }) {
   const utils = trpc.useUtils();
   const refresh = () => utils.companies.stakeholders.invalidate({ companyId });
@@ -54,6 +56,7 @@ function StakeholderManager({
   const rows = stakeholders.data ?? [];
   const total = rows.reduce((sum, row) => sum + Number(row.percentage), 0);
   const remaining = Math.max(0, Math.round((100 - total) * 100) / 100);
+  const capital = capitalSocial ? Number(capitalSocial) : null;
 
   return (
     <div className="mt-3 space-y-2 border-t border-lucathi-line/60 pt-3">
@@ -79,6 +82,10 @@ function StakeholderManager({
               ? people.find(item => item.id === row.personId)
               : null;
             const label = person?.fullName ?? row.externalName ?? "—";
+            const invested =
+              capital !== null
+                ? (capital * Number(row.percentage)) / 100
+                : null;
             return (
               <div
                 key={row.id}
@@ -88,6 +95,14 @@ function StakeholderManager({
                 <span className="text-lucathi-gray">
                   {row.percentage}%
                   {person ? "" : " · não-membro"}
+                </span>
+                <span className="text-lucathi-gray">
+                  {invested !== null
+                    ? `· ${invested.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })} investido`
+                    : "· —"}
                 </span>
                 {!person ? (
                   <button
@@ -127,61 +142,69 @@ function StakeholderManager({
         </p>
       )}
 
-      <div className="grid gap-2 md:grid-cols-2">
-        <select
-          value={personId}
-          onChange={e => {
-            setPersonId(e.target.value);
-            if (e.target.value) setExternalName("");
-          }}
-          className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-          aria-label="Membro da família"
-        >
-          <option value="">Membro da família…</option>
-          {people.map(item => (
-            <option key={item.id} value={item.id}>
-              {item.fullName}
-            </option>
-          ))}
-        </select>
-        <Input
-          value={externalName}
-          onChange={e => {
-            setExternalName(e.target.value);
-            if (e.target.value) setPersonId("");
-          }}
-          placeholder="Não-membro (nome completo)"
-          className="h-9 text-xs"
-          disabled={Boolean(personId)}
-        />
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Input
-          value={percentage}
-          onChange={e => setPercentage(e.target.value)}
-          inputMode="decimal"
-          placeholder="Participação (%)"
-          className="h-9 w-40 text-xs"
-        />
-        <Button
-          size="sm"
-          disabled={
-            !percentage ||
-            (!personId && !externalName.trim()) ||
-            add.isPending
-          }
-          onClick={() =>
-            add.mutate({
-              companyId,
-              personId: personId || undefined,
-              externalName: externalName.trim() || undefined,
-              percentage: Number(percentage.replace(',', '.')),
-            })
-          }
-        >
-          Adicionar sócio
-        </Button>
-      </div>
+      {remaining > 0 ? (
+        <>
+          <div className="grid gap-2 md:grid-cols-2">
+            <select
+              value={personId}
+              onChange={e => {
+                setPersonId(e.target.value);
+                if (e.target.value) setExternalName("");
+              }}
+              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+              aria-label="Membro da família"
+            >
+              <option value="">Membro da família…</option>
+              {people.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.fullName}
+                </option>
+              ))}
+            </select>
+            <Input
+              value={externalName}
+              onChange={e => {
+                setExternalName(e.target.value);
+                if (e.target.value) setPersonId("");
+              }}
+              placeholder="Não-membro (nome completo)"
+              className="h-9 text-xs"
+              disabled={Boolean(personId)}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              value={percentage}
+              onChange={e => setPercentage(e.target.value)}
+              inputMode="decimal"
+              placeholder="Participação (%)"
+              className="h-9 w-40 text-xs"
+            />
+            <Button
+              size="sm"
+              disabled={
+                !percentage ||
+                (!personId && !externalName.trim()) ||
+                add.isPending
+              }
+              onClick={() =>
+                add.mutate({
+                  companyId,
+                  personId: personId || undefined,
+                  externalName: externalName.trim() || undefined,
+                  percentage: Number(percentage.replace(',', '.')),
+                })
+              }
+            >
+              Adicionar sócio
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-lucathi-gray">
+          Quadro completo (100%) — remova uma participação para editar.
+        </p>
+      )}
     </div>
   );
 }
@@ -208,20 +231,16 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
     onError: e => toast.error(e.message),
   });
 
-  const selectClass =
-    "h-10 rounded-md border border-input bg-background px-3 text-sm";
-
   return (
     <section className="rounded-2xl border border-lucathi-line bg-white p-6">
       <div className="flex items-center gap-3">
         <Building2 className="size-5 text-lucathi-navy" />
         <div>
           <h2 className="font-display text-2xl text-lucathi-navy">
-            Holding e sociedades
+            Sociedades
           </h2>
           <p className="text-sm text-lucathi-gray">
-            Nacionais e internacionais, com quadro societário de membros e
-            não-membros somando 100%.
+            Nacionais e offshore, com quadro societário somando 100%.
           </p>
         </div>
       </div>
@@ -230,29 +249,36 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
         <Input
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="Razão social"
+          placeholder="Denominação social"
         />
-        <Input
-          value={taxNumber}
-          onChange={e => setTaxNumber(e.target.value)}
-          placeholder="CNPJ (opcional)"
-        />
-        <select
-          value={isOffshore ? "internacional" : "nacional"}
-          onChange={e => setIsOffshore(e.target.value === "internacional")}
-          className={selectClass}
-          aria-label="Tipo de sociedade"
-        >
-          <option value="nacional">Nacional</option>
-          <option value="internacional">Internacional (offshore)</option>
-        </select>
+        {isOffshore ? null : (
+          <Input
+            value={taxNumber}
+            onChange={e => setTaxNumber(e.target.value)}
+            placeholder="CNPJ"
+          />
+        )}
+        <label className="flex h-10 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-sm">
+          <input
+            type="checkbox"
+            checked={isOffshore}
+            onChange={e => {
+              setIsOffshore(e.target.checked);
+              if (e.target.checked) setTaxNumber("");
+            }}
+            className="size-4"
+          />
+          Offshore
+        </label>
         <Button
-          disabled={!name || create.isPending}
+          disabled={
+            !name || (!isOffshore && !taxNumber.trim()) || create.isPending
+          }
           onClick={() =>
             create.mutate({
               familyId,
               legalName: name,
-              taxNumber: taxNumber || undefined,
+              taxNumber: taxNumber.trim() || undefined,
               isOffshore,
             })
           }
@@ -262,32 +288,44 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
       </div>
 
       <div className="mt-5 space-y-3">
-        {list.data?.map(item => (
-          <div key={item.id} className="rounded-xl bg-lucathi-mist px-4 py-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">{item.legalName}</p>
-                <p className="text-xs text-lucathi-gray">
-                  {item.isOffshore ? "Internacional (offshore)" : "Nacional"}
-                  {item.taxNumber ? ` · CNPJ ${item.taxNumber}` : ""}
-                </p>
+        {list.data?.map(item => {
+          const simples = item.taxRegime === "SIMPLES_NACIONAL";
+          return (
+            <div
+              key={item.id}
+              className={
+                simples
+                  ? "rounded-xl border-2 border-emerald-400 bg-lucathi-mist px-4 py-3"
+                  : "rounded-xl bg-lucathi-mist px-4 py-3"
+              }
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">{item.legalName}</p>
+                  <p className="text-xs text-lucathi-gray">
+                    {item.isOffshore ? "Offshore" : "Nacional"}
+                    {item.taxNumber ? ` · CNPJ ${item.taxNumber}` : ""}
+                    {simples ? " · Simples Nacional" : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => setDetailsCompanyId(item.id)}
+                >
+                  <Info className="mr-1 size-3.5" /> Detalhes
+                </Button>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 px-2 text-xs"
-                onClick={() => setDetailsCompanyId(item.id)}
-              >
-                <Info className="mr-1 size-3.5" /> Detalhes
-              </Button>
+              <StakeholderManager
+                companyId={item.id}
+                familyId={familyId}
+                people={people.data ?? []}
+                capitalSocial={item.capitalSocial}
+              />
             </div>
-            <StakeholderManager
-              companyId={item.id}
-              familyId={familyId}
-              people={people.data ?? []}
-            />
-          </div>
-        ))}
+          );
+        })}
         {!list.data?.length ? (
           <p className="text-sm text-lucathi-gray">
             Nenhuma sociedade cadastrada.
