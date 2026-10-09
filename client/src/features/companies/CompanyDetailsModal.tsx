@@ -20,20 +20,18 @@ import {
   type CertidaoType,
 } from "@/features/certidoes/types";
 import {
-  companyDocLabels,
-  companyDocStatusLabels,
-  companyDocStatusValues,
   companyJurisdictionLabels,
   companyJurisdictionValues,
   computePerShare,
-  docTypesForCompany,
   emptyHoldingForm,
   formatAmount,
   holdingFormFromDetails,
   holdingFormToFields,
-  type CompanyDocStatus,
-  type CompanyDocType,
-  type CompanyType,
+  societaryTypeLabels,
+  societaryTypeValues,
+  taxRegimeLabels,
+  taxRegimeValues,
+  ufValues,
   type HoldingFormState,
 } from "./holdingDetails";
 
@@ -146,30 +144,15 @@ export function CompanyDetailsModal({
   );
 
   const [form, setForm] = useState<HoldingFormState>(emptyHoldingForm);
-  const [docs, setDocs] = useState<
-    Partial<Record<CompanyDocType, CompanyDocStatus>>
-  >({});
 
   const data = query.data;
   const company = data?.company;
-  const international = company?.type === "HOLDING_INTERNACIONAL";
+  const international = company?.isOffshore === true;
   const currency = international ? "$" : "R$";
-  const docTypes = company
-    ? docTypesForCompany(company.type as CompanyType)
-    : [];
 
   useEffect(() => {
     if (!data) return;
     setForm(holdingFormFromDetails(data.details));
-    setDocs(
-      data.docs.reduce(
-        (acc, row) => {
-          acc[row.docType as CompanyDocType] = row.status;
-          return acc;
-        },
-        {} as Partial<Record<CompanyDocType, CompanyDocStatus>>
-      )
-    );
   }, [data]);
 
   const save = trpc.companies.upsertDetails.useMutation({
@@ -194,10 +177,6 @@ export function CompanyDetailsModal({
     save.mutate({
       companyId,
       fields: holdingFormToFields(form),
-      docs: docTypes.map(docType => ({
-        docType,
-        status: docs[docType] ?? "PENDENTE",
-      })),
     });
   };
 
@@ -279,24 +258,64 @@ export function CompanyDetailsModal({
                     value={form.nire}
                     onChange={value => update("nire", value)}
                   />
-                  <Field
-                    label="UF"
-                    value={form.uf}
-                    onChange={value => update("uf", value)}
-                    placeholder="SP"
-                  />
-                  <Field
-                    label="Tipo societário"
-                    value={form.societaryType}
-                    onChange={value => update("societaryType", value)}
-                    placeholder="Ltda, S.A., EIRELI…"
-                  />
-                  <Field
-                    label="Regime tributário"
-                    value={form.taxRegime}
-                    onChange={value => update("taxRegime", value)}
-                    placeholder="Lucro presumido, Lucro real…"
-                  />
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-lucathi-gray">
+                      UF
+                    </span>
+                    <select
+                      value={form.uf}
+                      onChange={event => update("uf", event.target.value)}
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      aria-label="UF"
+                    >
+                      <option value="">Selecione</option>
+                      {ufValues.map(value => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-lucathi-gray">
+                      Tipo societário
+                    </span>
+                    <select
+                      value={form.societaryType}
+                      onChange={event =>
+                        update("societaryType", event.target.value)
+                      }
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      aria-label="Tipo societário"
+                    >
+                      <option value="">Selecione</option>
+                      {societaryTypeValues.map(value => (
+                        <option key={value} value={value}>
+                          {societaryTypeLabels[value]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs font-medium text-lucathi-gray">
+                      Regime tributário
+                    </span>
+                    <select
+                      value={form.taxRegime}
+                      onChange={event =>
+                        update("taxRegime", event.target.value)
+                      }
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      aria-label="Regime tributário"
+                    >
+                      <option value="">Selecione</option>
+                      {taxRegimeValues.map(value => (
+                        <option key={value} value={value}>
+                          {taxRegimeLabels[value]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </>
               )}
 
@@ -410,41 +429,6 @@ export function CompanyDetailsModal({
                 label="Valor de mercado"
                 value={formatAmount(perShare.mercado, Boolean(international))}
               />
-            </div>
-          </Section>
-
-          <Section
-            title="Documentos"
-            hint="Status de cada documento da holding."
-          >
-            <div className="space-y-2">
-              {docTypes.map(docType => (
-                <div
-                  key={docType}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-lucathi-line px-3 py-2"
-                >
-                  <span className="text-sm text-lucathi-navy">
-                    {companyDocLabels[docType]}
-                  </span>
-                  <select
-                    value={docs[docType] ?? "PENDENTE"}
-                    onChange={event =>
-                      setDocs(previous => ({
-                        ...previous,
-                        [docType]: event.target.value as CompanyDocStatus,
-                      }))
-                    }
-                    className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                    aria-label={`Status de ${companyDocLabels[docType]}`}
-                  >
-                    {companyDocStatusValues.map(status => (
-                      <option key={status} value={status}>
-                        {companyDocStatusLabels[status]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
             </div>
           </Section>
 

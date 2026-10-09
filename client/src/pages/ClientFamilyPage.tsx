@@ -15,14 +15,6 @@ import { UnifiedRequirementsMap } from "@/features/families/common/UnifiedRequir
 import { ClientPatrimonio } from "@/features/families/client/ClientPatrimonio";
 import { trpc } from "@/lib/trpc";
 
-const regimeLabels: Record<string, string> = {
-  CPB: "Comunhão Parcial de Bens",
-  CUB: "Comunhão Universal de Bens",
-  STB: "Separação Total de Bens",
-  STOB: "Separação Obrigatória de Bens",
-  NA: "Não Aplicável",
-};
-
 /**
  * Índice /minha-familia (sem id): cada titular tem uma única família — redireciona
  * direto; com múltiplos vínculos (caso raro), lista as famílias acessíveis.
@@ -72,10 +64,6 @@ export function ClientFamilyIndex() {
             <div>
               <p className="text-sm font-medium text-lucathi-navy">
                 {family.name}
-              </p>
-              <p className="text-xs text-lucathi-gray">
-                {family.civilStatus} ·{" "}
-                {regimeLabels[family.maritalRegime] ?? family.maritalRegime}
               </p>
             </div>
             <Button
@@ -134,11 +122,6 @@ export default function ClientFamilyPage() {
               Acesso do titular · Consulta da família
             </p>
             <h1 className="mt-2 font-display text-4xl">{family.data.name}</h1>
-            <p className="mt-2 text-sm text-white/80">
-              {family.data.civilStatus} ·{" "}
-              {regimeLabels[family.data.maritalRegime] ??
-                family.data.maritalRegime}
-            </p>
           </div>
           {typeof percent === "number" ? (
             <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 backdrop-blur-sm">

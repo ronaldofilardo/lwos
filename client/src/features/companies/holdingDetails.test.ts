@@ -6,7 +6,6 @@
 import { describe, expect, it } from "vitest";
 import {
   computePerShare,
-  docTypesForCompany,
   emptyHoldingForm,
   formatAmount,
   holdingFormFromDetails,
@@ -93,15 +92,5 @@ describe("formatAmount", () => {
     expect(formatAmount(1234.5, false)).toBe("R$ 1.234,50");
     expect(formatAmount(1234.5, true)).toBe("$ 1,234.50");
     expect(formatAmount(null, false)).toBe("—");
-  });
-});
-
-describe("docTypesForCompany", () => {
-  it("alterna entre as duas listas de documentos", () => {
-    expect(docTypesForCompany("HOLDING_INTERNACIONAL")).toHaveLength(7);
-    expect(docTypesForCompany("HOLDING_NACIONAL")).toHaveLength(7);
-    expect(docTypesForCompany("HOLDING_NACIONAL")).not.toContain(
-      "SHARE_CERTIFICATE"
-    );
   });
 });

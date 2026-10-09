@@ -1,12 +1,10 @@
-import { and, eq } from "drizzle-orm";
-import { companyDetailDocs, companyDetails } from "../../../drizzle/schema";
+import { eq } from "drizzle-orm";
+import { companyDetails } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
-import { docTypesForCompanyType } from "./company-details";
 import type { z } from "zod";
 import type {
   companyDetailsFieldsSchema,
-  CompanyDetailDoc,
 } from "./company-details";
 
 type CompanyDetailsFields = z.infer<typeof companyDetailsFieldsSchema>;
@@ -22,10 +20,10 @@ function detailValues(fields: CompanyDetailsFields) {
 
   return {
     nire: text(fields.nire),
-    uf: text(fields.uf),
+    uf: fields.uf ?? null,
     sede: text(fields.sede),
-    societaryType: text(fields.societaryType),
-    taxRegime: text(fields.taxRegime),
+    societaryType: fields.societaryType ?? null,
+    taxRegime: fields.taxRegime ?? null,
     corporatePurpose: text(fields.corporatePurpose),
     capitalSocial: amount(fields.capitalSocial),
     shareQuantity: amount(fields.shareQuantity),
@@ -79,69 +77,6 @@ export async function upsertCompanyDetailsRecord(input: {
       target: companyDetails.companyId,
       set: { ...values, updatedAt: now },
     });
-}
-
-/**
- * Cria os documentos da variante que faltam (find-or-create) e devolve as
- * linhas na ordem do bloco do modal, descartando documentos de outra variante.
- */
-export async function listCompanyDetailDocs(input: {
-  companyId: string;
-  companyType: string;
-}) {
-  const db = await requireDatabase();
-  const expected = docTypesForCompanyType(input.companyType);
-  const existing = await db
-    .select()
-    .from(companyDetailDocs)
-    .where(eq(companyDetailDocs.companyId, input.companyId));
-  const known = new Set(existing.map(row => row.docType));
-  const missing = expected.filter(docType => !known.has(docType));
-
-  let rows = existing;
-  if (missing.length) {
-    await db.insert(companyDetailDocs).values(
-      missing.map(docType => ({
-        id: createId(),
-        companyId: input.companyId,
-        docType,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }))
-    );
-    rows = await db
-      .select()
-      .from(companyDetailDocs)
-      .where(eq(companyDetailDocs.companyId, input.companyId));
-  }
-
-  const order = new Map(expected.map((docType, index) => [docType, index]));
-  return rows
-    .filter(row => order.has(row.docType))
-    .sort((a, b) => (order.get(a.docType) ?? 0) - (order.get(b.docType) ?? 0));
-}
-
-export async function updateCompanyDetailDocRecord(
-  input: CompanyDetailDoc & { companyId: string }
-) {
-  const db = await requireDatabase();
-  const current = await db
-    .select({ id: companyDetailDocs.id })
-    .from(companyDetailDocs)
-    .where(
-      and(
-        eq(companyDetailDocs.companyId, input.companyId),
-        eq(companyDetailDocs.docType, input.docType)
-      )
-    )
-    .limit(1);
-  if (!current[0])
-    throw new Error("Documento não encontrado para esta sociedade.");
-
-  await db
-    .update(companyDetailDocs)
-    .set({ status: input.status, updatedAt: new Date() })
-    .where(eq(companyDetailDocs.id, current[0].id));
 }
 
 /**

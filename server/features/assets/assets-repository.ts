@@ -11,9 +11,7 @@ export async function createAssetRecord(input: z.infer<typeof createAssetSchema>
   await db.insert(otherAssets).values({
     ...input,
     id,
-    declaredValue: input.declaredValue?.toFixed(2) ?? null,
-    marketValue: input.marketValue?.toFixed(2) ?? null,
-    ownerPersonId: input.ownerPersonId || null,
+    declaredValue: input.declaredValue.toFixed(2),
     notes: input.notes || null,
   });
   return id;

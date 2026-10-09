@@ -36,6 +36,45 @@ var init_roles = __esm({
   }
 });
 
+// shared/validation/uf.ts
+import { z } from "zod";
+var UFS, ufSchema;
+var init_uf = __esm({
+  "shared/validation/uf.ts"() {
+    "use strict";
+    UFS = [
+      "AC",
+      "AL",
+      "AP",
+      "AM",
+      "BA",
+      "CE",
+      "DF",
+      "ES",
+      "GO",
+      "MA",
+      "MT",
+      "MS",
+      "MG",
+      "PA",
+      "PB",
+      "PR",
+      "PE",
+      "PI",
+      "RJ",
+      "RN",
+      "RS",
+      "RO",
+      "RR",
+      "SC",
+      "SP",
+      "SE",
+      "TO"
+    ];
+    ufSchema = z.enum(UFS);
+  }
+});
+
 // drizzle/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
@@ -53,25 +92,16 @@ __export(schema_exports, {
   civilStatusEnum: () => civilStatusEnum,
   civilStatusValues: () => civilStatusValues,
   companies: () => companies,
-  companyDetailDocs: () => companyDetailDocs,
   companyDetails: () => companyDetails,
-  companyDocStatusEnum: () => companyDocStatusEnum,
-  companyDocStatusValues: () => companyDocStatusValues,
-  companyDocTypeEnum: () => companyDocTypeEnum,
-  companyDocTypeValues: () => companyDocTypeValues,
   companyJurisdictionEnum: () => companyJurisdictionEnum,
   companyJurisdictionValues: () => companyJurisdictionValues,
   companyStakeholders: () => companyStakeholders,
-  companyTypeEnum: () => companyTypeEnum,
-  companyTypeValues: () => companyTypeValues,
-  contributionStatusEnum: () => contributionStatusEnum,
   documentStatusEnum: () => documentStatusEnum,
   documentStatusValues: () => documentStatusValues,
   documentVersions: () => documentVersions,
   documents: () => documents,
   encumbranceTypeEnum: () => encumbranceTypeEnum,
   encumbranceTypeValues: () => encumbranceTypeValues,
-  encumbrances: () => encumbrances,
   entityTypeEnum: () => entityTypeEnum,
   entityTypeValues: () => entityTypeValues,
   families: () => families,
@@ -88,21 +118,34 @@ __export(schema_exports, {
   otherAssets: () => otherAssets,
   people: () => people,
   portalLinks: () => portalLinks,
+  projectObjectiveEnum: () => projectObjectiveEnum,
+  projectObjectiveValues: () => projectObjectiveValues,
+  projectObjectives: () => projectObjectives,
   projectStatusEnum: () => projectStatusEnum,
+  projectStatusValues: () => projectStatusValues,
   projects: () => projects,
   properties: () => properties,
-  propertyContributions: () => propertyContributions,
+  propertyKindEnum: () => propertyKindEnum,
+  propertyKindValues: () => propertyKindValues,
   propertyOwners: () => propertyOwners,
+  propertyUtilityEnum: () => propertyUtilityEnum,
+  propertyUtilityValues: () => propertyUtilityValues,
   proposalStatusEnum: () => proposalStatusEnum,
   proposalStatusValues: () => proposalStatusValues,
   rightTypeEnum: () => rightTypeEnum,
   roleEnum: () => roleEnum,
+  societaryTypeEnum: () => societaryTypeEnum,
+  societaryTypeValues: () => societaryTypeValues,
+  taxRegimeEnum: () => taxRegimeEnum,
+  taxRegimeValues: () => taxRegimeValues,
+  ufEnum: () => ufEnum,
   users: () => users,
   vinculoEnum: () => vinculoEnum,
   vinculoValues: () => vinculoValues
 });
 import {
   boolean,
+  check,
   date,
   decimal,
   index,
@@ -117,11 +160,12 @@ import {
   varchar
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-var ids, auditTime, updatedAtCol, civilStatusValues, maritalRegimeValues, documentStatusValues, assetCategoryValues, proposalStatusValues, leadStatusValues, vinculoValues, entityTypeValues, companyTypeValues, encumbranceTypeValues, certidaoScopeValues, certidaoTypeValues, certidaoStatusValues, companyJurisdictionValues, companyDocStatusValues, companyDocTypeValues, roleEnum, civilStatusEnum, maritalRegimeEnum, documentStatusEnum, assetCategoryEnum, leadStatusEnum, vinculoEnum, proposalStatusEnum, projectStatusEnum, accessRoleEnum, entityTypeEnum, rightTypeEnum, companyTypeEnum, encumbranceTypeEnum, certidaoScopeEnum, certidaoTypeEnum, certidaoStatusEnum, companyJurisdictionEnum, companyDocStatusEnum, companyDocTypeEnum, contributionStatusEnum, users, families, projects, familyAccess, leads, people, documents, documentVersions, properties, propertyOwners, encumbrances, companies, companyStakeholders, propertyContributions, otherAssets, certidoes, companyDetails, companyDetailDocs, financialProposals, portalLinks, firstAccessLinks, lwrReports, auditLogs, fileBlobs;
+var ids, auditTime, updatedAtCol, civilStatusValues, maritalRegimeValues, documentStatusValues, assetCategoryValues, proposalStatusValues, leadStatusValues, vinculoValues, entityTypeValues, projectStatusValues, projectObjectiveValues, propertyKindValues, propertyUtilityValues, societaryTypeValues, taxRegimeValues, encumbranceTypeValues, certidaoScopeValues, certidaoTypeValues, certidaoStatusValues, companyJurisdictionValues, roleEnum, civilStatusEnum, maritalRegimeEnum, documentStatusEnum, assetCategoryEnum, leadStatusEnum, vinculoEnum, proposalStatusEnum, projectStatusEnum, projectObjectiveEnum, accessRoleEnum, entityTypeEnum, rightTypeEnum, propertyKindEnum, propertyUtilityEnum, encumbranceTypeEnum, societaryTypeEnum, taxRegimeEnum, ufEnum, certidaoScopeEnum, certidaoTypeEnum, certidaoStatusEnum, companyJurisdictionEnum, users, families, projects, projectObjectives, familyAccess, leads, people, documents, documentVersions, properties, propertyOwners, companies, companyStakeholders, otherAssets, certidoes, companyDetails, financialProposals, portalLinks, firstAccessLinks, lwrReports, auditLogs, fileBlobs;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
     init_roles();
+    init_uf();
     ids = { id: varchar("id", { length: 36 }).primaryKey() };
     auditTime = timestamp("createdAt").defaultNow().notNull();
     updatedAtCol = () => timestamp("updatedAt").defaultNow().$onUpdate(() => /* @__PURE__ */ new Date()).notNull();
@@ -140,14 +184,18 @@ var init_schema = __esm({
       "REJEITADO",
       "VENCIDO",
       "DISPENSADO",
-      "NA"
+      "NA",
+      "NAO_POSSUI"
     ];
     assetCategoryValues = [
-      "INVESTIMENTO",
-      "VEICULO",
-      "PARTICIPACAO_OUTRA",
-      "DIREITO",
-      "OUTRO"
+      "ATIVOS_AGRO",
+      "CONTA_CORRENTE",
+      "CREDITO",
+      "DINHEIRO_ESPECIE",
+      "INVESTIMENTOS",
+      "OUTROS",
+      "SEMOVENTES",
+      "VEICULO_EMBARCACAO_AERONAVE"
     ];
     proposalStatusValues = [
       "RASCUNHO",
@@ -172,19 +220,57 @@ var init_schema = __esm({
       "ATIVO",
       "CERTIDAO"
     ];
-    companyTypeValues = [
-      "HOLDING_NACIONAL",
-      "HOLDING_INTERNACIONAL",
-      "SOCIEDADE_NACIONAL"
+    projectStatusValues = [
+      "ATIVO",
+      "SUSPENSO",
+      "CONCLUIDO",
+      "CANCELADO"
+    ];
+    projectObjectiveValues = [
+      "PROTECAO_PATRIMONIAL",
+      "PLANEJAMENTO_SUCESSORIO",
+      "GOVERNANCA_FAMILIAR_OU_SOCIETARIA",
+      "PREVENCAO_DE_CONFLITOS_ENTRE_HERDEIROS",
+      "FORMALIZACAO_DE_RELACIONAMENTOS",
+      "SEGURO_DE_VIDA",
+      "SEGURO_SAUDE",
+      "EFICIENCIA_FISCAL",
+      "REESTRUTURACAO_SOCIETARIA",
+      "DIVERSIFICACAO_DE_JURISDICAO_E_MOEDA",
+      "FUNDOS_DE_INVESTIMENTOS",
+      "SAIDA_DEFINITIVA_DO_BRASIL",
+      "REPERFILAMENTO_DE_DIVIDA",
+      "FILANTROPIA"
+    ];
+    propertyKindValues = ["URBANO", "RURAL"];
+    propertyUtilityValues = [
+      "ATIVIDADE_INDUSTRIAL_COMERCIAL",
+      "ATIVIDADE_RURAL",
+      "INVESTIMENTO",
+      "LAZER",
+      "LOCACAO_ARRENDAMENTO",
+      "OUTRA",
+      "PENDENTE",
+      "RESIDENCIAL"
+    ];
+    societaryTypeValues = ["LTDA", "SA", "SCP"];
+    taxRegimeValues = [
+      "SIMPLES_NACIONAL",
+      "LUCRO_PRESUMIDO",
+      "LUCRO_REAL"
     ];
     encumbranceTypeValues = [
-      "HIPOTECA",
+      "PENDENTE",
       "ALIENACAO_FIDUCIARIA",
-      "PENHOR",
-      "USUFRUTO",
-      "SERVIDAO",
-      "SEQUESTRO",
-      "OUTRO"
+      "ARROLAMENTO",
+      "HIPOTECA",
+      "INCOMUNICABILIDADE_INALIENABILIDADE_IMPENHORABILIDADE",
+      "NA",
+      "NAO_HA",
+      "OUTROS",
+      "PENHORA",
+      "SERVIDAO_PASSAGEM",
+      "USUFRUTO"
     ];
     certidaoScopeValues = ["PESSOA", "SOCIEDADE"];
     certidaoTypeValues = [
@@ -213,28 +299,6 @@ var init_schema = __esm({
       "UK",
       "PANAMA"
     ];
-    companyDocStatusValues = [
-      "PENDENTE",
-      "RECEBIDO",
-      "NA",
-      "NAO_POSSUI"
-    ];
-    companyDocTypeValues = [
-      "CONTRATO_SOCIAL",
-      "BALANCO_FECHADO",
-      "BALANCETE_ATUALIZADO",
-      "ACORDO_SOCIOS",
-      "LIVRO_RAZAO_IMOBILIZADO",
-      "LIVRO_REGISTRO_ACOES_NOMINATIVAS",
-      "LIVRO_TRANSFERENCIA_ACOES",
-      "MEMORANDUM_ARTICLES",
-      "BALANCE_SHEET",
-      "CERTIFICATE_INCORPORATION",
-      "REGISTER_DIRECTORS",
-      "REGISTER_MEMBERS",
-      "CERTIFICATE_GOOD_STANDING",
-      "SHARE_CERTIFICATE"
-    ];
     roleEnum = pgEnum("role", APP_ROLES);
     civilStatusEnum = pgEnum("civilStatus", civilStatusValues);
     maritalRegimeEnum = pgEnum("maritalRegime", maritalRegimeValues);
@@ -249,12 +313,11 @@ var init_schema = __esm({
       "proposalStatus",
       proposalStatusValues
     );
-    projectStatusEnum = pgEnum("projectStatus", [
-      "EM_ANDAMENTO",
-      "AGUARDANDO_DOCUMENTOS",
-      "EM_REVISAO",
-      "CONCLUIDO"
-    ]);
+    projectStatusEnum = pgEnum("projectStatus", projectStatusValues);
+    projectObjectiveEnum = pgEnum(
+      "projectObjective",
+      projectObjectiveValues
+    );
     accessRoleEnum = pgEnum("accessRole", ["RESPONSAVEL", "CLIENTE"]);
     entityTypeEnum = pgEnum("entityType", entityTypeValues);
     rightTypeEnum = pgEnum("rightType", [
@@ -262,11 +325,18 @@ var init_schema = __esm({
       "USUFRUTO",
       "NUA_PROPRIEDADE"
     ]);
-    companyTypeEnum = pgEnum("companyType", companyTypeValues);
+    propertyKindEnum = pgEnum("propertyKind", propertyKindValues);
+    propertyUtilityEnum = pgEnum(
+      "propertyUtility",
+      propertyUtilityValues
+    );
     encumbranceTypeEnum = pgEnum(
-      "encumbranceType",
+      "propertyEncumbranceType",
       encumbranceTypeValues
     );
+    societaryTypeEnum = pgEnum("societaryType", societaryTypeValues);
+    taxRegimeEnum = pgEnum("taxRegime", taxRegimeValues);
+    ufEnum = pgEnum("uf", UFS);
     certidaoScopeEnum = pgEnum("certidaoScope", certidaoScopeValues);
     certidaoTypeEnum = pgEnum("certidaoType", certidaoTypeValues);
     certidaoStatusEnum = pgEnum(
@@ -277,19 +347,6 @@ var init_schema = __esm({
       "companyJurisdiction",
       companyJurisdictionValues
     );
-    companyDocStatusEnum = pgEnum(
-      "companyDocStatus",
-      companyDocStatusValues
-    );
-    companyDocTypeEnum = pgEnum(
-      "companyDocType",
-      companyDocTypeValues
-    );
-    contributionStatusEnum = pgEnum("contributionStatus", [
-      "RASCUNHO",
-      "EM_ANALISE",
-      "CONCLUIDA"
-    ]);
     users = pgTable("users", {
       id: serial("id").primaryKey(),
       name: text("name"),
@@ -303,8 +360,6 @@ var init_schema = __esm({
     families = pgTable("families", {
       ...ids,
       name: varchar("name", { length: 160 }).notNull(),
-      civilStatus: civilStatusEnum("civilStatus").notNull(),
-      maritalRegime: maritalRegimeEnum("maritalRegime").notNull(),
       notes: text("notes"),
       createdBy: varchar("createdBy", { length: 36 }).notNull(),
       createdAt: auditTime,
@@ -314,10 +369,25 @@ var init_schema = __esm({
       ...ids,
       familyId: varchar("familyId", { length: 36 }).notNull().unique(),
       title: varchar("title", { length: 160 }).notNull(),
-      status: projectStatusEnum("status").default("EM_ANDAMENTO").notNull(),
+      status: projectStatusEnum("status").default("ATIVO").notNull(),
       createdAt: auditTime,
       updatedAt: updatedAtCol()
     });
+    projectObjectives = pgTable(
+      "projectObjectives",
+      {
+        ...ids,
+        projectId: varchar("projectId", { length: 36 }).notNull(),
+        objective: projectObjectiveEnum("objective").notNull(),
+        createdAt: auditTime
+      },
+      (table) => [
+        uniqueIndex("project_objective_unique").on(
+          table.projectId,
+          table.objective
+        )
+      ]
+    );
     familyAccess = pgTable(
       "familyAccess",
       {
@@ -373,12 +443,26 @@ var init_schema = __esm({
         // família pode ser true — garantido pelo unique index parcial
         // people_primary_unique (WHERE "isPrimaryContact" = true).
         isPrimaryContact: boolean("isPrimaryContact").default(false).notNull(),
+        phone: varchar("phone", { length: 20 }),
+        cep: varchar("cep", { length: 8 }),
+        street: varchar("street", { length: 160 }),
+        number: varchar("number", { length: 20 }),
+        complement: varchar("complement", { length: 80 }),
+        district: varchar("district", { length: 80 }),
+        city: varchar("city", { length: 120 }),
+        uf: varchar("uf", { length: 2 }),
+        addressSameAsPrimary: boolean("addressSameAsPrimary").default(false).notNull(),
+        isDependent: boolean("isDependent").default(false).notNull(),
         createdAt: auditTime,
         updatedAt: updatedAtCol()
       },
       (table) => [
         index("people_family_idx").on(table.familyId),
-        uniqueIndex("people_primary_unique").on(table.familyId).where(sql`${table.isPrimaryContact} = true`)
+        uniqueIndex("people_primary_unique").on(table.familyId).where(sql`${table.isPrimaryContact} = true`),
+        // CPF normalizado por família: um mesmo CPF não pode ser duplicado na família.
+        uniqueIndex("people_family_taxid_unique").on(table.familyId, table.taxId),
+        // Um único cônjuge por família.
+        uniqueIndex("people_conjuge_unique").on(table.familyId).where(sql`${table.vinculo} = 'CONJUGE'`)
       ]
     );
     documents = pgTable(
@@ -396,7 +480,11 @@ var init_schema = __esm({
         dispensationApprovedBy: varchar("dispensationApprovedBy", { length: 36 }),
         dispensedAt: timestamp("dispensedAt"),
         currentVersion: integer("currentVersion").default(0).notNull(),
+        issuedAt: date("issuedAt"),
         validUntil: date("validUntil"),
+        referenceDate: date("referenceDate"),
+        apostilled: boolean("apostilled").default(false).notNull(),
+        translated: boolean("translated").default(false).notNull(),
         createdAt: auditTime,
         updatedAt: updatedAtCol()
       },
@@ -428,40 +516,95 @@ var init_schema = __esm({
         ...ids,
         familyId: varchar("familyId", { length: 36 }).notNull(),
         description: varchar("description", { length: 240 }).notNull(),
+        kind: propertyKindEnum("kind"),
         hasRegistration: boolean("hasRegistration").default(true).notNull(),
         registrationNumber: varchar("registrationNumber", { length: 120 }),
         alternativeDocType: varchar("alternativeDocType", { length: 80 }),
         noRegistrationReason: text("noRegistrationReason"),
-        registryOffice: varchar("registryOffice", { length: 160 }),
-        propertyCity: varchar("propertyCity", { length: 120 }).notNull(),
+        // Cartório: número de registro 1–55 (provimento) + UF e cidade do cartório.
+        registryOfficeNumber: integer("registryOfficeNumber"),
+        registryUf: varchar("registryUf", { length: 2 }),
         registryCity: varchar("registryCity", { length: 120 }),
+        propertyCity: varchar("propertyCity", { length: 120 }).notNull(),
+        uf: varchar("uf", { length: 2 }),
+        notes: text("notes"),
         acquisitionDate: date("acquisitionDate"),
-        declaredValue: decimal("declaredValue", { precision: 15, scale: 2 }),
+        irpfBalanceValue: decimal("irpfBalanceValue", { precision: 15, scale: 2 }),
         marketValue: decimal("marketValue", { precision: 15, scale: 2 }),
+        venalValue: decimal("venalValue", { precision: 15, scale: 2 }),
+        irGcapValue: decimal("irGcapValue", { precision: 15, scale: 2 }),
+        emolumentsValue: decimal("emolumentsValue", { precision: 15, scale: 2 }),
+        itbiRate: decimal("itbiRate", { precision: 5, scale: 2 }),
+        hasLaudemio: boolean("hasLaudemio").default(false).notNull(),
+        laudemioRate: decimal("laudemioRate", { precision: 5, scale: 2 }),
+        utility: propertyUtilityEnum("utility").default("PENDENTE").notNull(),
+        rentValue: decimal("rentValue", { precision: 15, scale: 2 }),
+        inscricaoImobiliaria: varchar("inscricaoImobiliaria", { length: 120 }),
+        ccir: varchar("ccir", { length: 40 }),
+        nirf: varchar("nirf", { length: 40 }),
+        encumbranceType: encumbranceTypeEnum("encumbranceType").default("PENDENTE").notNull(),
+        encumbranceNote: text("encumbranceNote"),
         createdAt: auditTime,
         updatedAt: updatedAtCol()
       },
-      (table) => [index("properties_family_idx").on(table.familyId)]
+      (table) => [
+        index("properties_family_idx").on(table.familyId),
+        check(
+          "properties_registry_office_number_ck",
+          sql`${table.registryOfficeNumber} BETWEEN 1 AND 55`
+        ),
+        check(
+          "properties_values_non_negative_ck",
+          sql`${table.irpfBalanceValue} >= 0 AND ${table.marketValue} >= 0 AND ${table.venalValue} >= 0 AND ${table.irGcapValue} >= 0 AND ${table.emolumentsValue} >= 0`
+        ),
+        check(
+          "properties_itbi_rate_ck",
+          sql`${table.itbiRate} >= 0 AND ${table.itbiRate} <= 100`
+        ),
+        check(
+          "properties_laudemio_ck",
+          sql`NOT ${table.hasLaudemio} OR (${table.laudemioRate} IS NOT NULL AND ${table.laudemioRate} > 0)`
+        ),
+        check(
+          "properties_rent_value_ck",
+          sql`${table.utility} <> 'LOCACAO_ARRENDAMENTO' OR (${table.rentValue} IS NOT NULL AND ${table.rentValue} > 0)`
+        ),
+        check(
+          "properties_rural_docs_ck",
+          sql`${table.kind} IS DISTINCT FROM 'RURAL' OR (${table.ccir} IS NOT NULL AND ${table.nirf} IS NOT NULL)`
+        )
+      ]
     );
-    propertyOwners = pgTable("propertyOwners", {
-      ...ids,
-      propertyId: varchar("propertyId", { length: 36 }).notNull(),
-      personId: varchar("personId", { length: 36 }).notNull(),
-      ownershipPercentage: decimal("ownershipPercentage", {
-        precision: 5,
-        scale: 2
-      }).notNull(),
-      rightType: rightTypeEnum("rightType").default("PROPRIEDADE").notNull(),
-      createdAt: auditTime
-    });
-    encumbrances = pgTable("encumbrances", {
-      ...ids,
-      propertyId: varchar("propertyId", { length: 36 }).notNull(),
-      type: encumbranceTypeEnum("type").notNull(),
-      description: text("description"),
-      active: boolean("active").default(true).notNull(),
-      createdAt: auditTime
-    });
+    propertyOwners = pgTable(
+      "propertyOwners",
+      {
+        ...ids,
+        propertyId: varchar("propertyId", { length: 36 }).notNull(),
+        personId: varchar("personId", { length: 36 }),
+        companyId: varchar("companyId", { length: 36 }),
+        ownershipPercentage: decimal("ownershipPercentage", {
+          precision: 5,
+          scale: 2
+        }).notNull(),
+        rightType: rightTypeEnum("rightType").default("PROPRIEDADE").notNull(),
+        createdAt: auditTime
+      },
+      (table) => [
+        uniqueIndex("property_owner_person_unique").on(
+          table.propertyId,
+          table.personId
+        ),
+        uniqueIndex("property_owner_company_unique").on(
+          table.propertyId,
+          table.companyId
+        ),
+        // Exatamente um titulável preenchido: pessoa física OU sociedade.
+        check(
+          "property_owner_exactly_one_ck",
+          sql`(CASE WHEN ${table.personId} IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN ${table.companyId} IS NOT NULL THEN 1 ELSE 0 END) = 1`
+        )
+      ]
+    );
     companies = pgTable(
       "companies",
       {
@@ -469,11 +612,22 @@ var init_schema = __esm({
         familyId: varchar("familyId", { length: 36 }).notNull(),
         legalName: varchar("legalName", { length: 180 }).notNull(),
         taxNumber: varchar("taxNumber", { length: 20 }),
-        type: companyTypeEnum("type").default("HOLDING_NACIONAL").notNull(),
+        isOffshore: boolean("isOffshore").default(false).notNull(),
         createdAt: auditTime,
         updatedAt: updatedAtCol()
       },
-      (table) => [index("companies_family_idx").on(table.familyId)]
+      (table) => [
+        index("companies_family_idx").on(table.familyId),
+        uniqueIndex("companies_family_tax_number_unique").on(
+          table.familyId,
+          table.taxNumber
+        ),
+        // CNPJ obrigatório quando a sociedade NÃO é offshore.
+        check(
+          "companies_tax_number_ck",
+          sql`${table.isOffshore} = true OR ${table.taxNumber} IS NOT NULL`
+        )
+      ]
     );
     companyStakeholders = pgTable(
       "companyStakeholders",
@@ -497,29 +651,26 @@ var init_schema = __esm({
         )
       ]
     );
-    propertyContributions = pgTable("propertyContributions", {
-      ...ids,
-      propertyId: varchar("propertyId", { length: 36 }).notNull(),
-      companyId: varchar("companyId", { length: 36 }).notNull(),
-      percentage: decimal("percentage", { precision: 5, scale: 2 }).notNull(),
-      status: contributionStatusEnum("status").default("RASCUNHO").notNull(),
-      createdAt: auditTime
-    });
     otherAssets = pgTable(
       "otherAssets",
       {
         ...ids,
         familyId: varchar("familyId", { length: 36 }).notNull(),
-        category: assetCategoryEnum("category").default("OUTRO").notNull(),
+        category: assetCategoryEnum("category").notNull(),
         description: varchar("description", { length: 240 }).notNull(),
-        declaredValue: decimal("declaredValue", { precision: 15, scale: 2 }),
-        marketValue: decimal("marketValue", { precision: 15, scale: 2 }),
-        ownerPersonId: varchar("ownerPersonId", { length: 36 }),
+        declaredValue: decimal("declaredValue", { precision: 15, scale: 2 }).notNull(),
+        ownerPersonId: varchar("ownerPersonId", { length: 36 }).notNull(),
         notes: text("notes"),
         createdAt: auditTime,
         updatedAt: updatedAtCol()
       },
-      (table) => [index("other_assets_family_idx").on(table.familyId)]
+      (table) => [
+        index("other_assets_family_idx").on(table.familyId),
+        check(
+          "other_assets_declared_value_ck",
+          sql`${table.declaredValue} > 0`
+        )
+      ]
     );
     certidoes = pgTable(
       "certidoes",
@@ -546,10 +697,10 @@ var init_schema = __esm({
         ...ids,
         companyId: varchar("companyId", { length: 36 }).notNull(),
         nire: varchar("nire", { length: 20 }),
-        uf: varchar("uf", { length: 2 }),
+        uf: ufEnum("uf"),
         sede: varchar("sede", { length: 160 }),
-        societaryType: varchar("societaryType", { length: 60 }),
-        taxRegime: varchar("taxRegime", { length: 60 }),
+        societaryType: societaryTypeEnum("societaryType"),
+        taxRegime: taxRegimeEnum("taxRegime"),
         corporatePurpose: text("corporatePurpose"),
         capitalSocial: decimal("capitalSocial", { precision: 15, scale: 2 }),
         shareQuantity: decimal("shareQuantity", { precision: 15, scale: 2 }),
@@ -584,21 +735,6 @@ var init_schema = __esm({
       },
       (table) => [
         uniqueIndex("company_details_unique").on(table.companyId)
-      ]
-    );
-    companyDetailDocs = pgTable(
-      "companyDetailDocs",
-      {
-        ...ids,
-        companyId: varchar("companyId", { length: 36 }).notNull(),
-        docType: companyDocTypeEnum("docType").notNull(),
-        status: companyDocStatusEnum("status").default("PENDENTE").notNull(),
-        createdAt: auditTime,
-        updatedAt: updatedAtCol()
-      },
-      (table) => [
-        uniqueIndex("company_detail_doc_unique").on(table.companyId, table.docType),
-        index("company_detail_docs_idx").on(table.companyId)
       ]
     );
     financialProposals = pgTable(
@@ -788,13 +924,13 @@ __export(family_storage_path_exports, {
   onlyDigits: () => onlyDigits,
   resolveFamilyStorageFolder: () => resolveFamilyStorageFolder
 });
-import { and as and6, eq as eq9 } from "drizzle-orm";
+import { and as and5, eq as eq8 } from "drizzle-orm";
 function onlyDigits(value) {
   return value.replace(/\D/g, "");
 }
 async function resolveFamilyStorageFolder(familyId) {
   const db = await requireDatabase();
-  const [primary] = await db.select({ taxId: people.taxId }).from(people).where(and6(eq9(people.familyId, familyId), eq9(people.isPrimaryContact, true))).limit(1);
+  const [primary] = await db.select({ taxId: people.taxId }).from(people).where(and5(eq8(people.familyId, familyId), eq8(people.isPrimaryContact, true))).limit(1);
   const digits = primary?.taxId ? onlyDigits(primary.taxId) : "";
   if (digits) return digits;
   return `familia-${familyId}`;
@@ -803,7 +939,7 @@ async function findFamilyIdByPrimaryContactCpf(cpf, excludeFamilyId) {
   const digits = onlyDigits(cpf);
   if (!digits) return null;
   const db = await requireDatabase();
-  const rows = await db.select({ familyId: people.familyId, taxId: people.taxId }).from(people).where(eq9(people.isPrimaryContact, true));
+  const rows = await db.select({ familyId: people.familyId, taxId: people.taxId }).from(people).where(eq8(people.isPrimaryContact, true));
   for (const row of rows) {
     if (!row.taxId) continue;
     if (excludeFamilyId && row.familyId === excludeFamilyId) continue;
@@ -1324,14 +1460,14 @@ import { asc, eq as eq4, inArray } from "drizzle-orm";
 
 // server/features/certidoes/certidao-types.ts
 init_schema();
-import { z } from "zod";
-var certidaoTypeSchema = z.enum(certidaoTypeValues);
-var certidaoStatusSchema = z.enum(certidaoStatusValues);
-var certidaoScopeSchema = z.enum(certidaoScopeValues);
-var certidaoUpdateSchema = z.object({
-  certidaoId: z.string().min(1),
+import { z as z2 } from "zod";
+var certidaoTypeSchema = z2.enum(certidaoTypeValues);
+var certidaoStatusSchema = z2.enum(certidaoStatusValues);
+var certidaoScopeSchema = z2.enum(certidaoScopeValues);
+var certidaoUpdateSchema = z2.object({
+  certidaoId: z2.string().min(1),
   status: certidaoStatusSchema.optional(),
-  validUntil: z.string().optional()
+  validUntil: z2.string().optional()
 });
 var CERTIDAO_TYPE_LABELS = {
   CND_FEDERAL: "CND Federal",
@@ -1448,23 +1584,21 @@ async function updateCertidaoRecord(input) {
 }
 
 // server/features/leads/lead-types.ts
-import { z as z3 } from "zod";
+import { z as z4 } from "zod";
 
 // server/features/families/family-types.ts
-import { z as z2 } from "zod";
-var civilStatusSchema = z2.enum([
+import { z as z3 } from "zod";
+var civilStatusSchema = z3.enum([
   "SOLTEIRO",
   "DIVORCIADO",
   "VIUVO",
   "CASADO",
   "UNIAO_ESTAVEL"
 ]);
-var maritalRegimeSchema = z2.enum(["CPB", "CUB", "STB", "STOB", "NA"]);
-var familyInputSchema = z2.object({
-  name: z2.string().min(3).max(160),
-  civilStatus: civilStatusSchema,
-  maritalRegime: maritalRegimeSchema,
-  notes: z2.string().max(2e3).optional()
+var maritalRegimeSchema = z3.enum(["CPB", "CUB", "STB", "STOB", "NA"]);
+var familyInputSchema = z3.object({
+  name: z3.string().min(3).max(160),
+  notes: z3.string().max(2e3).optional()
 });
 
 // server/features/leads/lead-types.ts
@@ -1474,26 +1608,26 @@ var ALLOWED_LEAD_MIME_TYPES = /* @__PURE__ */ new Set([
   "image/png",
   "image/webp"
 ]);
-var leadCreateSchema = z3.object({
-  familyId: z3.string().optional(),
-  fullName: z3.string().min(3).max(160),
-  taxId: z3.string().min(11).max(20),
-  email: z3.string().email(),
-  birthDate: z3.string().min(1),
+var leadCreateSchema = z4.object({
+  familyId: z4.string().optional(),
+  fullName: z4.string().min(3).max(160),
+  taxId: z4.string().min(11).max(20),
+  email: z4.string().email(),
+  birthDate: z4.string().min(1),
   // YYYY-MM-DD
-  fileName: z3.string().min(1).max(255),
-  mimeType: z3.string().min(1),
-  base64Data: z3.string().min(1)
+  fileName: z4.string().min(1).max(255),
+  mimeType: z4.string().min(1),
+  base64Data: z4.string().min(1)
 });
-var leadAcceptSchema = z3.object({
-  leadId: z3.string().min(1),
-  familyName: z3.string().min(3).max(160),
+var leadAcceptSchema = z4.object({
+  leadId: z4.string().min(1),
+  familyName: z4.string().min(3).max(160),
   civilStatus: civilStatusSchema,
   maritalRegime: maritalRegimeSchema
 });
-var leadRejectSchema = z3.object({
-  leadId: z3.string().min(1),
-  reviewNote: z3.string().max(1e3).optional()
+var leadRejectSchema = z4.object({
+  leadId: z4.string().min(1),
+  reviewNote: z4.string().max(1e3).optional()
 });
 
 // server/features/leads/lead-repository.ts
@@ -1590,8 +1724,6 @@ async function acceptLeadRecord(input, reviewedBy) {
     await tx.insert(families).values({
       id: familyId,
       name: input.familyName,
-      civilStatus: input.civilStatus,
-      maritalRegime: input.maritalRegime,
       createdBy: String(reviewedBy)
     });
     await tx.insert(projects).values({ id: projectId, familyId, title: input.familyName });
@@ -1744,7 +1876,7 @@ function registerStorageProxy(app2) {
 }
 
 // server/_core/systemRouter.ts
-import { z as z4 } from "zod";
+import { z as z5 } from "zod";
 
 // server/_core/notification.ts
 async function notifyOwner({ title, content }) {
@@ -1791,16 +1923,16 @@ var adminProcedure = t.procedure.use(
 // server/_core/systemRouter.ts
 var systemRouter = router({
   health: publicProcedure.input(
-    z4.object({
-      timestamp: z4.number().min(0, "timestamp cannot be negative")
+    z5.object({
+      timestamp: z5.number().min(0, "timestamp cannot be negative")
     })
   ).query(() => ({
     ok: true
   })),
   notifyOwner: adminProcedure.input(
-    z4.object({
-      title: z4.string().min(1, "title is required"),
-      content: z4.string().min(1, "content is required")
+    z5.object({
+      title: z5.string().min(1, "title is required"),
+      content: z5.string().min(1, "content is required")
     })
   ).mutation(async ({ input }) => {
     const delivered = await notifyOwner(input);
@@ -1811,7 +1943,7 @@ var systemRouter = router({
 });
 
 // server/features/companies/company-router.ts
-import { z as z9 } from "zod";
+import { z as z10 } from "zod";
 init_roles();
 
 // server/features/audit/audit-repository.ts
@@ -1924,128 +2056,13 @@ async function ensureFamilyDocumentRequirements(familyId) {
   return created;
 }
 
-// server/features/properties/property-repository.ts
-init_schema();
-init_database();
-import { desc as desc3, eq as eq8, and as and5 } from "drizzle-orm";
-var PCT_EPSILON = 1e-3;
-function totalOwnership(rows) {
-  return rows.reduce((sum, row) => sum + Number(row.ownershipPercentage ?? 0), 0);
-}
-async function createPropertyRecord(input) {
-  const db = await requireDatabase();
-  const id = createId();
-  const existingProperty = await db.select().from(properties).where(
-    and5(
-      eq8(properties.familyId, input.familyId),
-      eq8(properties.description, input.description),
-      eq8(properties.propertyCity, input.propertyCity)
-    )
-  ).limit(1);
-  if (existingProperty.length > 0) {
-    return existingProperty[0].id;
-  }
-  await db.insert(properties).values({
-    ...input,
-    id,
-    hasRegistration: input.hasRegistration,
-    registrationNumber: input.hasRegistration ? input.registrationNumber || null : null,
-    alternativeDocType: input.hasRegistration ? null : input.alternativeDocType || null,
-    noRegistrationReason: input.hasRegistration ? null : input.noRegistrationReason || null,
-    registryOffice: input.registryOffice || null,
-    registryCity: input.registryCity || null,
-    acquisitionDate: input.acquisitionDate || null,
-    declaredValue: input.declaredValue?.toFixed(2) ?? null,
-    marketValue: input.marketValue?.toFixed(2) ?? null
-  });
-  return id;
-}
-async function listPropertyRecords(familyId) {
-  const db = await requireDatabase();
-  return db.select().from(properties).where(eq8(properties.familyId, familyId)).orderBy(desc3(properties.updatedAt));
-}
-async function getPropertyRecord(propertyId) {
-  const db = await requireDatabase();
-  const result = await db.select().from(properties).where(eq8(properties.id, propertyId)).limit(1);
-  return result[0] ?? null;
-}
-async function addEncumbranceRecord(input) {
-  const db = await requireDatabase();
-  const id = createId();
-  await db.insert(encumbrances).values({ ...input, id });
-  return id;
-}
-async function listEncumbrances(propertyId) {
-  const db = await requireDatabase();
-  return db.select().from(encumbrances).where(eq8(encumbrances.propertyId, propertyId));
-}
-async function addPropertyOwnerRecord(input) {
-  const db = await requireDatabase();
-  const id = createId();
-  await db.transaction(async (tx) => {
-    const existing = await tx.select().from(propertyOwners).where(eq8(propertyOwners.propertyId, input.propertyId));
-    if (existing.some((row) => row.personId === input.personId)) {
-      throw new Error("Este membro j\xE1 est\xE1 vinculado a este im\xF3vel.");
-    }
-    const total = totalOwnership(existing) + input.ownershipPercentage;
-    if (total > 100 + PCT_EPSILON) {
-      throw new Error(
-        `A soma das titularidades n\xE3o pode passar de 100% (atual ${totalOwnership(existing)}%).`
-      );
-    }
-    await tx.insert(propertyOwners).values({ ...input, id, ownershipPercentage: input.ownershipPercentage.toFixed(2) });
-  });
-  return id;
-}
-async function updatePropertyOwnerRecord(input) {
-  const db = await requireDatabase();
-  await db.transaction(async (tx) => {
-    const current = await tx.select().from(propertyOwners).where(eq8(propertyOwners.id, input.ownerId)).limit(1);
-    const owner = current[0];
-    if (!owner || owner.propertyId !== input.propertyId) {
-      throw new Error("Titularidade n\xE3o encontrada.");
-    }
-    const others = await tx.select().from(propertyOwners).where(eq8(propertyOwners.propertyId, input.propertyId));
-    const remaining = others.filter((row) => row.id !== input.ownerId);
-    const personId = input.personId ?? owner.personId;
-    if (remaining.some((row) => row.personId === personId)) {
-      throw new Error("Este membro j\xE1 est\xE1 vinculado a este im\xF3vel.");
-    }
-    const percentage = input.ownershipPercentage ?? Number(owner.ownershipPercentage);
-    const total = totalOwnership(remaining) + percentage;
-    if (total > 100 + PCT_EPSILON) {
-      throw new Error(
-        `A soma das titularidades n\xE3o pode passar de 100% (atual ${totalOwnership(remaining)}%).`
-      );
-    }
-    await tx.update(propertyOwners).set({
-      personId,
-      ownershipPercentage: percentage.toFixed(2),
-      rightType: input.rightType ?? owner.rightType
-    }).where(eq8(propertyOwners.id, input.ownerId));
-  });
-}
-async function removePropertyOwnerRecord(input) {
-  const db = await requireDatabase();
-  const removed = await db.delete(propertyOwners).where(eq8(propertyOwners.id, input.ownerId)).returning({ id: propertyOwners.id, propertyId: propertyOwners.propertyId });
-  const row = removed[0];
-  if (!row || row.propertyId !== input.propertyId) {
-    throw new Error("Titularidade n\xE3o encontrada.");
-  }
-  return row.id;
-}
-async function listPropertyOwners(propertyId) {
-  const db = await requireDatabase();
-  return db.select().from(propertyOwners).where(eq8(propertyOwners.propertyId, propertyId));
-}
-
 // server/features/people/person-repository.ts
 init_schema();
-import { and as and8, eq as eq12 } from "drizzle-orm";
+import { and as and7, eq as eq11 } from "drizzle-orm";
 
 // server/features/families/family-repository.ts
 init_schema();
-import { desc as desc4, eq as eq10, count, inArray as inArray2, and as and7 } from "drizzle-orm";
+import { desc as desc3, eq as eq9, count, inArray as inArray2, and as and6 } from "drizzle-orm";
 init_database();
 async function createFamilyRecord(input, createdBy) {
   const db = await requireDatabase();
@@ -2059,20 +2076,20 @@ async function createFamilyRecord(input, createdBy) {
 }
 async function listFamilyRecords() {
   const db = await requireDatabase();
-  const records = await db.select().from(families).orderBy(desc4(families.updatedAt));
+  const records = await db.select().from(families).orderBy(desc3(families.updatedAt));
   if (!records.length) return [];
-  const accessRows = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(and7(inArray2(familyAccess.familyId, records.map((r) => r.id)), eq10(familyAccess.accessRole, "CLIENTE")));
+  const accessRows = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(and6(inArray2(familyAccess.familyId, records.map((r) => r.id)), eq9(familyAccess.accessRole, "CLIENTE")));
   const familyIdsWithAccess = new Set(accessRows.map((r) => r.familyId));
   return records.map((record) => ({ ...record, hasClientAccess: familyIdsWithAccess.has(record.id) }));
 }
 async function getFamilyRecord(familyId) {
   const db = await requireDatabase();
-  const result = await db.select().from(families).where(eq10(families.id, familyId)).limit(1);
+  const result = await db.select().from(families).where(eq9(families.id, familyId)).limit(1);
   return result[0] ?? null;
 }
 async function getClientFamilyIds(userId) {
   const db = await requireDatabase();
-  const access = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(eq10(familyAccess.userId, userId));
+  const access = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(eq9(familyAccess.userId, userId));
   return access.map((a) => a.familyId);
 }
 async function getDashboardData(allowedFamilyIds) {
@@ -2081,14 +2098,14 @@ async function getDashboardData(allowedFamilyIds) {
   if (scoped && allowedFamilyIds.length === 0) {
     return { totalFamilies: 0, totalPeople: 0, totalDocuments: 0, families: [] };
   }
-  const allFamilies = scoped ? await db.select().from(families).where(inArray2(families.id, allowedFamilyIds)).orderBy(desc4(families.updatedAt)) : await db.select().from(families).orderBy(desc4(families.updatedAt));
+  const allFamilies = scoped ? await db.select().from(families).where(inArray2(families.id, allowedFamilyIds)).orderBy(desc3(families.updatedAt)) : await db.select().from(families).orderBy(desc3(families.updatedAt));
   const families2 = [];
   let totalPeople = 0;
   let totalDocuments = 0;
   for (const f of allFamilies) {
-    const [{ count: peopleCount }] = await db.select({ count: count() }).from(people).where(eq10(people.familyId, f.id));
-    const [{ count: documentsCount }] = await db.select({ count: count() }).from(documents).where(eq10(documents.familyId, f.id));
-    families2.push({ id: f.id, name: f.name, civilStatus: f.civilStatus, maritalRegime: f.maritalRegime, updatedAt: f.updatedAt, peopleCount: Number(peopleCount), documentsCount: Number(documentsCount) });
+    const [{ count: peopleCount }] = await db.select({ count: count() }).from(people).where(eq9(people.familyId, f.id));
+    const [{ count: documentsCount }] = await db.select({ count: count() }).from(documents).where(eq9(documents.familyId, f.id));
+    families2.push({ id: f.id, name: f.name, updatedAt: f.updatedAt, peopleCount: Number(peopleCount), documentsCount: Number(documentsCount) });
     totalPeople += Number(peopleCount);
     totalDocuments += Number(documentsCount);
   }
@@ -2153,11 +2170,11 @@ async function listClientStorageFiles(userId) {
 // server/lib/family-storage-migration.ts
 init_schema();
 init_database();
-import { eq as eq11, inArray as inArray3 } from "drizzle-orm";
+import { eq as eq10, inArray as inArray3 } from "drizzle-orm";
 async function migrateFamilyStorageFolder(familyId, oldFolder, newFolder) {
   if (oldFolder === newFolder) return { migratedFiles: 0 };
   const db = await requireDatabase();
-  const familyDocs = await db.select({ id: documents.id }).from(documents).where(eq11(documents.familyId, familyId));
+  const familyDocs = await db.select({ id: documents.id }).from(documents).where(eq10(documents.familyId, familyId));
   const docIds = familyDocs.map((d) => d.id);
   if (docIds.length === 0) return { migratedFiles: 0 };
   const versions = await db.select({ id: documentVersions.id, storageKey: documentVersions.storageKey }).from(documentVersions).where(inArray3(documentVersions.documentId, docIds));
@@ -2169,7 +2186,7 @@ async function migrateFamilyStorageFolder(familyId, oldFolder, newFolder) {
   try {
     for (const version of toMigrate) {
       const newKey = `${newFolder}/${version.storageKey.slice(prefix.length)}`;
-      await db.update(documentVersions).set({ storageKey: newKey }).where(eq11(documentVersions.id, version.id));
+      await db.update(documentVersions).set({ storageKey: newKey }).where(eq10(documentVersions.id, version.id));
       migratedCount++;
     }
   } catch {
@@ -2187,8 +2204,8 @@ init_family_storage_path();
 init_database();
 
 // server/features/people/person-types.ts
-import { z as z5 } from "zod";
-var vinculoSchema = z5.enum([
+import { z as z6 } from "zod";
+var vinculoSchema = z6.enum([
   "TITULAR",
   "CONJUGE",
   "FILHO",
@@ -2196,22 +2213,22 @@ var vinculoSchema = z5.enum([
   "BISNETO"
 ]);
 var marriedStatuses = /* @__PURE__ */ new Set(["CASADO", "UNIAO_ESTAVEL"]);
-var personInputSchema = z5.object({
-  familyId: z5.string().min(1),
-  fullName: z5.string().min(3).max(160),
-  email: z5.string().email().optional().or(z5.literal("")),
-  taxId: z5.string().max(20).optional(),
-  birthDate: z5.string().optional(),
+var personInputSchema = z6.object({
+  familyId: z6.string().min(1),
+  fullName: z6.string().min(3).max(160),
+  email: z6.string().email().optional().or(z6.literal("")),
+  taxId: z6.string().max(20).optional(),
+  birthDate: z6.string().optional(),
   vinculo: vinculoSchema,
-  parentPersonId: z5.string().min(1).optional(),
-  spouseName: z5.string().max(160).optional(),
+  parentPersonId: z6.string().min(1).optional(),
+  spouseName: z6.string().max(160).optional(),
   civilStatus: civilStatusSchema.optional(),
   maritalRegime: maritalRegimeSchema.optional(),
-  exSpouseNote: z5.string().max(1e3).optional(),
+  exSpouseNote: z6.string().max(1e3).optional(),
   // Fase 3: marca esta pessoa como titular/responsável da família — usado
   // pra nomear a pasta de storage local (CPF do titular). Opcional; se
   // omitido, a pessoa não vira titular automaticamente.
-  isPrimaryContact: z5.boolean().optional()
+  isPrimaryContact: z6.boolean().optional()
 }).superRefine((data, ctx) => {
   if ((data.vinculo === "NETO" || data.vinculo === "BISNETO") && !data.parentPersonId) {
     ctx.addIssue({
@@ -2246,20 +2263,20 @@ var personInputSchema = z5.object({
     }
   }
 });
-var setPrimaryContactSchema = z5.object({
-  familyId: z5.string().min(1),
-  personId: z5.string().min(1)
+var setPrimaryContactSchema = z6.object({
+  familyId: z6.string().min(1),
+  personId: z6.string().min(1)
 });
-var personAttachmentSchema = z5.object({
-  category: z5.string().min(2).max(80),
-  fileName: z5.string().min(1).max(255),
-  mimeType: z5.string().min(1).max(120),
-  base64Data: z5.string().min(8).max(8e6)
+var personAttachmentSchema = z6.object({
+  category: z6.string().min(2).max(80),
+  fileName: z6.string().min(1).max(255),
+  mimeType: z6.string().min(1).max(120),
+  base64Data: z6.string().min(8).max(8e6)
 });
-var attachDocumentsSchema = z5.object({
-  familyId: z5.string().min(1),
-  personId: z5.string().min(1),
-  attachments: z5.array(personAttachmentSchema).min(1).max(8)
+var attachDocumentsSchema = z6.object({
+  familyId: z6.string().min(1),
+  personId: z6.string().min(1),
+  attachments: z6.array(personAttachmentSchema).min(1).max(8)
 });
 function isMarriedStatus(status) {
   return Boolean(status && marriedStatuses.has(status));
@@ -2284,7 +2301,7 @@ async function assertParentMatches(familyId, parentPersonId, expectedVinculo) {
     id: people.id,
     vinculo: people.vinculo,
     fullName: people.fullName
-  }).from(people).where(and8(eq12(people.id, parentPersonId), eq12(people.familyId, familyId))).limit(1);
+  }).from(people).where(and7(eq11(people.id, parentPersonId), eq11(people.familyId, familyId))).limit(1);
   if (!parent) throw new Error("Pai/m\xE3e n\xE3o encontrado nesta fam\xEDlia.");
   if (parent.vinculo !== expectedVinculo) {
     throw new Error(
@@ -2305,17 +2322,15 @@ async function addPersonRecord(input) {
   let civilStatus = input.civilStatus;
   let maritalRegime = input.maritalRegime;
   if (input.vinculo === "CONJUGE") {
-    const family = await getFamilyRecord(input.familyId);
-    if (!family) throw new Error("Fam\xEDlia n\xE3o encontrada.");
-    civilStatus = family.civilStatus;
-    maritalRegime = family.maritalRegime;
+    civilStatus = civilStatus ?? "CASADO";
+    maritalRegime = maritalRegime ?? "CPB";
   } else if (civilStatus && !isMarriedStatus(civilStatus)) {
     maritalRegime = "NA";
   }
   await db.transaction(async (tx) => {
     if (input.isPrimaryContact && input.taxId) {
       await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
-      await tx.update(people).set({ isPrimaryContact: false }).where(eq12(people.familyId, input.familyId));
+      await tx.update(people).set({ isPrimaryContact: false }).where(eq11(people.familyId, input.familyId));
     }
     await tx.insert(people).values({
       id,
@@ -2350,17 +2365,17 @@ async function addPersonRecord(input) {
 }
 async function getPersonRecord(personId) {
   const db = await requireDatabase();
-  const result = await db.select().from(people).where(eq12(people.id, personId)).limit(1);
+  const result = await db.select().from(people).where(eq11(people.id, personId)).limit(1);
   return result[0] ?? null;
 }
 async function listPeopleByFamily(familyId) {
   const db = await requireDatabase();
-  return db.select().from(people).where(eq12(people.familyId, familyId));
+  return db.select().from(people).where(eq11(people.familyId, familyId));
 }
 async function getPrimaryContact(familyId) {
   const db = await requireDatabase();
   const result = await db.select().from(people).where(
-    and8(eq12(people.familyId, familyId), eq12(people.isPrimaryContact, true))
+    and7(eq11(people.familyId, familyId), eq11(people.isPrimaryContact, true))
   ).limit(1);
   return result[0] ?? null;
 }
@@ -2369,16 +2384,16 @@ async function setPrimaryContact(input) {
   let oldFolder = "";
   await db.transaction(async (tx) => {
     const [candidate] = await tx.select({ id: people.id, taxId: people.taxId, familyId: people.familyId }).from(people).where(
-      and8(eq12(people.id, input.personId), eq12(people.familyId, input.familyId))
+      and7(eq11(people.id, input.personId), eq11(people.familyId, input.familyId))
     ).limit(1);
     if (!candidate) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
     if (candidate.taxId) {
       await assertCpfNotUsedByAnotherFamily(candidate.taxId, input.familyId);
     }
     oldFolder = await resolveFamilyStorageFolder(input.familyId);
-    await tx.update(people).set({ isPrimaryContact: false }).where(eq12(people.familyId, input.familyId));
+    await tx.update(people).set({ isPrimaryContact: false }).where(eq11(people.familyId, input.familyId));
     await tx.update(people).set({ isPrimaryContact: true }).where(
-      and8(eq12(people.familyId, input.familyId), eq12(people.id, input.personId))
+      and7(eq11(people.familyId, input.familyId), eq11(people.id, input.personId))
     );
   });
   const newFolder = await resolveFamilyStorageFolder(input.familyId);
@@ -2388,8 +2403,8 @@ async function setPrimaryContact(input) {
 // server/features/companies/company-repository.ts
 init_schema();
 init_database();
-import { eq as eq13 } from "drizzle-orm";
-var PCT_EPSILON2 = 1e-3;
+import { eq as eq12 } from "drizzle-orm";
+var PCT_EPSILON = 1e-3;
 function totalPercentage(rows) {
   return rows.reduce((sum, row) => sum + Number(row.percentage ?? 0), 0);
 }
@@ -2404,29 +2419,23 @@ async function createCompanyRecord(input) {
 }
 async function getCompanyRecord(companyId) {
   const db = await requireDatabase();
-  const result = await db.select().from(companies).where(eq13(companies.id, companyId)).limit(1);
+  const result = await db.select().from(companies).where(eq12(companies.id, companyId)).limit(1);
   return result[0] ?? null;
 }
 async function listCompanyRecords(familyId) {
   const db = await requireDatabase();
-  return db.select().from(companies).where(eq13(companies.familyId, familyId));
+  return db.select().from(companies).where(eq12(companies.familyId, familyId));
 }
 async function listStakeholderRecords(companyId) {
   const db = await requireDatabase();
-  return db.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, companyId));
-}
-async function createContributionRecord(input) {
-  const db = await requireDatabase();
-  const id = createId();
-  await db.insert(propertyContributions).values({ ...input, id, percentage: input.percentage.toFixed(2) });
-  return id;
+  return db.select().from(companyStakeholders).where(eq12(companyStakeholders.companyId, companyId));
 }
 async function createStakeholderRecord(input) {
   const db = await requireDatabase();
   const id = createId();
   const externalName = input.externalName?.trim() || null;
   await db.transaction(async (tx) => {
-    const existing = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, input.companyId));
+    const existing = await tx.select().from(companyStakeholders).where(eq12(companyStakeholders.companyId, input.companyId));
     if (input.personId && existing.some((row) => row.personId === input.personId)) {
       throw new Error("Este membro j\xE1 participa da sociedade.");
     }
@@ -2434,7 +2443,7 @@ async function createStakeholderRecord(input) {
       throw new Error("Este n\xE3o-membro j\xE1 participa da sociedade.");
     }
     const total = totalPercentage(existing) + input.percentage;
-    if (total > 100 + PCT_EPSILON2) {
+    if (total > 100 + PCT_EPSILON) {
       throw new Error(
         `A soma das participa\xE7\xF5es n\xE3o pode passar de 100% (atual ${totalPercentage(existing)}%).`
       );
@@ -2452,12 +2461,12 @@ async function createStakeholderRecord(input) {
 async function updateStakeholderRecord(input) {
   const db = await requireDatabase();
   await db.transaction(async (tx) => {
-    const current = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.id, input.stakeholderId)).limit(1);
+    const current = await tx.select().from(companyStakeholders).where(eq12(companyStakeholders.id, input.stakeholderId)).limit(1);
     const stakeholder = current[0];
     if (!stakeholder || stakeholder.companyId !== input.companyId) {
       throw new Error("Participa\xE7\xE3o n\xE3o encontrada.");
     }
-    const others = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, input.companyId));
+    const others = await tx.select().from(companyStakeholders).where(eq12(companyStakeholders.companyId, input.companyId));
     const remaining = others.filter((row) => row.id !== input.stakeholderId);
     const personId = input.personId !== void 0 ? input.personId : stakeholder.personId;
     const externalName = input.externalName !== void 0 ? input.externalName.trim() || null : stakeholder.externalName;
@@ -2472,17 +2481,17 @@ async function updateStakeholderRecord(input) {
     }
     const percentage = input.percentage ?? Number(stakeholder.percentage);
     const total = totalPercentage(remaining) + percentage;
-    if (total > 100 + PCT_EPSILON2) {
+    if (total > 100 + PCT_EPSILON) {
       throw new Error(
         `A soma das participa\xE7\xF5es n\xE3o pode passar de 100% (atual ${totalPercentage(remaining)}%).`
       );
     }
-    await tx.update(companyStakeholders).set({ personId, externalName, percentage: percentage.toFixed(2) }).where(eq13(companyStakeholders.id, input.stakeholderId));
+    await tx.update(companyStakeholders).set({ personId, externalName, percentage: percentage.toFixed(2) }).where(eq12(companyStakeholders.id, input.stakeholderId));
   });
 }
 async function removeStakeholderRecord(input) {
   const db = await requireDatabase();
-  const removed = await db.delete(companyStakeholders).where(eq13(companyStakeholders.id, input.stakeholderId)).returning({
+  const removed = await db.delete(companyStakeholders).where(eq12(companyStakeholders.id, input.stakeholderId)).returning({
     id: companyStakeholders.id,
     companyId: companyStakeholders.companyId
   });
@@ -2494,55 +2503,26 @@ async function removeStakeholderRecord(input) {
 }
 
 // server/features/companies/company-types.ts
-init_schema();
-import { z as z6 } from "zod";
-var companyInputSchema = z6.object({
-  familyId: z6.string().min(1),
-  legalName: z6.string().min(3).max(180),
-  taxNumber: z6.string().max(20).optional(),
-  type: z6.enum(companyTypeValues)
-});
-var contributionInputSchema = z6.object({
-  propertyId: z6.string().min(1),
-  companyId: z6.string().min(1),
-  percentage: z6.number().positive().max(100)
+import { z as z7 } from "zod";
+var companyInputSchema = z7.object({
+  familyId: z7.string().min(1),
+  legalName: z7.string().min(3).max(180),
+  taxNumber: z7.string().max(20).optional(),
+  isOffshore: z7.boolean().default(false)
 });
 
 // server/features/companies/company-details.ts
 init_schema();
-import { z as z7 } from "zod";
-var NATIONAL_COMPANY_DOC_TYPES = [
-  "CONTRATO_SOCIAL",
-  "BALANCO_FECHADO",
-  "BALANCETE_ATUALIZADO",
-  "ACORDO_SOCIOS",
-  "LIVRO_RAZAO_IMOBILIZADO",
-  "LIVRO_REGISTRO_ACOES_NOMINATIVAS",
-  "LIVRO_TRANSFERENCIA_ACOES"
-];
-var INTERNATIONAL_COMPANY_DOC_TYPES = [
-  "MEMORANDUM_ARTICLES",
-  "BALANCE_SHEET",
-  "CERTIFICATE_INCORPORATION",
-  "REGISTER_DIRECTORS",
-  "REGISTER_MEMBERS",
-  "CERTIFICATE_GOOD_STANDING",
-  "SHARE_CERTIFICATE"
-];
-function isInternationalCompany(type) {
-  return type === "HOLDING_INTERNACIONAL";
-}
-function docTypesForCompanyType(type) {
-  return isInternationalCompany(type) ? INTERNATIONAL_COMPANY_DOC_TYPES : NATIONAL_COMPANY_DOC_TYPES;
-}
-var text2 = (max) => z7.string().max(max, `M\xE1ximo de ${max} caracteres.`).transform((value) => value.trim() || null).nullish();
-var money = z7.number().finite().nullish();
-var companyDetailsFieldsSchema = z7.object({
+init_uf();
+import { z as z8 } from "zod";
+var text2 = (max) => z8.string().max(max, `M\xE1ximo de ${max} caracteres.`).transform((value) => value.trim() || null).nullish();
+var money = z8.number().finite().nullish();
+var companyDetailsFieldsSchema = z8.object({
   nire: text2(20),
-  uf: text2(2),
+  uf: z8.enum(UFS).nullish(),
   sede: text2(160),
-  societaryType: text2(60),
-  taxRegime: text2(60),
+  societaryType: z8.enum(societaryTypeValues).nullish(),
+  taxRegime: z8.enum(taxRegimeValues).nullish(),
   corporatePurpose: text2(4e3),
   capitalSocial: money,
   shareQuantity: money,
@@ -2560,39 +2540,30 @@ var companyDetailsFieldsSchema = z7.object({
   financing: money,
   estimatedMarketValue: money,
   companyNumber: text2(60),
-  jurisdiction: z7.enum(companyJurisdictionValues).nullish(),
+  jurisdiction: z8.enum(companyJurisdictionValues).nullish(),
   residentAgent: text2(120),
   notes: text2(8e3)
 });
-var companyDetailsIdSchema = z7.object({
-  companyId: z7.string().min(1, "Informe a sociedade.")
-});
-var companyDetailDocSchema = z7.object({
-  docType: z7.enum(companyDocTypeValues),
-  status: z7.enum(companyDocStatusValues)
+var companyDetailsIdSchema = z8.object({
+  companyId: z8.string().min(1, "Informe a sociedade.")
 });
 var companyDetailsUpsertSchema = companyDetailsIdSchema.extend({
-  fields: companyDetailsFieldsSchema,
-  docs: z7.array(companyDetailDocSchema).optional()
-});
-var companyDetailDocUpdateSchema = companyDetailsIdSchema.extend({
-  docType: z7.enum(companyDocTypeValues),
-  status: z7.enum(companyDocStatusValues)
+  fields: companyDetailsFieldsSchema
 });
 
 // server/features/companies/company-details-repository.ts
 init_schema();
 init_database();
-import { and as and9, eq as eq14 } from "drizzle-orm";
+import { eq as eq13 } from "drizzle-orm";
 function detailValues(fields) {
   const text3 = (value) => value ?? null;
   const amount = (value) => value === void 0 || value === null ? null : value.toFixed(2);
   return {
     nire: text3(fields.nire),
-    uf: text3(fields.uf),
+    uf: fields.uf ?? null,
     sede: text3(fields.sede),
-    societaryType: text3(fields.societaryType),
-    taxRegime: text3(fields.taxRegime),
+    societaryType: fields.societaryType ?? null,
+    taxRegime: fields.taxRegime ?? null,
     corporatePurpose: text3(fields.corporatePurpose),
     capitalSocial: amount(fields.capitalSocial),
     shareQuantity: amount(fields.shareQuantity),
@@ -2617,7 +2588,7 @@ function detailValues(fields) {
 }
 async function getCompanyDetailsRecord(companyId) {
   const db = await requireDatabase();
-  const result = await db.select().from(companyDetails).where(eq14(companyDetails.companyId, companyId)).limit(1);
+  const result = await db.select().from(companyDetails).where(eq13(companyDetails.companyId, companyId)).limit(1);
   return result[0] ?? null;
 }
 async function upsertCompanyDetailsRecord(input) {
@@ -2635,40 +2606,6 @@ async function upsertCompanyDetailsRecord(input) {
     set: { ...values, updatedAt: now }
   });
 }
-async function listCompanyDetailDocs(input) {
-  const db = await requireDatabase();
-  const expected = docTypesForCompanyType(input.companyType);
-  const existing = await db.select().from(companyDetailDocs).where(eq14(companyDetailDocs.companyId, input.companyId));
-  const known = new Set(existing.map((row) => row.docType));
-  const missing = expected.filter((docType) => !known.has(docType));
-  let rows = existing;
-  if (missing.length) {
-    await db.insert(companyDetailDocs).values(
-      missing.map((docType) => ({
-        id: createId(),
-        companyId: input.companyId,
-        docType,
-        createdAt: /* @__PURE__ */ new Date(),
-        updatedAt: /* @__PURE__ */ new Date()
-      }))
-    );
-    rows = await db.select().from(companyDetailDocs).where(eq14(companyDetailDocs.companyId, input.companyId));
-  }
-  const order = new Map(expected.map((docType, index2) => [docType, index2]));
-  return rows.filter((row) => order.has(row.docType)).sort((a, b) => (order.get(a.docType) ?? 0) - (order.get(b.docType) ?? 0));
-}
-async function updateCompanyDetailDocRecord(input) {
-  const db = await requireDatabase();
-  const current = await db.select({ id: companyDetailDocs.id }).from(companyDetailDocs).where(
-    and9(
-      eq14(companyDetailDocs.companyId, input.companyId),
-      eq14(companyDetailDocs.docType, input.docType)
-    )
-  ).limit(1);
-  if (!current[0])
-    throw new Error("Documento n\xE3o encontrado para esta sociedade.");
-  await db.update(companyDetailDocs).set({ status: input.status, updatedAt: /* @__PURE__ */ new Date() }).where(eq14(companyDetailDocs.id, current[0].id));
-}
 function computePerShare(input) {
   const quantity = Number(input.shareQuantity ?? 0);
   const perShare = (amount) => {
@@ -2683,30 +2620,30 @@ function computePerShare(input) {
 }
 
 // server/features/companies/company-stakeholder.ts
-import { z as z8 } from "zod";
-var stakeholderInputSchema = z8.object({
-  companyId: z8.string().min(1),
+import { z as z9 } from "zod";
+var stakeholderInputSchema = z9.object({
+  companyId: z9.string().min(1),
   // Sócio membro da família (people) OU não-membro informado em externalName.
-  personId: z8.string().min(1).optional(),
-  externalName: z8.string().min(2).max(160).optional(),
-  percentage: z8.number().positive().max(100)
+  personId: z9.string().min(1).optional(),
+  externalName: z9.string().min(2).max(160).optional(),
+  percentage: z9.number().positive().max(100)
 }).refine((data) => Boolean(data.personId || data.externalName?.trim()), {
   message: "Informe um membro da fam\xEDlia ou o nome do n\xE3o-membro.",
   path: ["personId"]
 });
-var stakeholderUpdateSchema = z8.object({
-  companyId: z8.string().min(1),
-  stakeholderId: z8.string().min(1),
-  personId: z8.string().min(1).optional(),
-  externalName: z8.string().min(2).max(160).optional(),
-  percentage: z8.number().positive().max(100).optional()
+var stakeholderUpdateSchema = z9.object({
+  companyId: z9.string().min(1),
+  stakeholderId: z9.string().min(1),
+  personId: z9.string().min(1).optional(),
+  externalName: z9.string().min(2).max(160).optional(),
+  percentage: z9.number().positive().max(100).optional()
 }).refine(
   (data) => data.percentage !== void 0 || data.personId !== void 0 || data.externalName !== void 0,
   { message: "Nada para atualizar.", path: ["percentage"] }
 );
-var stakeholderDeleteSchema = z8.object({
-  companyId: z8.string().min(1),
-  stakeholderId: z8.string().min(1)
+var stakeholderDeleteSchema = z9.object({
+  companyId: z9.string().min(1),
+  stakeholderId: z9.string().min(1)
 });
 
 // server/features/companies/company-router.ts
@@ -2716,11 +2653,11 @@ async function requireCompanyFamily(companyId) {
   return company;
 }
 var companyRouter = router({
-  list: protectedProcedure.input(z9.object({ familyId: z9.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z10.object({ familyId: z10.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCompanyRecords(input.familyId);
   }),
-  stakeholders: protectedProcedure.input(z9.object({ companyId: z9.string() })).query(async ({ ctx, input }) => {
+  stakeholders: protectedProcedure.input(z10.object({ companyId: z10.string() })).query(async ({ ctx, input }) => {
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     return listStakeholderRecords(input.companyId);
@@ -2746,18 +2683,9 @@ var companyRouter = router({
       entityId: companyId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { type: input.type, requirements: requirements.length }
+      metadata: { isOffshore: input.isOffshore, requirements: requirements.length }
     });
     return { companyId };
-  }),
-  createContribution: protectedProcedure.input(contributionInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
-    const property = await getPropertyRecord(input.propertyId);
-    if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
-    await assertFamilyAccess(ctx, property.familyId);
-    const contributionId = await createContributionRecord(input);
-    await recordAudit({ action: "INTEGRALIZACAO_REGISTRADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { contributionId } });
-    return { contributionId };
   }),
   addStakeholder: protectedProcedure.input(stakeholderInputSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
@@ -2807,9 +2735,8 @@ var companyRouter = router({
   getDetails: protectedProcedure.input(companyDetailsIdSchema).query(async ({ ctx, input }) => {
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
-    const [details, docs, stakeholders, certidoes2, people2] = await Promise.all([
+    const [details, stakeholders, certidoes2, people2] = await Promise.all([
       getCompanyDetailsRecord(company.id),
-      listCompanyDetailDocs({ companyId: company.id, companyType: company.type }),
       listStakeholderRecords(company.id),
       listCertidaoRecords(company.familyId),
       listPeopleByFamily(company.familyId)
@@ -2820,10 +2747,9 @@ var companyRouter = router({
         id: company.id,
         legalName: company.legalName,
         taxNumber: company.taxNumber,
-        type: company.type
+        isOffshore: company.isOffshore
       },
       details,
-      docs,
       stakeholders: stakeholders.map((stakeholder) => ({
         ...stakeholder,
         displayName: stakeholder.externalName ?? (stakeholder.personId ? names.get(stakeholder.personId) ?? null : null)
@@ -2838,16 +2764,7 @@ var companyRouter = router({
     const user = requireRole(ctx, TEAM_ROLES);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
-    const allowed = new Set(docTypesForCompanyType(company.type));
-    for (const doc of input.docs ?? []) {
-      if (!allowed.has(doc.docType)) {
-        throw new Error("Documento inv\xE1lido para o tipo desta sociedade.");
-      }
-    }
     await upsertCompanyDetailsRecord({ companyId: company.id, fields: input.fields });
-    for (const doc of input.docs ?? []) {
-      await updateCompanyDetailDocRecord({ ...doc, companyId: company.id });
-    }
     await recordAudit({
       action: "DETALHES_HOLDING_SALVOS",
       entityType: "SOCIEDADE",
@@ -2855,55 +2772,35 @@ var companyRouter = router({
       actorUserId: user.id,
       familyId: company.familyId,
       metadata: {
-        type: company.type,
-        documents: (input.docs ?? []).length,
+        isOffshore: company.isOffshore,
         capitalSocial: input.fields.capitalSocial ?? 0
       }
-    });
-    return { success: true };
-  }),
-  updateDetailDoc: protectedProcedure.input(companyDetailDocUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
-    const company = await requireCompanyFamily(input.companyId);
-    await assertFamilyAccess(ctx, company.familyId);
-    const allowed = new Set(docTypesForCompanyType(company.type));
-    if (!allowed.has(input.docType)) {
-      throw new Error("Documento inv\xE1lido para o tipo desta sociedade.");
-    }
-    await updateCompanyDetailDocRecord(input);
-    await recordAudit({
-      action: "DETALHES_HOLDING_DOC_STATUS",
-      entityType: "SOCIEDADE",
-      entityId: company.id,
-      actorUserId: user.id,
-      familyId: company.familyId,
-      metadata: { docType: input.docType, status: input.status }
     });
     return { success: true };
   })
 });
 
 // server/features/documents/document-router.ts
-import { z as z11 } from "zod";
+import { z as z12 } from "zod";
 init_roles();
 
 // server/features/documents/document-review.ts
 init_schema();
 init_database();
-import { eq as eq16 } from "drizzle-orm";
+import { eq as eq15 } from "drizzle-orm";
 
 // server/features/documents/couple-docs.ts
 init_schema();
 init_database();
-import { and as and10, eq as eq15, inArray as inArray4, ne } from "drizzle-orm";
+import { and as and8, eq as eq14, inArray as inArray4, ne } from "drizzle-orm";
 async function releaseSpouseCoupleDocs(sourceDocument) {
   if (sourceDocument.entityType !== "PESSOA") return 0;
   if (!isCoupleSharedCategory(sourceDocument.category)) return 0;
   const db = await requireDatabase();
   const [spouse] = await db.select({ id: people.id }).from(people).where(
-    and10(
-      eq15(people.familyId, sourceDocument.familyId),
-      eq15(people.vinculo, "CONJUGE"),
+    and8(
+      eq14(people.familyId, sourceDocument.familyId),
+      eq14(people.vinculo, "CONJUGE"),
       ne(people.id, sourceDocument.entityId)
     )
   ).limit(1);
@@ -2916,12 +2813,12 @@ async function releaseSpouseCoupleDocs(sourceDocument) {
     dispensedAt: /* @__PURE__ */ new Date(),
     rejectionReason: null
   }).where(
-    and10(
-      eq15(documents.familyId, sourceDocument.familyId),
-      eq15(documents.entityType, "PESSOA"),
-      eq15(documents.entityId, spouse.id),
-      eq15(documents.category, sourceDocument.category),
-      eq15(documents.status, "PENDENTE"),
+    and8(
+      eq14(documents.familyId, sourceDocument.familyId),
+      eq14(documents.entityType, "PESSOA"),
+      eq14(documents.entityId, spouse.id),
+      eq14(documents.category, sourceDocument.category),
+      eq14(documents.status, "PENDENTE"),
       inArray4(documents.category, [...COUPLE_SHARED_CATEGORIES])
     )
   ).returning({ id: documents.id });
@@ -2938,7 +2835,7 @@ async function reviewDocumentRecord(input) {
   await db.update(documents).set({
     status: input.status,
     rejectionReason: input.status === "REJEITADO" ? input.rejectionReason : null
-  }).where(eq16(documents.id, input.documentId));
+  }).where(eq15(documents.id, input.documentId));
   if (document && input.status === "VALIDADO") {
     await releaseSpouseCoupleDocs({
       familyId: document.familyId,
@@ -2959,14 +2856,14 @@ async function dispenseDocumentRecord(input) {
     dispensationRequestedBy: input.requestedBy,
     dispensationApprovedBy: input.approvedBy,
     dispensedAt: /* @__PURE__ */ new Date()
-  }).where(eq16(documents.id, input.documentId));
+  }).where(eq15(documents.id, input.documentId));
 }
 
 // server/features/documents/document-types.ts
 init_schema();
-import { z as z10 } from "zod";
-var documentEntitySchema = z10.enum(entityTypeValues);
-var documentStatusSchema = z10.enum([
+import { z as z11 } from "zod";
+var documentEntitySchema = z11.enum(entityTypeValues);
+var documentStatusSchema = z11.enum([
   "PENDENTE",
   "RECEBIDO_EM_ANALISE",
   "VALIDADO",
@@ -2975,35 +2872,35 @@ var documentStatusSchema = z10.enum([
   "DISPENSADO",
   "NA"
 ]);
-var createDocumentSchema = z10.object({
-  familyId: z10.string().min(1),
+var createDocumentSchema = z11.object({
+  familyId: z11.string().min(1),
   entityType: documentEntitySchema,
-  entityId: z10.string().min(1),
-  category: z10.string().min(2).max(80),
-  validUntil: z10.string().optional()
+  entityId: z11.string().min(1),
+  category: z11.string().min(2).max(80),
+  validUntil: z11.string().optional()
 });
-var uploadVersionSchema = z10.object({
-  documentId: z10.string().min(1),
-  fileName: z10.string().min(1).max(255),
-  mimeType: z10.string().min(1).max(120),
-  base64Data: z10.string().min(8).max(8e6)
+var uploadVersionSchema = z11.object({
+  documentId: z11.string().min(1),
+  fileName: z11.string().min(1).max(255),
+  mimeType: z11.string().min(1).max(120),
+  base64Data: z11.string().min(8).max(8e6)
 });
-var reviewDocumentSchema = z10.object({
-  documentId: z10.string().min(1),
-  status: z10.enum(["VALIDADO", "REJEITADO"]),
-  rejectionReason: z10.string().min(3).max(1e3).optional()
+var reviewDocumentSchema = z11.object({
+  documentId: z11.string().min(1),
+  status: z11.enum(["VALIDADO", "REJEITADO"]),
+  rejectionReason: z11.string().min(3).max(1e3).optional()
 });
-var dispenseDocumentSchema = z10.object({
-  documentId: z10.string().min(1),
-  reason: z10.string().min(3).max(1e3),
-  requestedBy: z10.string().optional()
+var dispenseDocumentSchema = z11.object({
+  documentId: z11.string().min(1),
+  reason: z11.string().min(3).max(1e3),
+  requestedBy: z11.string().optional()
 });
 
 // server/features/documents/document-upload.ts
 init_schema();
 init_family_storage_path();
 import { createHash as createHash2 } from "node:crypto";
-import { eq as eq17 } from "drizzle-orm";
+import { eq as eq16 } from "drizzle-orm";
 init_database();
 var ALLOWED_MIME_TYPES = /* @__PURE__ */ new Set([
   "application/pdf",
@@ -3041,7 +2938,7 @@ async function storeDocumentVersion(input) {
       currentVersion: nextVersion,
       status: "RECEBIDO_EM_ANALISE",
       rejectionReason: null
-    }).where(eq17(documents.id, document.id));
+    }).where(eq16(documents.id, document.id));
   });
   await releaseSpouseCoupleDocs({
     familyId: document.familyId,
@@ -3054,11 +2951,11 @@ async function storeDocumentVersion(input) {
 
 // server/features/documents/document-router.ts
 var documentRouter = router({
-  list: protectedProcedure.input(z11.object({ familyId: z11.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z12.object({ familyId: z12.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listDocumentRecords(input.familyId);
   }),
-  versions: protectedProcedure.input(z11.object({ documentId: z11.string() })).query(async ({ ctx, input }) => {
+  versions: protectedProcedure.input(z12.object({ documentId: z12.string() })).query(async ({ ctx, input }) => {
     const document = await getDocumentRecord(input.documentId);
     if (!document) return [];
     await assertFamilyAccess(ctx, document.familyId);
@@ -3077,7 +2974,7 @@ var documentRouter = router({
     });
     return { documentId };
   }),
-  generateRequirements: protectedProcedure.input(z11.object({ familyId: z11.string() })).mutation(async ({ ctx, input }) => {
+  generateRequirements: protectedProcedure.input(z12.object({ familyId: z12.string() })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
     await assertFamilyAccess(ctx, input.familyId);
     const created = await ensureFamilyDocumentRequirements(input.familyId);
@@ -3148,15 +3045,15 @@ var documentRouter = router({
 // server/features/families/family-router.ts
 init_schema();
 import { createHash as createHash3, randomBytes } from "node:crypto";
-import { and as and12, eq as eq19 } from "drizzle-orm";
-import { z as z12 } from "zod";
+import { and as and10, eq as eq18 } from "drizzle-orm";
+import { z as z13 } from "zod";
 init_database();
 init_roles();
 
 // server/features/families/family-timeline-repository.ts
 init_schema();
 init_database();
-import { and as and11, count as count2, desc as desc5, eq as eq18, gt, isNull } from "drizzle-orm";
+import { and as and9, count as count2, desc as desc4, eq as eq17, gt, isNull } from "drizzle-orm";
 
 // server/features/families/family-timeline.ts
 var iso = (value) => value ? new Date(value).toISOString() : null;
@@ -3337,38 +3234,38 @@ async function getFamilyTimelineRecord(familyId) {
   const [family] = await db.select({
     id: families.id,
     createdAt: families.createdAt
-  }).from(families).where(eq18(families.id, familyId)).limit(1);
+  }).from(families).where(eq17(families.id, familyId)).limit(1);
   if (!family) return null;
   const [lead] = await db.select({
     id: leads.id,
     status: leads.status,
     createdAt: leads.createdAt,
     updatedAt: leads.updatedAt
-  }).from(leads).where(eq18(leads.familyId, familyId)).orderBy(desc5(leads.createdAt)).limit(1);
-  const [{ total: peopleTotal }] = await db.select({ total: count2() }).from(people).where(eq18(people.familyId, familyId));
+  }).from(leads).where(eq17(leads.familyId, familyId)).orderBy(desc4(leads.createdAt)).limit(1);
+  const [{ total: peopleTotal }] = await db.select({ total: count2() }).from(people).where(eq17(people.familyId, familyId));
   const [{ total: titularCount }] = await db.select({ total: count2() }).from(people).where(
-    and11(eq18(people.familyId, familyId), eq18(people.isPrimaryContact, true))
+    and9(eq17(people.familyId, familyId), eq17(people.isPrimaryContact, true))
   );
-  const [{ total: propertiesTotal }] = await db.select({ total: count2() }).from(properties).where(eq18(properties.familyId, familyId));
-  const [{ total: companiesTotal }] = await db.select({ total: count2() }).from(companies).where(eq18(companies.familyId, familyId));
-  const [{ total: assetsTotal }] = await db.select({ total: count2() }).from(otherAssets).where(eq18(otherAssets.familyId, familyId));
-  const documentRows = await db.select({ status: documents.status }).from(documents).where(eq18(documents.familyId, familyId));
-  const [{ total: lwrVersions }] = await db.select({ total: count2() }).from(lwrReports).where(eq18(lwrReports.familyId, familyId));
+  const [{ total: propertiesTotal }] = await db.select({ total: count2() }).from(properties).where(eq17(properties.familyId, familyId));
+  const [{ total: companiesTotal }] = await db.select({ total: count2() }).from(companies).where(eq17(companies.familyId, familyId));
+  const [{ total: assetsTotal }] = await db.select({ total: count2() }).from(otherAssets).where(eq17(otherAssets.familyId, familyId));
+  const documentRows = await db.select({ status: documents.status }).from(documents).where(eq17(documents.familyId, familyId));
+  const [{ total: lwrVersions }] = await db.select({ total: count2() }).from(lwrReports).where(eq17(lwrReports.familyId, familyId));
   const [proposal] = await db.select({
     id: financialProposals.id,
     status: financialProposals.status,
     createdAt: financialProposals.createdAt,
     acceptedAt: financialProposals.acceptedAt
-  }).from(financialProposals).where(eq18(financialProposals.familyId, familyId)).orderBy(desc5(financialProposals.createdAt)).limit(1);
+  }).from(financialProposals).where(eq17(financialProposals.familyId, familyId)).orderBy(desc4(financialProposals.createdAt)).limit(1);
   const [{ total: clientAccessCount }] = await db.select({ total: count2() }).from(familyAccess).where(
-    and11(
-      eq18(familyAccess.familyId, familyId),
-      eq18(familyAccess.accessRole, "CLIENTE")
+    and9(
+      eq17(familyAccess.familyId, familyId),
+      eq17(familyAccess.accessRole, "CLIENTE")
     )
   );
   const [{ total: activePortalLinks }] = await db.select({ total: count2() }).from(portalLinks).where(
-    and11(
-      eq18(portalLinks.familyId, familyId),
+    and9(
+      eq17(portalLinks.familyId, familyId),
       isNull(portalLinks.revokedAt),
       gt(portalLinks.expiresAt, /* @__PURE__ */ new Date())
     )
@@ -3414,17 +3311,17 @@ var familyRouter = router({
     const user = ctx.user;
     if (user.role !== "CLIENTE") return listFamilyRecords();
     const db = await requireDatabase();
-    const access = await db.select().from(familyAccess).where(eq19(familyAccess.userId, user.id));
+    const access = await db.select().from(familyAccess).where(eq18(familyAccess.userId, user.id));
     const records = await Promise.all(
       access.map((item) => getFamilyRecord(item.familyId))
     );
     return records.filter(Boolean);
   }),
-  get: protectedProcedure.input(z12.object({ familyId: z12.string().min(1) })).query(async ({ ctx, input }) => {
+  get: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getFamilyRecord(input.familyId);
   }),
-  timeline: protectedProcedure.input(z12.object({ familyId: z12.string().min(1) })).query(async ({ ctx, input }) => {
+  timeline: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getFamilyTimelineRecord(input.familyId);
   }),
@@ -3443,7 +3340,7 @@ var familyRouter = router({
     }
     return result;
   }),
-  grantClientAccess: protectedProcedure.input(z12.object({ familyId: z12.string(), userId: z12.number().int() })).mutation(async ({ ctx, input }) => {
+  grantClientAccess: protectedProcedure.input(z13.object({ familyId: z13.string(), userId: z13.number().int() })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, ["SOCIO"]);
     const db = await requireDatabase();
     await db.insert(familyAccess).values({
@@ -3464,13 +3361,13 @@ var familyRouter = router({
     }
     return { success: true };
   }),
-  generateFirstAccessLink: protectedProcedure.input(z12.object({ familyId: z12.string().min(1) })).mutation(async ({ ctx, input }) => {
+  generateFirstAccessLink: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, ["SOCIO"]);
     const db = await requireDatabase();
     const existingAccess = await db.select({ id: familyAccess.id }).from(familyAccess).where(
-      and12(
-        eq19(familyAccess.familyId, input.familyId),
-        eq19(familyAccess.accessRole, "CLIENTE")
+      and10(
+        eq18(familyAccess.familyId, input.familyId),
+        eq18(familyAccess.accessRole, "CLIENTE")
       )
     ).limit(1);
     if (existingAccess[0])
@@ -3505,13 +3402,13 @@ var familyRouter = router({
     }
     return { token, fullName: contact.fullName };
   }),
-  generatePasswordResetLink: protectedProcedure.input(z12.object({ familyId: z12.string().min(1) })).mutation(async ({ ctx, input }) => {
+  generatePasswordResetLink: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, ["SOCIO"]);
     const db = await requireDatabase();
     const existingAccess = await db.select({ id: familyAccess.id }).from(familyAccess).where(
-      and12(
-        eq19(familyAccess.familyId, input.familyId),
-        eq19(familyAccess.accessRole, "CLIENTE")
+      and10(
+        eq18(familyAccess.familyId, input.familyId),
+        eq18(familyAccess.accessRole, "CLIENTE")
       )
     ).limit(1);
     if (!existingAccess[0])
@@ -3562,33 +3459,33 @@ var familyRouter = router({
 
 // server/features/reports/lwr-router.ts
 init_schema();
-import { desc as desc6, eq as eq20 } from "drizzle-orm";
-import { z as z14 } from "zod";
+import { desc as desc5, eq as eq19 } from "drizzle-orm";
+import { z as z15 } from "zod";
 init_roles();
 init_database();
 
 // server/features/reports/lwr-types.ts
-import { z as z13 } from "zod";
-var lwrInputSchema = z13.object({
-  familyId: z13.string().min(1),
-  baseDate: z13.string().min(10),
-  proposedStructure: z13.string().min(10).max(12e3),
-  financialProposal: z13.string().max(12e3).optional().default("Proposta financeira gerenciada no m\xF3dulo aut\xF4nomo."),
-  canvaUrl: z13.string().max(1e3).optional(),
-  presentationFileKey: z13.string().max(500).optional()
+import { z as z14 } from "zod";
+var lwrInputSchema = z14.object({
+  familyId: z14.string().min(1),
+  baseDate: z14.string().min(10),
+  proposedStructure: z14.string().min(10).max(12e3),
+  financialProposal: z14.string().max(12e3).optional().default("Proposta financeira gerenciada no m\xF3dulo aut\xF4nomo."),
+  canvaUrl: z14.string().max(1e3).optional(),
+  presentationFileKey: z14.string().max(500).optional()
 });
 
 // server/features/reports/lwr-router.ts
 var lwrRouter = router({
-  list: protectedProcedure.input(z14.object({ familyId: z14.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z15.object({ familyId: z15.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
-    return db.select().from(lwrReports).where(eq20(lwrReports.familyId, input.familyId)).orderBy(desc6(lwrReports.version));
+    return db.select().from(lwrReports).where(eq19(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version));
   }),
   create: protectedProcedure.input(lwrInputSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
     const db = await requireDatabase();
-    const previous = await db.select({ version: lwrReports.version }).from(lwrReports).where(eq20(lwrReports.familyId, input.familyId)).orderBy(desc6(lwrReports.version)).limit(1);
+    const previous = await db.select({ version: lwrReports.version }).from(lwrReports).where(eq19(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version)).limit(1);
     const version = (previous[0]?.version ?? 0) + 1;
     const reportId = createId();
     await db.insert(lwrReports).values({
@@ -3608,10 +3505,10 @@ var lwrRouter = router({
 });
 
 // server/features/people/person-router.ts
-import { z as z15 } from "zod";
+import { z as z16 } from "zod";
 init_roles();
 var personRouter = router({
-  list: protectedProcedure.input(z15.object({ familyId: z15.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z16.object({ familyId: z16.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listPeopleByFamily(input.familyId);
   }),
@@ -3688,23 +3585,23 @@ var personRouter = router({
 // server/features/portal/portal-router.ts
 init_schema();
 import { createHash as createHash4, randomBytes as randomBytes2 } from "node:crypto";
-import { and as and13, desc as desc7, eq as eq21, gt as gt3, isNull as isNull3 } from "drizzle-orm";
-import { z as z16 } from "zod";
+import { and as and11, desc as desc6, eq as eq20, gt as gt3, isNull as isNull3 } from "drizzle-orm";
+import { z as z17 } from "zod";
 init_database();
 function hashToken2(token) {
   return createHash4("sha256").update(token).digest("hex");
 }
 async function getActivePortalLink(token) {
   const db = await requireDatabase();
-  const result = await db.select().from(portalLinks).where(and13(
-    eq21(portalLinks.tokenHash, hashToken2(token)),
+  const result = await db.select().from(portalLinks).where(and11(
+    eq20(portalLinks.tokenHash, hashToken2(token)),
     isNull3(portalLinks.revokedAt),
     gt3(portalLinks.expiresAt, /* @__PURE__ */ new Date())
   )).limit(1);
   return result[0] ?? null;
 }
 var portalRouter = router({
-  createLink: protectedProcedure.input(z16.object({ familyId: z16.string(), origin: z16.string().url() })).mutation(async ({ ctx, input }) => {
+  createLink: protectedProcedure.input(z17.object({ familyId: z17.string(), origin: z17.string().url() })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, ["SOCIO"]);
     const token = randomBytes2(24).toString("base64url");
     const db = await requireDatabase();
@@ -3719,31 +3616,31 @@ var portalRouter = router({
     await recordAudit({ action: "LINK_PORTAL_GERADO", entityType: "FAMILIA", entityId: input.familyId, actorUserId: user.id, familyId: input.familyId });
     return { id: linkId, url: `${input.origin}/portal/${token}`, expiresInDays: 7 };
   }),
-  listLinks: protectedProcedure.input(z16.object({ familyId: z16.string() })).query(async ({ ctx, input }) => {
+  listLinks: protectedProcedure.input(z17.object({ familyId: z17.string() })).query(async ({ ctx, input }) => {
     requireRole(ctx, ["SOCIO"]);
     const db = await requireDatabase();
-    return db.select({ id: portalLinks.id, expiresAt: portalLinks.expiresAt, revokedAt: portalLinks.revokedAt, createdAt: portalLinks.createdAt }).from(portalLinks).where(eq21(portalLinks.familyId, input.familyId)).orderBy(desc7(portalLinks.createdAt));
+    return db.select({ id: portalLinks.id, expiresAt: portalLinks.expiresAt, revokedAt: portalLinks.revokedAt, createdAt: portalLinks.createdAt }).from(portalLinks).where(eq20(portalLinks.familyId, input.familyId)).orderBy(desc6(portalLinks.createdAt));
   }),
-  revokeLink: protectedProcedure.input(z16.object({ linkId: z16.string() })).mutation(async ({ ctx, input }) => {
+  revokeLink: protectedProcedure.input(z17.object({ linkId: z17.string() })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, ["SOCIO"]);
     const db = await requireDatabase();
-    const [link] = await db.select().from(portalLinks).where(eq21(portalLinks.id, input.linkId)).limit(1);
+    const [link] = await db.select().from(portalLinks).where(eq20(portalLinks.id, input.linkId)).limit(1);
     if (!link) throw new Error("Link n\xE3o encontrado.");
-    await db.update(portalLinks).set({ revokedAt: /* @__PURE__ */ new Date() }).where(eq21(portalLinks.id, input.linkId));
+    await db.update(portalLinks).set({ revokedAt: /* @__PURE__ */ new Date() }).where(eq20(portalLinks.id, input.linkId));
     await recordAudit({ action: "LINK_PORTAL_REVOGADO", entityType: "FAMILIA", entityId: link.familyId, actorUserId: user.id, familyId: link.familyId });
     return { success: true };
   }),
-  status: publicProcedure.input(z16.object({ token: z16.string().min(16) })).query(async ({ input }) => {
+  status: publicProcedure.input(z17.object({ token: z17.string().min(16) })).query(async ({ input }) => {
     const link = await getActivePortalLink(input.token);
     if (!link) throw new Error("Link inv\xE1lido, revogado ou expirado.");
     const db = await requireDatabase();
-    const [family] = await db.select().from(families).where(eq21(families.id, link.familyId)).limit(1);
-    const [project] = await db.select().from(projects).where(eq21(projects.familyId, link.familyId)).limit(1);
-    const documentList = await db.select().from(documents).where(eq21(documents.familyId, link.familyId));
-    const reports = await db.select().from(lwrReports).where(eq21(lwrReports.familyId, link.familyId));
+    const [family] = await db.select().from(families).where(eq20(families.id, link.familyId)).limit(1);
+    const [project] = await db.select().from(projects).where(eq20(projects.familyId, link.familyId)).limit(1);
+    const documentList = await db.select().from(documents).where(eq20(documents.familyId, link.familyId));
+    const reports = await db.select().from(lwrReports).where(eq20(lwrReports.familyId, link.familyId));
     return { family, project, documents: documentList, reports };
   }),
-  uploadDocument: publicProcedure.input(z16.object({ token: z16.string().min(16), documentId: z16.string(), fileName: z16.string(), mimeType: z16.string(), base64Data: z16.string() })).mutation(async ({ input }) => {
+  uploadDocument: publicProcedure.input(z17.object({ token: z17.string().min(16), documentId: z17.string(), fileName: z17.string(), mimeType: z17.string(), base64Data: z17.string() })).mutation(async ({ input }) => {
     const link = await getActivePortalLink(input.token);
     if (!link) throw new Error("Link inv\xE1lido, revogado ou expirado.");
     const document = await getDocumentRecord(input.documentId);
@@ -3755,25 +3652,127 @@ var portalRouter = router({
 });
 
 // server/features/properties/property-router.ts
-import { z as z18 } from "zod";
+import { z as z19 } from "zod";
 init_roles();
 
-// server/features/properties/property-types.ts
+// server/features/properties/property-repository.ts
 init_schema();
-import { z as z17 } from "zod";
-var propertyInputSchema = z17.object({
-  familyId: z17.string().min(1),
-  description: z17.string().min(3).max(240),
-  hasRegistration: z17.boolean().default(true),
-  registrationNumber: z17.string().max(120).optional(),
-  alternativeDocType: z17.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
-  noRegistrationReason: z17.string().max(1e3).optional(),
-  registryOffice: z17.string().max(160).optional(),
-  propertyCity: z17.string().min(2).max(120),
-  registryCity: z17.string().max(120).optional(),
-  acquisitionDate: z17.string().optional(),
-  declaredValue: z17.number().nonnegative().optional(),
-  marketValue: z17.number().nonnegative().optional()
+init_database();
+import { desc as desc7, eq as eq21, and as and12 } from "drizzle-orm";
+var PCT_EPSILON2 = 1e-3;
+function totalOwnership(rows) {
+  return rows.reduce((sum, row) => sum + Number(row.ownershipPercentage ?? 0), 0);
+}
+async function createPropertyRecord(input) {
+  const db = await requireDatabase();
+  const id = createId();
+  const existingProperty = await db.select().from(properties).where(
+    and12(
+      eq21(properties.familyId, input.familyId),
+      eq21(properties.description, input.description),
+      eq21(properties.propertyCity, input.propertyCity)
+    )
+  ).limit(1);
+  if (existingProperty.length > 0) {
+    return existingProperty[0].id;
+  }
+  await db.insert(properties).values({
+    ...input,
+    id,
+    hasRegistration: input.hasRegistration,
+    registrationNumber: input.hasRegistration ? input.registrationNumber || null : null,
+    alternativeDocType: input.hasRegistration ? null : input.alternativeDocType || null,
+    noRegistrationReason: input.hasRegistration ? null : input.noRegistrationReason || null,
+    registryCity: input.registryCity || null,
+    acquisitionDate: input.acquisitionDate || null,
+    irpfBalanceValue: input.declaredValue?.toFixed(2) ?? null,
+    marketValue: input.marketValue?.toFixed(2) ?? null
+  });
+  return id;
+}
+async function listPropertyRecords(familyId) {
+  const db = await requireDatabase();
+  return db.select().from(properties).where(eq21(properties.familyId, familyId)).orderBy(desc7(properties.updatedAt));
+}
+async function getPropertyRecord(propertyId) {
+  const db = await requireDatabase();
+  const result = await db.select().from(properties).where(eq21(properties.id, propertyId)).limit(1);
+  return result[0] ?? null;
+}
+async function addPropertyOwnerRecord(input) {
+  const db = await requireDatabase();
+  const id = createId();
+  await db.transaction(async (tx) => {
+    const existing = await tx.select().from(propertyOwners).where(eq21(propertyOwners.propertyId, input.propertyId));
+    if (existing.some((row) => row.personId === input.personId)) {
+      throw new Error("Este membro j\xE1 est\xE1 vinculado a este im\xF3vel.");
+    }
+    const total = totalOwnership(existing) + input.ownershipPercentage;
+    if (total > 100 + PCT_EPSILON2) {
+      throw new Error(
+        `A soma das titularidades n\xE3o pode passar de 100% (atual ${totalOwnership(existing)}%).`
+      );
+    }
+    await tx.insert(propertyOwners).values({ ...input, id, ownershipPercentage: input.ownershipPercentage.toFixed(2) });
+  });
+  return id;
+}
+async function updatePropertyOwnerRecord(input) {
+  const db = await requireDatabase();
+  await db.transaction(async (tx) => {
+    const current = await tx.select().from(propertyOwners).where(eq21(propertyOwners.id, input.ownerId)).limit(1);
+    const owner = current[0];
+    if (!owner || owner.propertyId !== input.propertyId) {
+      throw new Error("Titularidade n\xE3o encontrada.");
+    }
+    const others = await tx.select().from(propertyOwners).where(eq21(propertyOwners.propertyId, input.propertyId));
+    const remaining = others.filter((row) => row.id !== input.ownerId);
+    const personId = input.personId ?? owner.personId;
+    if (remaining.some((row) => row.personId === personId)) {
+      throw new Error("Este membro j\xE1 est\xE1 vinculado a este im\xF3vel.");
+    }
+    const percentage = input.ownershipPercentage ?? Number(owner.ownershipPercentage);
+    const total = totalOwnership(remaining) + percentage;
+    if (total > 100 + PCT_EPSILON2) {
+      throw new Error(
+        `A soma das titularidades n\xE3o pode passar de 100% (atual ${totalOwnership(remaining)}%).`
+      );
+    }
+    await tx.update(propertyOwners).set({
+      personId,
+      ownershipPercentage: percentage.toFixed(2),
+      rightType: input.rightType ?? owner.rightType
+    }).where(eq21(propertyOwners.id, input.ownerId));
+  });
+}
+async function removePropertyOwnerRecord(input) {
+  const db = await requireDatabase();
+  const removed = await db.delete(propertyOwners).where(eq21(propertyOwners.id, input.ownerId)).returning({ id: propertyOwners.id, propertyId: propertyOwners.propertyId });
+  const row = removed[0];
+  if (!row || row.propertyId !== input.propertyId) {
+    throw new Error("Titularidade n\xE3o encontrada.");
+  }
+  return row.id;
+}
+async function listPropertyOwners(propertyId) {
+  const db = await requireDatabase();
+  return db.select().from(propertyOwners).where(eq21(propertyOwners.propertyId, propertyId));
+}
+
+// server/features/properties/property-types.ts
+import { z as z18 } from "zod";
+var propertyInputSchema = z18.object({
+  familyId: z18.string().min(1),
+  description: z18.string().min(3).max(240),
+  hasRegistration: z18.boolean().default(true),
+  registrationNumber: z18.string().max(120).optional(),
+  alternativeDocType: z18.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
+  noRegistrationReason: z18.string().max(1e3).optional(),
+  propertyCity: z18.string().min(2).max(120),
+  registryCity: z18.string().max(120).optional(),
+  acquisitionDate: z18.string().optional(),
+  declaredValue: z18.number().nonnegative().optional(),
+  marketValue: z18.number().nonnegative().optional()
 }).refine((data) => {
   if (!data.hasRegistration) {
     return Boolean(data.alternativeDocType && data.noRegistrationReason && data.noRegistrationReason.trim().length >= 3);
@@ -3783,42 +3782,31 @@ var propertyInputSchema = z17.object({
   message: "Im\xF3veis sem matr\xEDcula exigem documento alternativo (Escritura P\xFAblica ou Contrato de Compra e Venda) e justificativa.",
   path: ["alternativeDocType"]
 });
-var encumbranceInputSchema = z17.object({
-  propertyId: z17.string().min(1),
-  type: z17.enum(encumbranceTypeValues),
-  description: z17.string().max(1e3).optional()
+var propertyOwnerInputSchema = z18.object({
+  propertyId: z18.string().min(1),
+  personId: z18.string().min(1),
+  ownershipPercentage: z18.number().positive().max(100),
+  rightType: z18.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
 });
-var propertyOwnerInputSchema = z17.object({
-  propertyId: z17.string().min(1),
-  personId: z17.string().min(1),
-  ownershipPercentage: z17.number().positive().max(100),
-  rightType: z17.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
+var propertyOwnerUpdateSchema = z18.object({
+  propertyId: z18.string().min(1),
+  ownerId: z18.string().min(1),
+  personId: z18.string().min(1).optional(),
+  ownershipPercentage: z18.number().positive().max(100).optional(),
+  rightType: z18.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
 });
-var propertyOwnerUpdateSchema = z17.object({
-  propertyId: z17.string().min(1),
-  ownerId: z17.string().min(1),
-  personId: z17.string().min(1).optional(),
-  ownershipPercentage: z17.number().positive().max(100).optional(),
-  rightType: z17.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
-});
-var propertyOwnerDeleteSchema = z17.object({
-  propertyId: z17.string().min(1),
-  ownerId: z17.string().min(1)
+var propertyOwnerDeleteSchema = z18.object({
+  propertyId: z18.string().min(1),
+  ownerId: z18.string().min(1)
 });
 
 // server/features/properties/property-router.ts
 var propertyRouter = router({
-  list: protectedProcedure.input(z18.object({ familyId: z18.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z19.object({ familyId: z19.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listPropertyRecords(input.familyId);
   }),
-  encumbrances: protectedProcedure.input(z18.object({ propertyId: z18.string() })).query(async ({ ctx, input }) => {
-    const property = await getPropertyRecord(input.propertyId);
-    if (!property) return [];
-    await assertFamilyAccess(ctx, property.familyId);
-    return listEncumbrances(input.propertyId);
-  }),
-  owners: protectedProcedure.input(z18.object({ propertyId: z18.string() })).query(async ({ ctx, input }) => {
+  owners: protectedProcedure.input(z19.object({ propertyId: z19.string() })).query(async ({ ctx, input }) => {
     const property = await getPropertyRecord(input.propertyId);
     if (!property) return [];
     await assertFamilyAccess(ctx, property.familyId);
@@ -3842,15 +3830,6 @@ var propertyRouter = router({
       metadata: { requirements: requirements.length }
     });
     return { propertyId };
-  }),
-  addEncumbrance: protectedProcedure.input(encumbranceInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
-    const property = await getPropertyRecord(input.propertyId);
-    if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
-    await assertFamilyAccess(ctx, property.familyId);
-    const encumbranceId = await addEncumbranceRecord(input);
-    await recordAudit({ action: "GRAVAME_CADASTRADO", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { encumbranceId, type: input.type } });
-    return { encumbranceId };
   }),
   addOwner: protectedProcedure.input(propertyOwnerInputSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
@@ -3885,7 +3864,7 @@ var propertyRouter = router({
 init_schema();
 init_roles();
 import { desc as desc8, eq as eq22 } from "drizzle-orm";
-import { z as z19 } from "zod";
+import { z as z20 } from "zod";
 init_database();
 var userRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -3893,7 +3872,7 @@ var userRouter = router({
     const db = await requireDatabase();
     return db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).orderBy(desc8(users.lastSignedIn));
   }),
-  changeRole: protectedProcedure.input(z19.object({ userId: z19.number().int(), role: z19.enum(APP_ROLES) })).mutation(async ({ ctx, input }) => {
+  changeRole: protectedProcedure.input(z20.object({ userId: z20.number().int(), role: z20.enum(APP_ROLES) })).mutation(async ({ ctx, input }) => {
     const actor = requireRole(ctx, ["SOCIO"]);
     if (input.userId === actor.id && input.role !== "SOCIO") throw new Error("O SOCIO respons\xE1vel n\xE3o pode remover o pr\xF3prio papel.");
     const db = await requireDatabase();
@@ -3906,10 +3885,10 @@ var userRouter = router({
 // server/features/audit/audit-router.ts
 init_schema();
 import { desc as desc9, eq as eq23 } from "drizzle-orm";
-import { z as z20 } from "zod";
+import { z as z21 } from "zod";
 init_database();
 var auditRouter = router({
-  listByFamily: protectedProcedure.input(z20.object({ familyId: z20.string() })).query(async ({ ctx, input }) => {
+  listByFamily: protectedProcedure.input(z21.object({ familyId: z21.string() })).query(async ({ ctx, input }) => {
     requireRole(ctx, ["SOCIO", "ADMIN"]);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
@@ -3919,8 +3898,8 @@ var auditRouter = router({
 
 // server/features/people/first-access-router.ts
 import { createHash as createHash5 } from "node:crypto";
-import { and as and14, eq as eq24, isNull as isNull4, gt as gt4 } from "drizzle-orm";
-import { z as z21 } from "zod";
+import { and as and13, eq as eq24, isNull as isNull4, gt as gt4 } from "drizzle-orm";
+import { z as z22 } from "zod";
 import bcrypt2 from "bcryptjs";
 init_db();
 init_database();
@@ -3930,11 +3909,11 @@ function hashToken3(token) {
   return createHash5("sha256").update(token).digest("hex");
 }
 var firstAccessRouter = router({
-  verifyToken: publicProcedure.input(z21.object({ token: z21.string().min(16) })).query(async ({ input }) => {
+  verifyToken: publicProcedure.input(z22.object({ token: z22.string().min(16) })).query(async ({ input }) => {
     checkRateLimit(`verify:${input.token}`);
     const db = await requireDatabase();
     const [link] = await db.select().from(firstAccessLinks).where(
-      and14(
+      and13(
         eq24(firstAccessLinks.tokenHash, hashToken3(input.token)),
         isNull4(firstAccessLinks.consumedAt),
         gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -3949,11 +3928,11 @@ var firstAccessRouter = router({
       email: person.email ?? null
     };
   }),
-  setPassword: publicProcedure.input(z21.object({ token: z21.string().min(16), password: z21.string().min(6) })).mutation(async ({ input }) => {
+  setPassword: publicProcedure.input(z22.object({ token: z22.string().min(16), password: z22.string().min(6) })).mutation(async ({ input }) => {
     checkRateLimit(`setpwd:${input.token}`);
     const db = await requireDatabase();
     const [link] = await db.select().from(firstAccessLinks).where(
-      and14(
+      and13(
         eq24(firstAccessLinks.tokenHash, hashToken3(input.token)),
         isNull4(firstAccessLinks.consumedAt),
         gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -4003,7 +3982,7 @@ var firstAccessRouter = router({
 
 // server/features/assets/assets-router.ts
 init_roles();
-import { z as z23 } from "zod";
+import { z as z24 } from "zod";
 
 // server/features/assets/assets-repository.ts
 init_schema();
@@ -4015,9 +3994,7 @@ async function createAssetRecord(input) {
   await db.insert(otherAssets).values({
     ...input,
     id,
-    declaredValue: input.declaredValue?.toFixed(2) ?? null,
-    marketValue: input.marketValue?.toFixed(2) ?? null,
-    ownerPersonId: input.ownerPersonId || null,
+    declaredValue: input.declaredValue.toFixed(2),
     notes: input.notes || null
   });
   return id;
@@ -4028,27 +4005,21 @@ async function listAssetRecords(familyId) {
 }
 
 // server/features/assets/assets-types.ts
-import { z as z22 } from "zod";
-var assetCategorySchema = z22.enum([
-  "INVESTIMENTO",
-  "VEICULO",
-  "PARTICIPACAO_OUTRA",
-  "DIREITO",
-  "OUTRO"
-]);
-var createAssetSchema = z22.object({
-  familyId: z22.string().min(1),
-  category: assetCategorySchema.default("OUTRO"),
-  description: z22.string().min(2).max(240),
-  declaredValue: z22.number().nonnegative().optional(),
-  marketValue: z22.number().nonnegative().optional(),
-  ownerPersonId: z22.string().optional(),
-  notes: z22.string().max(1e3).optional()
+init_schema();
+import { z as z23 } from "zod";
+var assetCategorySchema = z23.enum(assetCategoryValues);
+var createAssetSchema = z23.object({
+  familyId: z23.string().min(1),
+  category: assetCategorySchema.default("OUTROS"),
+  description: z23.string().min(2).max(240),
+  declaredValue: z23.number().nonnegative(),
+  ownerPersonId: z23.string().min(1),
+  notes: z23.string().max(1e3).optional()
 });
 
 // server/features/assets/assets-router.ts
 var assetRouter = router({
-  list: protectedProcedure.input(z23.object({ familyId: z23.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z24.object({ familyId: z24.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listAssetRecords(input.familyId);
   }),
@@ -4076,7 +4047,7 @@ var assetRouter = router({
 
 // server/features/proposals/proposal-router.ts
 init_roles();
-import { z as z25 } from "zod";
+import { z as z26 } from "zod";
 
 // server/features/proposals/proposal-repository.ts
 init_schema();
@@ -4131,37 +4102,37 @@ async function reviewCounterProposalRecord(input) {
 }
 
 // server/features/proposals/proposal-types.ts
-import { z as z24 } from "zod";
-var proposalStatusSchema = z24.enum([
+import { z as z25 } from "zod";
+var proposalStatusSchema = z25.enum([
   "RASCUNHO",
   "ENVIADA",
   "ACEITA",
   "CONTRAPROPOSTA_RECEBIDA",
   "RECUSADA"
 ]);
-var createProposalSchema = z24.object({
-  familyId: z24.string().min(1),
-  scopeDescription: z24.string().min(10, "Descri\xE7\xE3o do escopo de trabalho deve ter ao menos 10 caracteres."),
-  proposedValue: z24.number().positive("Valor da proposta deve ser maior que zero.")
+var createProposalSchema = z25.object({
+  familyId: z25.string().min(1),
+  scopeDescription: z25.string().min(10, "Descri\xE7\xE3o do escopo de trabalho deve ter ao menos 10 caracteres."),
+  proposedValue: z25.number().positive("Valor da proposta deve ser maior que zero.")
 });
-var acceptProposalSchema = z24.object({
-  proposalId: z24.string().min(1),
-  clientNotes: z24.string().max(1e3).optional()
+var acceptProposalSchema = z25.object({
+  proposalId: z25.string().min(1),
+  clientNotes: z25.string().max(1e3).optional()
 });
-var counterProposalSchema = z24.object({
-  proposalId: z24.string().min(1),
-  counterProposalValue: z24.number().positive("Valor da contraproposta deve ser maior que zero."),
-  counterProposalNotes: z24.string().min(3, "Justificativa da contraproposta \xE9 obrigat\xF3ria.").max(1e3)
+var counterProposalSchema = z25.object({
+  proposalId: z25.string().min(1),
+  counterProposalValue: z25.number().positive("Valor da contraproposta deve ser maior que zero."),
+  counterProposalNotes: z25.string().min(3, "Justificativa da contraproposta \xE9 obrigat\xF3ria.").max(1e3)
 });
-var reviewCounterProposalSchema = z24.object({
-  proposalId: z24.string().min(1),
-  decision: z24.enum(["ACEITAR", "RECUSAR"]),
-  notes: z24.string().max(1e3).optional()
+var reviewCounterProposalSchema = z25.object({
+  proposalId: z25.string().min(1),
+  decision: z25.enum(["ACEITAR", "RECUSAR"]),
+  notes: z25.string().max(1e3).optional()
 });
 
 // server/features/proposals/proposal-router.ts
 var proposalRouter = router({
-  list: protectedProcedure.input(z25.object({ familyId: z25.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z26.object({ familyId: z26.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listProposalRecords(input.familyId);
   }),
@@ -4265,14 +4236,14 @@ var leadRouter = router({
 });
 
 // server/features/certidoes/certidao-router.ts
-import { z as z26 } from "zod";
+import { z as z27 } from "zod";
 init_roles();
 var certidaoRouter = router({
-  list: protectedProcedure.input(z26.object({ familyId: z26.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z27.object({ familyId: z27.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCertidaoRecords(input.familyId);
   }),
-  generate: protectedProcedure.input(z26.object({ familyId: z26.string() })).mutation(async ({ ctx, input }) => {
+  generate: protectedProcedure.input(z27.object({ familyId: z27.string() })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
     await assertFamilyAccess(ctx, input.familyId);
     const created = await ensureFamilyCertidoes(input.familyId);

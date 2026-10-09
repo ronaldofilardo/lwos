@@ -14,7 +14,6 @@ vi.mock("../_shared/ids", () => idMocks);
 import { companies, companyStakeholders } from "../../../drizzle/schema";
 import {
   createCompanyRecord,
-  createContributionRecord,
   createStakeholderRecord,
   getCompanyRecord,
   listCompanyRecords,
@@ -190,20 +189,20 @@ describe("company-repository — escrita e consultas básicas", () => {
     idMocks.createId.mockReturnValue("hold-9");
 
     await expect(
-      createCompanyRecord({ familyId: "fam-1", legalName: "Holding Beta", taxNumber: "", type: "HOLDING_NACIONAL" } as never)
+      createCompanyRecord({ familyId: "fam-1", legalName: "Holding Beta", taxNumber: "", isOffshore: false } as never)
     ).resolves.toBe("hold-9");
     expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "hold-9", taxNumber: null, legalName: "Holding Beta" })
+      expect.objectContaining({ id: "hold-9", taxNumber: null, legalName: "Holding Beta", isOffshore: false })
     );
 
     await createCompanyRecord({
       familyId: "fam-1",
       legalName: "Holding Gamma",
       taxNumber: "11122233344",
-      type: "SOCIEDADE_NACIONAL",
+      isOffshore: true,
     } as never);
     expect(insertValues.mock.calls[1][0]).toEqual(
-      expect.objectContaining({ taxNumber: "11122233344" })
+      expect.objectContaining({ taxNumber: "11122233344", isOffshore: true })
     );
   });
 
@@ -226,19 +225,6 @@ describe("company-repository — escrita e consultas básicas", () => {
 
     await expect(listCompanyRecords("fam-1")).resolves.toEqual([{ id: "hold-1" }]);
     await expect(listStakeholderRecords("hold-1")).resolves.toHaveLength(1);
-  });
-
-  it("registra integralização com porcentagem formatada", async () => {
-    const { db, insertValues } = fullDb();
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-    idMocks.createId.mockReturnValue("int-1");
-
-    await expect(
-      createContributionRecord({ propertyId: "im-1", companyId: "hold-1", percentage: 12.5 } as never)
-    ).resolves.toBe("int-1");
-    expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "int-1", percentage: "12.50" })
-    );
   });
 });
 

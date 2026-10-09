@@ -78,14 +78,14 @@ export async function addPersonRecord(
     await assertParentMatches(input.familyId, input.parentPersonId, "NETO");
   }
 
-  // Cônjuge do titular: estado civil/regime espelham a família — não vem do form.
+  // Cônjuge: estado civil/regime podem vir vindo do form (família não guarda
+  // mais esses campos); default razoável quando omitidos, já que people exige
+  // valores NOT NULL. A regra fina (pedir regime no form) fica da Fase 3.
   let civilStatus = input.civilStatus;
   let maritalRegime = input.maritalRegime;
   if (input.vinculo === "CONJUGE") {
-    const family = await getFamilyRecord(input.familyId);
-    if (!family) throw new Error("Família não encontrada.");
-    civilStatus = family.civilStatus;
-    maritalRegime = family.maritalRegime;
+    civilStatus = civilStatus ?? "CASADO";
+    maritalRegime = maritalRegime ?? "CPB";
   } else if (civilStatus && !isMarriedStatus(civilStatus)) {
     maritalRegime = "NA";
   }

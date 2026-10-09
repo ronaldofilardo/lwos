@@ -179,8 +179,6 @@ function ActionRequiredList({ familyId }: { familyId: string }) {
 type FamilyRow = {
   id: string;
   name: string;
-  civilStatus: string;
-  maritalRegime: string;
 };
 
 import { useState } from "react";
@@ -209,7 +207,6 @@ function ClientFamilyOverview({ family }: { family: FamilyRow }) {
               Acesso do titular
             </p>
             <h1 className="mt-2 font-display text-4xl">{family.name}</h1>
-            <p className="mt-2 text-sm text-white/80">{family.civilStatus}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {typeof percent === "number" ? (
@@ -383,9 +380,6 @@ export default function ClientFamilyDashboard() {
               <div>
                 <p className="text-sm font-medium text-lucathi-navy">
                   {family.name}
-                </p>
-                <p className="text-xs text-lucathi-gray">
-                  {family.civilStatus}
                 </p>
               </div>
               <Button

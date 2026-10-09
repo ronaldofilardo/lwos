@@ -1,21 +1,37 @@
 export const encumbranceTypeValues = [
-  "HIPOTECA",
+  "PENDENTE",
   "ALIENACAO_FIDUCIARIA",
-  "PENHOR",
+  "ARROLAMENTO",
+  "HIPOTECA",
+  "INCOMUNICABILIDADE_INALIENABILIDADE_IMPENHORABILIDADE",
+  "NA",
+  "NAO_HA",
+  "OUTROS",
+  "PENHORA",
+  "SERVIDAO_PASSAGEM",
   "USUFRUTO",
-  "SERVIDAO",
-  "SEQUESTRO",
-  "OUTRO",
 ] as const;
 
 export type EncumbranceType = (typeof encumbranceTypeValues)[number];
 
 export const encumbranceTypeLabels: Record<EncumbranceType, string> = {
-  HIPOTECA: "Hipoteca",
+  PENDENTE: "Pendente de verificação",
   ALIENACAO_FIDUCIARIA: "Alienação fiduciária",
-  PENHOR: "Penhor",
+  ARROLAMENTO: "Arrolamento",
+  HIPOTECA: "Hipoteca",
+  INCOMUNICABILIDADE_INALIENABILIDADE_IMPENHORABILIDADE:
+    "Incomunicabilidade / Inalienabilidade / Impenhorabilidade",
+  NA: "N/A",
+  NAO_HA: "Não há",
+  OUTROS: "Outro",
+  PENHORA: "Penhora",
+  SERVIDAO_PASSAGEM: "Servidão de passagem",
   USUFRUTO: "Usufruto",
-  SERVIDAO: "Servidão",
-  SEQUESTRO: "Sequestro judicial",
-  OUTRO: "Outro",
 };
+
+/** Valores que não devem acionar o alerta visual de gravame. */
+export const inactiveEncumbranceValues: readonly EncumbranceType[] = [
+  "PENDENTE",
+  "NA",
+  "NAO_HA",
+];

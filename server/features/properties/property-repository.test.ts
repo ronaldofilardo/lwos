@@ -11,13 +11,11 @@ const idMocks = vi.hoisted(() => ({ createId: vi.fn() }));
 vi.mock("../_shared/database", () => databaseMocks);
 vi.mock("../_shared/ids", () => idMocks);
 
-import { encumbrances, properties, propertyOwners } from "../../../drizzle/schema";
+import { properties, propertyOwners } from "../../../drizzle/schema";
 import {
-  addEncumbranceRecord,
   addPropertyOwnerRecord,
   createPropertyRecord,
   getPropertyRecord,
-  listEncumbrances,
   listPropertyOwners,
   listPropertyRecords,
   removePropertyOwnerRecord,
@@ -151,7 +149,6 @@ type PropertyDbConfig = {
   propertyRows?: Record<string, unknown>[];
   ownerRows?: OwnerRow[];
   currentOwnerRows?: OwnerRow[];
-  encumbranceRows?: Record<string, unknown>[];
   removedRows?: { id: string; propertyId: string }[];
 };
 
@@ -168,7 +165,6 @@ function propertyDb(config: PropertyDbConfig = {}) {
       const baseRows = (): unknown[] => {
         if (table === properties) return config.propertyRows ?? [];
         if (table === propertyOwners) return config.ownerRows ?? [];
-        if (table === encumbrances) return config.encumbranceRows ?? [];
         return [];
       };
       const limit = vi.fn(async () => {
@@ -196,7 +192,7 @@ function propertyDb(config: PropertyDbConfig = {}) {
   return { db, insertValues, setValues, remove };
 }
 
-describe("property-repository — imóveis, gravames e consultas", () => {
+describe("property-repository — imóveis e consultas", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("devolve o id do imóvel já cadastrado com a mesma descrição e cidade", async () => {
@@ -228,7 +224,6 @@ describe("property-repository — imóveis, gravames e consultas", () => {
         registrationNumber: "",
         alternativeDocType: "IPTU",
         noRegistrationReason: "sem motivo",
-        registryOffice: "",
         registryCity: "",
         acquisitionDate: "",
         declaredValue: 100000,
@@ -242,10 +237,9 @@ describe("property-repository — imóveis, gravames e consultas", () => {
         registrationNumber: null,
         alternativeDocType: null,
         noRegistrationReason: null,
-        registryOffice: null,
         registryCity: null,
         acquisitionDate: null,
-        declaredValue: "100000.00",
+        irpfBalanceValue: "100000.00",
         marketValue: null,
       })
     );
@@ -273,7 +267,7 @@ describe("property-repository — imóveis, gravames e consultas", () => {
         registrationNumber: null,
         alternativeDocType: "IPTU",
         noRegistrationReason: "Matrícula inexistente",
-        declaredValue: null,
+        irpfBalanceValue: null,
         marketValue: "50000.00",
       })
     );
@@ -291,20 +285,6 @@ describe("property-repository — imóveis, gravames e consultas", () => {
     const missing = propertyDb({ propertyLimitQueue: [[]] });
     databaseMocks.requireDatabase.mockResolvedValue(missing.db);
     await expect(getPropertyRecord("imovel-x")).resolves.toBeNull();
-  });
-
-  it("registra e lista gravames", async () => {
-    const { db, insertValues } = propertyDb({ encumbranceRows: [{ id: "grav-1" }] });
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-    idMocks.createId.mockReturnValue("grav-9");
-
-    await expect(
-      addEncumbranceRecord({ propertyId: "imovel-1", type: "HIPOTECA" } as never)
-    ).resolves.toBe("grav-9");
-    expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "grav-9", propertyId: "imovel-1" })
-    );
-    await expect(listEncumbrances("imovel-1")).resolves.toEqual([{ id: "grav-1" }]);
   });
 
   it("lista os titulares do imóvel", async () => {

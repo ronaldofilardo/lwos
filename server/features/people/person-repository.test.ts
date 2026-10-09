@@ -153,12 +153,7 @@ describe("person-repository", () => {
     ).rejects.toThrow("Filho(a)");
   });
 
-  it("preenche estado civil e regime da família para cônjuge sem documentos do casal", async () => {
-    familyMocks.getFamilyRecord.mockResolvedValue({
-      name: "Família",
-      civilStatus: "UNIAO_ESTAVEL",
-      maritalRegime: "CUB",
-    });
+  it("aplica default CASADO/CPB para cônjuge sem estado civil e gera só documentos do titular", async () => {
     const personValues = vi.fn().mockResolvedValue(undefined);
     const docsValues = vi.fn().mockResolvedValue(undefined);
     const insert = vi
@@ -182,8 +177,8 @@ describe("person-repository", () => {
 
     expect(personValues).toHaveBeenCalledWith(
       expect.objectContaining({
-        civilStatus: "UNIAO_ESTAVEL",
-        maritalRegime: "CUB",
+        civilStatus: "CASADO",
+        maritalRegime: "CPB",
         vinculo: "CONJUGE",
       })
     );
@@ -431,17 +426,36 @@ describe("validações de vínculo e campos opcionais", () => {
     ).rejects.toThrow("O pai/mãe de um bisneto(a) deve ter vínculo Neto(a).");
   });
 
-  it("falha quando o cônjuge aponta para família inexistente", async () => {
-    familyMocks.getFamilyRecord.mockResolvedValue(null);
-    databaseMocks.requireDatabase.mockResolvedValue(transactionDatabase(undefined));
+  it("respeita estado civil e regime informados para o cônjuge", async () => {
+    const personValues = vi.fn().mockResolvedValue(undefined);
+    const docsValues = vi.fn().mockResolvedValue(undefined);
+    const insert = vi
+      .fn()
+      .mockReturnValueOnce({ values: personValues })
+      .mockReturnValue({ values: docsValues });
+    const tx = { insert };
+    const db = {
+      transaction: vi.fn(
+        async (operation: (value: typeof tx) => Promise<void>) => operation(tx)
+      ),
+    };
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idMocks.createId.mockReturnValue("pessoa-conj").mockReturnValue("doc");
 
-    await expect(
-      addPersonRecord({
-        familyId: "familia-fantasma",
-        fullName: "Cônjuge",
-        vinculo: "CONJUGE",
-      } as never)
-    ).rejects.toThrow("Família não encontrada.");
+    await addPersonRecord({
+      familyId: "familia-1",
+      fullName: "Cônjuge",
+      vinculo: "CONJUGE",
+      civilStatus: "UNIAO_ESTAVEL",
+      maritalRegime: "CUB",
+    } as never);
+
+    expect(personValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        civilStatus: "UNIAO_ESTAVEL",
+        maritalRegime: "CUB",
+      })
+    );
   });
 
   function parentAndInsertDb(parent: Record<string, unknown> | undefined) {

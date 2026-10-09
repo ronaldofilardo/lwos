@@ -78,6 +78,20 @@
       "when": 1790419313450,
       "tag": "0011_company_details",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791555304633,
+      "tag": "0012_file_blobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791556705576,
+      "tag": "20261009143825_fase2_schema_adjustments",
+      "breakpoints": true
     }
   ]
 }

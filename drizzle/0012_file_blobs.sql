@@ -9,6 +9,4 @@ CREATE TABLE "fileBlobs" (
 	"createdAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX "fileBlobs_key_key" ON "fileBlobs" USING btree ("key");
---> statement-breakpoint
 COMMENT ON TABLE "fileBlobs" IS 'Arquivos do MVP armazenados no banco (≤5KB). Chave referência usada por storageProxy e document uploads.';

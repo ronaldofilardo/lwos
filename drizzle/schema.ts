@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   date,
   decimal,
   index,
@@ -15,6 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { APP_ROLES } from "../shared/domain/roles";
+import { UFS } from "../shared/validation/uf";
 
 const ids = { id: varchar("id", { length: 36 }).primaryKey() };
 const auditTime = timestamp("createdAt").defaultNow().notNull();
@@ -41,14 +43,18 @@ export const documentStatusValues = [
   "VENCIDO",
   "DISPENSADO",
   "NA",
+  "NAO_POSSUI",
 ] as const;
 
 export const assetCategoryValues = [
-  "INVESTIMENTO",
-  "VEICULO",
-  "PARTICIPACAO_OUTRA",
-  "DIREITO",
-  "OUTRO",
+  "ATIVOS_AGRO",
+  "CONTA_CORRENTE",
+  "CREDITO",
+  "DINHEIRO_ESPECIE",
+  "INVESTIMENTOS",
+  "OUTROS",
+  "SEMOVENTES",
+  "VEICULO_EMBARCACAO_AERONAVE",
 ] as const;
 
 export const proposalStatusValues = [
@@ -78,21 +84,65 @@ export const entityTypeValues = [
   "CERTIDAO",
 ] as const;
 
-export const companyTypeValues = [
-  "HOLDING_NACIONAL",
-  "HOLDING_INTERNACIONAL",
-  "SOCIEDADE_NACIONAL",
+export const projectStatusValues = [
+  "ATIVO",
+  "SUSPENSO",
+  "CONCLUIDO",
+  "CANCELADO",
 ] as const;
 
-/** Tipos de gravame aceitos no droplist (o texto livre vira OUTRO). */
+/** Objetivos múltiplos do projeto (14 opções — grafia: "SAIDA", não "SAIDE"). */
+export const projectObjectiveValues = [
+  "PROTECAO_PATRIMONIAL",
+  "PLANEJAMENTO_SUCESSORIO",
+  "GOVERNANCA_FAMILIAR_OU_SOCIETARIA",
+  "PREVENCAO_DE_CONFLITOS_ENTRE_HERDEIROS",
+  "FORMALIZACAO_DE_RELACIONAMENTOS",
+  "SEGURO_DE_VIDA",
+  "SEGURO_SAUDE",
+  "EFICIENCIA_FISCAL",
+  "REESTRUTURACAO_SOCIETARIA",
+  "DIVERSIFICACAO_DE_JURISDICAO_E_MOEDA",
+  "FUNDOS_DE_INVESTIMENTOS",
+  "SAIDA_DEFINITIVA_DO_BRASIL",
+  "REPERFILAMENTO_DE_DIVIDA",
+  "FILANTROPIA",
+] as const;
+
+export const propertyKindValues = ["URBANO", "RURAL"] as const;
+
+export const propertyUtilityValues = [
+  "ATIVIDADE_INDUSTRIAL_COMERCIAL",
+  "ATIVIDADE_RURAL",
+  "INVESTIMENTO",
+  "LAZER",
+  "LOCACAO_ARRENDAMENTO",
+  "OUTRA",
+  "PENDENTE",
+  "RESIDENCIAL",
+] as const;
+
+export const societaryTypeValues = ["LTDA", "SA", "SCP"] as const;
+
+export const taxRegimeValues = [
+  "SIMPLES_NACIONAL",
+  "LUCRO_PRESUMIDO",
+  "LUCRO_REAL",
+] as const;
+
+/** Gravame do imóvel (coluna própria; a tabela encumbrances foi removida). */
 export const encumbranceTypeValues = [
-  "HIPOTECA",
+  "PENDENTE",
   "ALIENACAO_FIDUCIARIA",
-  "PENHOR",
+  "ARROLAMENTO",
+  "HIPOTECA",
+  "INCOMUNICABILIDADE_INALIENABILIDADE_IMPENHORABILIDADE",
+  "NA",
+  "NAO_HA",
+  "OUTROS",
+  "PENHORA",
+  "SERVIDAO_PASSAGEM",
   "USUFRUTO",
-  "SERVIDAO",
-  "SEQUESTRO",
-  "OUTRO",
 ] as const;
 
 export const certidaoScopeValues = ["PESSOA", "SOCIEDADE"] as const;
@@ -128,32 +178,6 @@ export const companyJurisdictionValues = [
   "PANAMA",
 ] as const;
 
-/** Status do bloco de documentos do modal de detalhes da holding. */
-export const companyDocStatusValues = [
-  "PENDENTE",
-  "RECEBIDO",
-  "NA",
-  "NAO_POSSUI",
-] as const;
-
-/** 7 documentos por variante (nacional e internacional) do modal. */
-export const companyDocTypeValues = [
-  "CONTRATO_SOCIAL",
-  "BALANCO_FECHADO",
-  "BALANCETE_ATUALIZADO",
-  "ACORDO_SOCIOS",
-  "LIVRO_RAZAO_IMOBILIZADO",
-  "LIVRO_REGISTRO_ACOES_NOMINATIVAS",
-  "LIVRO_TRANSFERENCIA_ACOES",
-  "MEMORANDUM_ARTICLES",
-  "BALANCE_SHEET",
-  "CERTIFICATE_INCORPORATION",
-  "REGISTER_DIRECTORS",
-  "REGISTER_MEMBERS",
-  "CERTIFICATE_GOOD_STANDING",
-  "SHARE_CERTIFICATE",
-] as const;
-
 export const roleEnum = pgEnum("role", APP_ROLES);
 export const civilStatusEnum = pgEnum("civilStatus", civilStatusValues);
 export const maritalRegimeEnum = pgEnum("maritalRegime", maritalRegimeValues);
@@ -168,12 +192,11 @@ export const proposalStatusEnum = pgEnum(
   "proposalStatus",
   proposalStatusValues
 );
-export const projectStatusEnum = pgEnum("projectStatus", [
-  "EM_ANDAMENTO",
-  "AGUARDANDO_DOCUMENTOS",
-  "EM_REVISAO",
-  "CONCLUIDO",
-]);
+export const projectStatusEnum = pgEnum("projectStatus", projectStatusValues);
+export const projectObjectiveEnum = pgEnum(
+  "projectObjective",
+  projectObjectiveValues
+);
 export const accessRoleEnum = pgEnum("accessRole", ["RESPONSAVEL", "CLIENTE"]);
 export const entityTypeEnum = pgEnum("entityType", entityTypeValues);
 export const rightTypeEnum = pgEnum("rightType", [
@@ -181,11 +204,18 @@ export const rightTypeEnum = pgEnum("rightType", [
   "USUFRUTO",
   "NUA_PROPRIEDADE",
 ]);
-export const companyTypeEnum = pgEnum("companyType", companyTypeValues);
+export const propertyKindEnum = pgEnum("propertyKind", propertyKindValues);
+export const propertyUtilityEnum = pgEnum(
+  "propertyUtility",
+  propertyUtilityValues
+);
 export const encumbranceTypeEnum = pgEnum(
-  "encumbranceType",
+  "propertyEncumbranceType",
   encumbranceTypeValues
 );
+export const societaryTypeEnum = pgEnum("societaryType", societaryTypeValues);
+export const taxRegimeEnum = pgEnum("taxRegime", taxRegimeValues);
+export const ufEnum = pgEnum("uf", UFS);
 export const certidaoScopeEnum = pgEnum("certidaoScope", certidaoScopeValues);
 export const certidaoTypeEnum = pgEnum("certidaoType", certidaoTypeValues);
 export const certidaoStatusEnum = pgEnum(
@@ -196,19 +226,6 @@ export const companyJurisdictionEnum = pgEnum(
   "companyJurisdiction",
   companyJurisdictionValues
 );
-export const companyDocStatusEnum = pgEnum(
-  "companyDocStatus",
-  companyDocStatusValues
-);
-export const companyDocTypeEnum = pgEnum(
-  "companyDocType",
-  companyDocTypeValues
-);
-export const contributionStatusEnum = pgEnum("contributionStatus", [
-  "RASCUNHO",
-  "EM_ANALISE",
-  "CONCLUIDA",
-]);
 
 // Fase 2: autenticação local por e-mail/senha (sem OAuth).
 // `email` é o identificador de login (único, obrigatório).
@@ -227,8 +244,6 @@ export const users = pgTable("users", {
 export const families = pgTable("families", {
   ...ids,
   name: varchar("name", { length: 160 }).notNull(),
-  civilStatus: civilStatusEnum("civilStatus").notNull(),
-  maritalRegime: maritalRegimeEnum("maritalRegime").notNull(),
   notes: text("notes"),
   createdBy: varchar("createdBy", { length: 36 }).notNull(),
   createdAt: auditTime,
@@ -239,10 +254,30 @@ export const projects = pgTable("projects", {
   ...ids,
   familyId: varchar("familyId", { length: 36 }).notNull().unique(),
   title: varchar("title", { length: 160 }).notNull(),
-  status: projectStatusEnum("status").default("EM_ANDAMENTO").notNull(),
+  status: projectStatusEnum("status").default("ATIVO").notNull(),
   createdAt: auditTime,
   updatedAt: updatedAtCol(),
 });
+
+/**
+ * Objetivos múltiplos do projeto: uma linha por opção marcada (das 14 do
+ * enum). A restrição única impede repetir o mesmo objetivo no projeto.
+ */
+export const projectObjectives = pgTable(
+  "projectObjectives",
+  {
+    ...ids,
+    projectId: varchar("projectId", { length: 36 }).notNull(),
+    objective: projectObjectiveEnum("objective").notNull(),
+    createdAt: auditTime,
+  },
+  table => [
+    uniqueIndex("project_objective_unique").on(
+      table.projectId,
+      table.objective
+    ),
+  ]
+);
 
 export const familyAccess = pgTable(
   "familyAccess",
@@ -308,6 +343,18 @@ export const people = pgTable(
     // família pode ser true — garantido pelo unique index parcial
     // people_primary_unique (WHERE "isPrimaryContact" = true).
     isPrimaryContact: boolean("isPrimaryContact").default(false).notNull(),
+    phone: varchar("phone", { length: 20 }),
+    cep: varchar("cep", { length: 8 }),
+    street: varchar("street", { length: 160 }),
+    number: varchar("number", { length: 20 }),
+    complement: varchar("complement", { length: 80 }),
+    district: varchar("district", { length: 80 }),
+    city: varchar("city", { length: 120 }),
+    uf: varchar("uf", { length: 2 }),
+    addressSameAsPrimary: boolean("addressSameAsPrimary")
+      .default(false)
+      .notNull(),
+    isDependent: boolean("isDependent").default(false).notNull(),
     createdAt: auditTime,
     updatedAt: updatedAtCol(),
   },
@@ -316,6 +363,12 @@ export const people = pgTable(
     uniqueIndex("people_primary_unique")
       .on(table.familyId)
       .where(sql`${table.isPrimaryContact} = true`),
+    // CPF normalizado por família: um mesmo CPF não pode ser duplicado na família.
+    uniqueIndex("people_family_taxid_unique").on(table.familyId, table.taxId),
+    // Um único cônjuge por família.
+    uniqueIndex("people_conjuge_unique")
+      .on(table.familyId)
+      .where(sql`${table.vinculo} = 'CONJUGE'`),
   ]
 );
 
@@ -334,7 +387,11 @@ export const documents = pgTable(
     dispensationApprovedBy: varchar("dispensationApprovedBy", { length: 36 }),
     dispensedAt: timestamp("dispensedAt"),
     currentVersion: integer("currentVersion").default(0).notNull(),
+    issuedAt: date("issuedAt"),
     validUntil: date("validUntil"),
+    referenceDate: date("referenceDate"),
+    apostilled: boolean("apostilled").default(false).notNull(),
+    translated: boolean("translated").default(false).notNull(),
     createdAt: auditTime,
     updatedAt: updatedAtCol(),
   },
@@ -368,42 +425,98 @@ export const properties = pgTable(
     ...ids,
     familyId: varchar("familyId", { length: 36 }).notNull(),
     description: varchar("description", { length: 240 }).notNull(),
+    kind: propertyKindEnum("kind"),
     hasRegistration: boolean("hasRegistration").default(true).notNull(),
     registrationNumber: varchar("registrationNumber", { length: 120 }),
     alternativeDocType: varchar("alternativeDocType", { length: 80 }),
     noRegistrationReason: text("noRegistrationReason"),
-    registryOffice: varchar("registryOffice", { length: 160 }),
-    propertyCity: varchar("propertyCity", { length: 120 }).notNull(),
+    // Cartório: número de registro 1–55 (provimento) + UF e cidade do cartório.
+    registryOfficeNumber: integer("registryOfficeNumber"),
+    registryUf: varchar("registryUf", { length: 2 }),
     registryCity: varchar("registryCity", { length: 120 }),
+    propertyCity: varchar("propertyCity", { length: 120 }).notNull(),
+    uf: varchar("uf", { length: 2 }),
+    notes: text("notes"),
     acquisitionDate: date("acquisitionDate"),
-    declaredValue: decimal("declaredValue", { precision: 15, scale: 2 }),
+    irpfBalanceValue: decimal("irpfBalanceValue", { precision: 15, scale: 2 }),
     marketValue: decimal("marketValue", { precision: 15, scale: 2 }),
+    venalValue: decimal("venalValue", { precision: 15, scale: 2 }),
+    irGcapValue: decimal("irGcapValue", { precision: 15, scale: 2 }),
+    emolumentsValue: decimal("emolumentsValue", { precision: 15, scale: 2 }),
+    itbiRate: decimal("itbiRate", { precision: 5, scale: 2 }),
+    hasLaudemio: boolean("hasLaudemio").default(false).notNull(),
+    laudemioRate: decimal("laudemioRate", { precision: 5, scale: 2 }),
+    utility: propertyUtilityEnum("utility").default("PENDENTE").notNull(),
+    rentValue: decimal("rentValue", { precision: 15, scale: 2 }),
+    inscricaoImobiliaria: varchar("inscricaoImobiliaria", { length: 120 }),
+    ccir: varchar("ccir", { length: 40 }),
+    nirf: varchar("nirf", { length: 40 }),
+    encumbranceType: encumbranceTypeEnum("encumbranceType")
+      .default("PENDENTE")
+      .notNull(),
+    encumbranceNote: text("encumbranceNote"),
     createdAt: auditTime,
     updatedAt: updatedAtCol(),
   },
-  table => [index("properties_family_idx").on(table.familyId)]
+  table => [
+    index("properties_family_idx").on(table.familyId),
+    check(
+      "properties_registry_office_number_ck",
+      sql`${table.registryOfficeNumber} BETWEEN 1 AND 55`
+    ),
+    check(
+      "properties_values_non_negative_ck",
+      sql`${table.irpfBalanceValue} >= 0 AND ${table.marketValue} >= 0 AND ${table.venalValue} >= 0 AND ${table.irGcapValue} >= 0 AND ${table.emolumentsValue} >= 0`
+    ),
+    check(
+      "properties_itbi_rate_ck",
+      sql`${table.itbiRate} >= 0 AND ${table.itbiRate} <= 100`
+    ),
+    check(
+      "properties_laudemio_ck",
+      sql`NOT ${table.hasLaudemio} OR (${table.laudemioRate} IS NOT NULL AND ${table.laudemioRate} > 0)`
+    ),
+    check(
+      "properties_rent_value_ck",
+      sql`${table.utility} <> 'LOCACAO_ARRENDAMENTO' OR (${table.rentValue} IS NOT NULL AND ${table.rentValue} > 0)`
+    ),
+    check(
+      "properties_rural_docs_ck",
+      sql`${table.kind} IS DISTINCT FROM 'RURAL' OR (${table.ccir} IS NOT NULL AND ${table.nirf} IS NOT NULL)`
+    ),
+  ]
 );
 
-export const propertyOwners = pgTable("propertyOwners", {
-  ...ids,
-  propertyId: varchar("propertyId", { length: 36 }).notNull(),
-  personId: varchar("personId", { length: 36 }).notNull(),
-  ownershipPercentage: decimal("ownershipPercentage", {
-    precision: 5,
-    scale: 2,
-  }).notNull(),
-  rightType: rightTypeEnum("rightType").default("PROPRIEDADE").notNull(),
-  createdAt: auditTime,
-});
-
-export const encumbrances = pgTable("encumbrances", {
-  ...ids,
-  propertyId: varchar("propertyId", { length: 36 }).notNull(),
-  type: encumbranceTypeEnum("type").notNull(),
-  description: text("description"),
-  active: boolean("active").default(true).notNull(),
-  createdAt: auditTime,
-});
+export const propertyOwners = pgTable(
+  "propertyOwners",
+  {
+    ...ids,
+    propertyId: varchar("propertyId", { length: 36 }).notNull(),
+    personId: varchar("personId", { length: 36 }),
+    companyId: varchar("companyId", { length: 36 }),
+    ownershipPercentage: decimal("ownershipPercentage", {
+      precision: 5,
+      scale: 2,
+    }).notNull(),
+    rightType: rightTypeEnum("rightType").default("PROPRIEDADE").notNull(),
+    createdAt: auditTime,
+  },
+  table => [
+    uniqueIndex("property_owner_person_unique").on(
+      table.propertyId,
+      table.personId
+    ),
+    uniqueIndex("property_owner_company_unique").on(
+      table.propertyId,
+      table.companyId
+    ),
+    // Exatamente um titulável preenchido: pessoa física OU sociedade.
+    check(
+      "property_owner_exactly_one_ck",
+      sql`(CASE WHEN ${table.personId} IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN ${table.companyId} IS NOT NULL THEN 1 ELSE 0 END) = 1`
+    ),
+  ]
+);
 
 export const companies = pgTable(
   "companies",
@@ -412,11 +525,22 @@ export const companies = pgTable(
     familyId: varchar("familyId", { length: 36 }).notNull(),
     legalName: varchar("legalName", { length: 180 }).notNull(),
     taxNumber: varchar("taxNumber", { length: 20 }),
-    type: companyTypeEnum("type").default("HOLDING_NACIONAL").notNull(),
+    isOffshore: boolean("isOffshore").default(false).notNull(),
     createdAt: auditTime,
     updatedAt: updatedAtCol(),
   },
-  table => [index("companies_family_idx").on(table.familyId)]
+  table => [
+    index("companies_family_idx").on(table.familyId),
+    uniqueIndex("companies_family_tax_number_unique").on(
+      table.familyId,
+      table.taxNumber
+    ),
+    // CNPJ obrigatório quando a sociedade NÃO é offshore.
+    check(
+      "companies_tax_number_ck",
+      sql`${table.isOffshore} = true OR ${table.taxNumber} IS NOT NULL`
+    ),
+  ]
 );
 
 export const companyStakeholders = pgTable(
@@ -442,30 +566,26 @@ export const companyStakeholders = pgTable(
   ]
 );
 
-export const propertyContributions = pgTable("propertyContributions", {
-  ...ids,
-  propertyId: varchar("propertyId", { length: 36 }).notNull(),
-  companyId: varchar("companyId", { length: 36 }).notNull(),
-  percentage: decimal("percentage", { precision: 5, scale: 2 }).notNull(),
-  status: contributionStatusEnum("status").default("RASCUNHO").notNull(),
-  createdAt: auditTime,
-});
-
 export const otherAssets = pgTable(
   "otherAssets",
   {
     ...ids,
     familyId: varchar("familyId", { length: 36 }).notNull(),
-    category: assetCategoryEnum("category").default("OUTRO").notNull(),
+    category: assetCategoryEnum("category").notNull(),
     description: varchar("description", { length: 240 }).notNull(),
-    declaredValue: decimal("declaredValue", { precision: 15, scale: 2 }),
-    marketValue: decimal("marketValue", { precision: 15, scale: 2 }),
-    ownerPersonId: varchar("ownerPersonId", { length: 36 }),
+    declaredValue: decimal("declaredValue", { precision: 15, scale: 2 }).notNull(),
+    ownerPersonId: varchar("ownerPersonId", { length: 36 }).notNull(),
     notes: text("notes"),
     createdAt: auditTime,
     updatedAt: updatedAtCol(),
   },
-  table => [index("other_assets_family_idx").on(table.familyId)]
+  table => [
+    index("other_assets_family_idx").on(table.familyId),
+    check(
+      "other_assets_declared_value_ck",
+      sql`${table.declaredValue} > 0`
+    ),
+  ]
 );
 
 /**
@@ -507,10 +627,10 @@ export const companyDetails = pgTable(
     ...ids,
     companyId: varchar("companyId", { length: 36 }).notNull(),
     nire: varchar("nire", { length: 20 }),
-    uf: varchar("uf", { length: 2 }),
+    uf: ufEnum("uf"),
     sede: varchar("sede", { length: 160 }),
-    societaryType: varchar("societaryType", { length: 60 }),
-    taxRegime: varchar("taxRegime", { length: 60 }),
+    societaryType: societaryTypeEnum("societaryType"),
+    taxRegime: taxRegimeEnum("taxRegime"),
     corporatePurpose: text("corporatePurpose"),
     capitalSocial: decimal("capitalSocial", { precision: 15, scale: 2 }),
     shareQuantity: decimal("shareQuantity", { precision: 15, scale: 2 }),
@@ -545,27 +665,6 @@ export const companyDetails = pgTable(
   },
   table => [
     uniqueIndex("company_details_unique").on(table.companyId),
-  ]
-);
-
-/**
- * Documentos do modal de detalhes da holding: uma linha por documento da
- * variante (nacional ou internacional), com status próprio
- * PENDENTE/RECEBIDO/NA/NAO_POSSUI.
- */
-export const companyDetailDocs = pgTable(
-  "companyDetailDocs",
-  {
-    ...ids,
-    companyId: varchar("companyId", { length: 36 }).notNull(),
-    docType: companyDocTypeEnum("docType").notNull(),
-    status: companyDocStatusEnum("status").default("PENDENTE").notNull(),
-    createdAt: auditTime,
-    updatedAt: updatedAtCol(),
-  },
-  table => [
-    uniqueIndex("company_detail_doc_unique").on(table.companyId, table.docType),
-    index("company_detail_docs_idx").on(table.companyId),
   ]
 );
 

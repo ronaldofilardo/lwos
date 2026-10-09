@@ -6,18 +6,15 @@ import { requireRole } from "../access/authorization";
 import { recordAudit } from "../audit/audit-repository";
 import { ensureDocumentRequirements, PROPERTY_DOCUMENT_CATEGORIES } from "../documents/document-requirements";
 import {
-  addEncumbranceRecord,
   addPropertyOwnerRecord,
   createPropertyRecord,
   getPropertyRecord,
-  listEncumbrances,
   listPropertyOwners,
   listPropertyRecords,
   removePropertyOwnerRecord,
   updatePropertyOwnerRecord,
 } from "./property-repository";
 import {
-  encumbranceInputSchema,
   propertyInputSchema,
   propertyOwnerDeleteSchema,
   propertyOwnerInputSchema,
@@ -28,12 +25,6 @@ export const propertyRouter = router({
   list: protectedProcedure.input(z.object({ familyId: z.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listPropertyRecords(input.familyId);
-  }),
-  encumbrances: protectedProcedure.input(z.object({ propertyId: z.string() })).query(async ({ ctx, input }) => {
-    const property = await getPropertyRecord(input.propertyId);
-    if (!property) return [];
-    await assertFamilyAccess(ctx, property.familyId);
-    return listEncumbrances(input.propertyId);
   }),
   owners: protectedProcedure.input(z.object({ propertyId: z.string() })).query(async ({ ctx, input }) => {
     const property = await getPropertyRecord(input.propertyId);
@@ -61,15 +52,6 @@ export const propertyRouter = router({
       metadata: { requirements: requirements.length },
     });
     return { propertyId };
-  }),
-  addEncumbrance: protectedProcedure.input(encumbranceInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
-    const property = await getPropertyRecord(input.propertyId);
-    if (!property) throw new Error("Imóvel não encontrado.");
-    await assertFamilyAccess(ctx, property.familyId);
-    const encumbranceId = await addEncumbranceRecord(input);
-    await recordAudit({ action: "GRAVAME_CADASTRADO", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { encumbranceId, type: input.type } });
-    return { encumbranceId };
   }),
   addOwner: protectedProcedure.input(propertyOwnerInputSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);

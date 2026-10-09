@@ -63,14 +63,6 @@ export function FamilyWorkspacePage() {
     );
   }
 
-  const regimeLabels: Record<string, string> = {
-    CPB: "Comunhão Parcial de Bens",
-    CUB: "Comunhão Universal de Bens",
-    STB: "Separação Total de Bens",
-    STOB: "Separação Obrigatória de Bens",
-    NA: "Não Aplicável",
-  };
-
   return (
     <section className="space-y-6">
       <Button
@@ -92,10 +84,7 @@ export function FamilyWorkspacePage() {
             </p>
             <h1 className="mt-2 font-display text-4xl">{family.data.name}</h1>
             <p className="mt-2 text-sm text-white/80">
-              {family.data.civilStatus} ·{" "}
-              {regimeLabels[family.data.maritalRegime] ||
-                family.data.maritalRegime}{" "}
-              · Título do projeto sincronizado com a família.
+              Título do projeto sincronizado com a família.
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 backdrop-blur-sm">

@@ -1,8 +1,11 @@
-import { AlertTriangle, KeyRound, ShieldAlert, Sparkles, UserCheck } from "lucide-react";
+import { KeyRound, ShieldAlert, Sparkles, UserCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { EncumbranceForm } from "./EncumbranceForm";
 import { PropertyOwnerForm } from "./PropertyOwnerForm";
-import { encumbranceTypeLabels, type EncumbranceType } from "./types";
+import {
+  encumbranceTypeLabels,
+  inactiveEncumbranceValues,
+  type EncumbranceType,
+} from "./types";
 
 type Property = {
   id: string;
@@ -12,30 +15,27 @@ type Property = {
   registrationNumber: string | null;
   alternativeDocType?: string | null;
   noRegistrationReason?: string | null;
-  declaredValue?: string | null;
+  irpfBalanceValue?: string | null;
   marketValue?: string | null;
   acquisitionDate?: string | null;
+  encumbranceType?: string | null;
+  encumbranceNote?: string | null;
 };
 
 export function PropertyRow({
   familyId,
   property,
-  onAddEncumbrance,
 }: {
   familyId: string;
   property: Property;
-  onAddEncumbrance: (
-    propertyId: string,
-    type: EncumbranceType,
-    description?: string
-  ) => Promise<unknown>;
 }) {
-  const encumbrances = trpc.properties.encumbrances.useQuery({ propertyId: property.id });
   const owners = trpc.properties.owners.useQuery({ propertyId: property.id });
   const people = trpc.people.list.useQuery({ familyId });
 
-  const activeEncumbrances = encumbrances.data?.filter((item) => item.active) || [];
-  const hasAlert = activeEncumbrances.length > 0;
+  const encumbranceType = property.encumbranceType as EncumbranceType | null;
+  const hasEncumbranceAlert =
+    Boolean(encumbranceType) &&
+    !inactiveEncumbranceValues.includes(encumbranceType as EncumbranceType);
 
   const hasUsufruto = owners.data?.some((o) => o.rightType === "USUFRUTO");
   const hasNuaPropriedade = owners.data?.some((o) => o.rightType === "NUA_PROPRIEDADE");
@@ -85,17 +85,18 @@ export function PropertyRow({
             {property.marketValue ? (
               <span>Mercado: R$ {Number(property.marketValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
             ) : null}
-            {property.declaredValue ? (
-              <span>IRPF: R$ {Number(property.declaredValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+            {property.irpfBalanceValue ? (
+              <span>IRPF: R$ {Number(property.irpfBalanceValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
             ) : null}
           </div>
         </div>
 
-        {/* Alerta Visual de Gravames */}
-        {hasAlert ? (
+        {/* Alerta Visual de Gravame (coluna única encumbranceType) */}
+        {hasEncumbranceAlert ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 shadow-sm border border-red-200">
-            <AlertTriangle className="size-3.5" />
-            {activeEncumbrances.map(item => encumbranceTypeLabels[item.type as EncumbranceType] ?? item.type).join(", ")}
+            <ShieldAlert className="size-3.5" />
+            {encumbranceTypeLabels[encumbranceType as EncumbranceType] ?? encumbranceType}
+            {property.encumbranceNote ? ` · ${property.encumbranceNote}` : ""}
           </span>
         ) : (
           <span className="text-xs text-lucathi-gray">Sem gravame ativo</span>
@@ -139,10 +140,6 @@ export function PropertyRow({
       ) : null}
 
       <PropertyOwnerForm familyId={familyId} propertyId={property.id} />
-      <EncumbranceForm
-        propertyId={property.id}
-        onSubmit={(type, description) => onAddEncumbrance(property.id, type, description)}
-      />
     </div>
   );
 }

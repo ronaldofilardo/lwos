@@ -14,7 +14,6 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [alternativeDocType, setAlternativeDocType] = useState<"ESCRITURA_PUBLICA" | "CONTRATO_COMPRA_VENDA">("ESCRITURA_PUBLICA");
   const [noRegistrationReason, setNoRegistrationReason] = useState("");
-  const [registryOffice, setRegistryOffice] = useState("");
   const [registryCity, setRegistryCity] = useState("");
   const [acquisitionDate, setAcquisitionDate] = useState("");
   const [declaredValue, setDeclaredValue] = useState("");
@@ -35,14 +34,6 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
     onError: (e) => toast.error(e.message),
   });
 
-  const gravame = trpc.properties.addEncumbrance.useMutation({
-    onSuccess: () => {
-      utils.properties.list.invalidate({ familyId });
-      toast.success("Gravame cadastrado. Alerta visual exibido imediatamente.");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
   const submit = () => {
     create.mutate({
       familyId,
@@ -52,7 +43,6 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
       registrationNumber: hasRegistration ? registrationNumber : undefined,
       alternativeDocType: !hasRegistration ? alternativeDocType : undefined,
       noRegistrationReason: !hasRegistration ? noRegistrationReason : undefined,
-      registryOffice,
       registryCity,
       acquisitionDate: acquisitionDate || undefined,
       declaredValue: declaredValue ? Number(declaredValue) : undefined,
@@ -127,17 +117,11 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
               </div>
             </div>
           ) : (
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <Input
                 value={registrationNumber}
                 onChange={(e) => setRegistrationNumber(e.target.value)}
                 placeholder="Número da Matrícula"
-                className="h-9 text-xs"
-              />
-              <Input
-                value={registryOffice}
-                onChange={(e) => setRegistryOffice(e.target.value)}
-                placeholder="Cartório de Registro de Imóveis (RGI)"
                 className="h-9 text-xs"
               />
               <Input
@@ -184,7 +168,6 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
             key={item.id}
             familyId={familyId}
             property={item}
-            onAddEncumbrance={(propertyId, type, description) => gravame.mutateAsync({ propertyId, type, description })}
           />
         ))}
         {!list.data?.length ? (

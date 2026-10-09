@@ -1,19 +1,13 @@
 import { z } from "zod";
+import { assetCategoryValues } from "../../../drizzle/schema";
 
-export const assetCategorySchema = z.enum([
-  "INVESTIMENTO",
-  "VEICULO",
-  "PARTICIPACAO_OUTRA",
-  "DIREITO",
-  "OUTRO",
-]);
+export const assetCategorySchema = z.enum(assetCategoryValues);
 
 export const createAssetSchema = z.object({
   familyId: z.string().min(1),
-  category: assetCategorySchema.default("OUTRO"),
+  category: assetCategorySchema.default("OUTROS"),
   description: z.string().min(2).max(240),
-  declaredValue: z.number().nonnegative().optional(),
-  marketValue: z.number().nonnegative().optional(),
-  ownerPersonId: z.string().optional(),
+  declaredValue: z.number().nonnegative(),
+  ownerPersonId: z.string().min(1),
   notes: z.string().max(1000).optional(),
 });

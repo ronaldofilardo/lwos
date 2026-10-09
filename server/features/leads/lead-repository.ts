@@ -144,8 +144,6 @@ export async function acceptLeadRecord(
     await tx.insert(familiesTable).values({
       id: familyId,
       name: input.familyName,
-      civilStatus: input.civilStatus,
-      maritalRegime: input.maritalRegime,
       createdBy: String(reviewedBy),
     });
     await tx

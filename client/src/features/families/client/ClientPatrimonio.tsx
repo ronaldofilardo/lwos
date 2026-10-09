@@ -135,7 +135,7 @@ export function ClientPatrimonio({ familyId }: { familyId: string }) {
           <Row
             key={company.id}
             title={company.legalName}
-            detail={[company.taxNumber ? `CNPJ ${company.taxNumber}` : null, company.type]
+            detail={[company.taxNumber ? `CNPJ ${company.taxNumber}` : null, company.isOffshore ? "Holding internacional" : "Nacional"]
               .filter(Boolean)
               .join(" · ")}
           />

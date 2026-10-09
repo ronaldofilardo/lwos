@@ -49,7 +49,7 @@ export interface DashboardData {
   totalFamilies: number;
   totalPeople: number;
   totalDocuments: number;
-  families: { id: string; name: string; civilStatus: string; maritalRegime: string; updatedAt: Date; peopleCount: number; documentsCount: number }[];
+  families: { id: string; name: string; updatedAt: Date; peopleCount: number; documentsCount: number }[];
 }
 
 /**
@@ -84,7 +84,7 @@ export async function getDashboardData(allowedFamilyIds?: string[]) {
   for (const f of allFamilies) {
     const [{ count: peopleCount }] = await db.select({ count: count() }).from(people).where(eq(people.familyId, f.id));
     const [{ count: documentsCount }] = await db.select({ count: count() }).from(documents).where(eq(documents.familyId, f.id));
-    families.push({ id: f.id, name: f.name, civilStatus: f.civilStatus, maritalRegime: f.maritalRegime, updatedAt: f.updatedAt, peopleCount: Number(peopleCount), documentsCount: Number(documentsCount) });
+    families.push({ id: f.id, name: f.name, updatedAt: f.updatedAt, peopleCount: Number(peopleCount), documentsCount: Number(documentsCount) });
     totalPeople += Number(peopleCount);
     totalDocuments += Number(documentsCount);
   }

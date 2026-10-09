@@ -1,11 +1,6 @@
 // Espelhos dos enums de drizzle/schema.ts (o client não importa valores do
 // schema — só tipos via @shared/types — e o servidor valida com zod).
 
-export type CompanyType =
-  | "HOLDING_NACIONAL"
-  | "HOLDING_INTERNACIONAL"
-  | "SOCIEDADE_NACIONAL";
-
 export const companyJurisdictionValues = [
   "BVI",
   "BAHAMAS",
@@ -28,70 +23,36 @@ export const companyJurisdictionLabels: Record<CompanyJurisdiction, string> = {
   PANAMA: "Panamá",
 };
 
-export const companyDocStatusValues = [
-  "PENDENTE",
-  "RECEBIDO",
-  "NA",
-  "NAO_POSSUI",
-] as const;
+export const societaryTypeValues = ["LTDA", "SA", "SCP"] as const;
 
-export type CompanyDocStatus = (typeof companyDocStatusValues)[number];
+export type SocietaryType = (typeof societaryTypeValues)[number];
 
-export const companyDocStatusLabels: Record<CompanyDocStatus, string> = {
-  PENDENTE: "Pendente",
-  RECEBIDO: "Recebido",
-  NA: "N/A",
-  NAO_POSSUI: "Não possui",
+export const societaryTypeLabels: Record<SocietaryType, string> = {
+  LTDA: "Ltda",
+  SA: "S.A.",
+  SCP: "Sociedade em Conta de Participação",
 };
 
-export const nationalCompanyDocTypes = [
-  "CONTRATO_SOCIAL",
-  "BALANCO_FECHADO",
-  "BALANCETE_ATUALIZADO",
-  "ACORDO_SOCIOS",
-  "LIVRO_RAZAO_IMOBILIZADO",
-  "LIVRO_REGISTRO_ACOES_NOMINATIVAS",
-  "LIVRO_TRANSFERENCIA_ACOES",
+export const taxRegimeValues = [
+  "SIMPLES_NACIONAL",
+  "LUCRO_PRESUMIDO",
+  "LUCRO_REAL",
 ] as const;
 
-export const internationalCompanyDocTypes = [
-  "MEMORANDUM_ARTICLES",
-  "BALANCE_SHEET",
-  "CERTIFICATE_INCORPORATION",
-  "REGISTER_DIRECTORS",
-  "REGISTER_MEMBERS",
-  "CERTIFICATE_GOOD_STANDING",
-  "SHARE_CERTIFICATE",
-] as const;
+export type TaxRegime = (typeof taxRegimeValues)[number];
 
-export type CompanyDocType =
-  | (typeof nationalCompanyDocTypes)[number]
-  | (typeof internationalCompanyDocTypes)[number];
-
-export const companyDocLabels: Record<CompanyDocType, string> = {
-  CONTRATO_SOCIAL: "Contrato social",
-  BALANCO_FECHADO: "Balanço fechado",
-  BALANCETE_ATUALIZADO: "Balancete atualizado",
-  ACORDO_SOCIOS: "Acordo de sócios",
-  LIVRO_RAZAO_IMOBILIZADO: "Livro razão do imobilizado",
-  LIVRO_REGISTRO_ACOES_NOMINATIVAS: "Livro de registro de ações nominativas",
-  LIVRO_TRANSFERENCIA_ACOES: "Livro de transferência de ações",
-  MEMORANDUM_ARTICLES: "Memorandum & Articles of Association",
-  BALANCE_SHEET: "Balance Sheet",
-  CERTIFICATE_INCORPORATION: "Certificate of Incorporation",
-  REGISTER_DIRECTORS: "Register of Directors",
-  REGISTER_MEMBERS: "Register of Members",
-  CERTIFICATE_GOOD_STANDING: "Certificate of Good Standing",
-  SHARE_CERTIFICATE: "Share Certificate",
+export const taxRegimeLabels: Record<TaxRegime, string> = {
+  SIMPLES_NACIONAL: "Simples Nacional",
+  LUCRO_PRESUMIDO: "Lucro Presumido",
+  LUCRO_REAL: "Lucro Real",
 };
 
-export function docTypesForCompany(
-  type: CompanyType
-): readonly CompanyDocType[] {
-  return type === "HOLDING_INTERNACIONAL"
-    ? internationalCompanyDocTypes
-    : nationalCompanyDocTypes;
-}
+export const ufValues = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB",
+  "PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+] as const;
+
+export type Uf = (typeof ufValues)[number];
 
 export type HoldingFormState = {
   nire: string;
@@ -185,6 +146,15 @@ export function parseAmount(raw: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+function asEnumOrNull<T extends string>(
+  value: string,
+  allowed: readonly T[]
+): T | null {
+  return (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : null;
+}
+
 /** Estado do formulário → payload do servidor (null = campo limpo). */
 export function holdingFormToFields(form: HoldingFormState) {
   const text = (value: string) => {
@@ -194,10 +164,10 @@ export function holdingFormToFields(form: HoldingFormState) {
 
   return {
     nire: text(form.nire),
-    uf: text(form.uf),
+    uf: asEnumOrNull(form.uf.trim().toUpperCase(), ufValues),
     sede: text(form.sede),
-    societaryType: text(form.societaryType),
-    taxRegime: text(form.taxRegime),
+    societaryType: asEnumOrNull(form.societaryType, societaryTypeValues),
+    taxRegime: asEnumOrNull(form.taxRegime, taxRegimeValues),
     corporatePurpose: text(form.corporatePurpose),
     capitalSocial: parseAmount(form.capitalSocial),
     shareQuantity: parseAmount(form.shareQuantity),
@@ -215,11 +185,7 @@ export function holdingFormToFields(form: HoldingFormState) {
     financing: parseAmount(form.financing),
     estimatedMarketValue: parseAmount(form.estimatedMarketValue),
     companyNumber: text(form.companyNumber),
-    jurisdiction: (companyJurisdictionValues as readonly string[]).includes(
-      form.jurisdiction
-    )
-      ? (form.jurisdiction as CompanyJurisdiction)
-      : null,
+    jurisdiction: asEnumOrNull(form.jurisdiction, companyJurisdictionValues),
     residentAgent: text(form.residentAgent),
     notes: text(form.notes),
   };

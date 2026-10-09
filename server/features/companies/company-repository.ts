@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
-import { companies, companyStakeholders, propertyContributions } from "../../../drizzle/schema";
+import { companies, companyStakeholders } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import type { z } from "zod";
-import type { companyInputSchema, contributionInputSchema } from "./company-types";
+import type { companyInputSchema } from "./company-types";
 import type {
   stakeholderDeleteSchema,
   stakeholderInputSchema,
@@ -48,13 +48,6 @@ export async function listCompanyRecords(familyId: string) {
 export async function listStakeholderRecords(companyId: string) {
   const db = await requireDatabase();
   return db.select().from(companyStakeholders).where(eq(companyStakeholders.companyId, companyId));
-}
-
-export async function createContributionRecord(input: z.infer<typeof contributionInputSchema>) {
-  const db = await requireDatabase();
-  const id = createId();
-  await db.insert(propertyContributions).values({ ...input, id, percentage: input.percentage.toFixed(2) });
-  return id;
 }
 
 export async function createStakeholderRecord(input: z.infer<typeof stakeholderInputSchema>) {

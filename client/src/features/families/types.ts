@@ -9,8 +9,6 @@ export type Vinculo = "TITULAR" | "CONJUGE" | "FILHO" | "NETO" | "BISNETO";
 
 export type FamilyFormData = {
   name: string;
-  civilStatus: CivilStatus;
-  maritalRegime: MaritalRegime;
   notes: string;
 };
 

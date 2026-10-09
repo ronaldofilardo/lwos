@@ -1,13 +1,11 @@
 /**
  * @description Validação zod da ficha de detalhes da holding: campos opcionais,
- * conversão de texto vazio em null, jurisdição e documentos por variante.
+ * conversão de texto vazio em null e enums de UF/tipo societário/regime.
  * @see server/features/companies/company-details.ts
  */
 import { describe, expect, it } from "vitest";
 import {
-  companyDetailDocUpdateSchema,
   companyDetailsUpsertSchema,
-  docTypesForCompanyType,
 } from "./company-details";
 
 const validPayload = {
@@ -16,6 +14,8 @@ const validPayload = {
     nire: "123",
     uf: "SP",
     sede: "São Paulo",
+    societaryType: "LTDA",
+    taxRegime: "LUCRO_PRESUMIDO",
     capitalSocial: 100000,
     shareQuantity: 1000,
     estimatedMarketValue: 250000,
@@ -23,7 +23,6 @@ const validPayload = {
     companyNumber: null,
     notes: null,
   },
-  docs: [{ docType: "CONTRATO_SOCIAL", status: "RECEBIDO" }],
 };
 
 describe("companyDetailsUpsertSchema", () => {
@@ -82,40 +81,19 @@ describe("companyDetailsUpsertSchema", () => {
     );
   });
 
-  it("rejeita status de documento fora do enum", () => {
+  it("rejeita tipo societário fora do enum", () => {
     const parsed = companyDetailsUpsertSchema.safeParse({
-      ...validPayload,
-      docs: [{ docType: "CONTRATO_SOCIAL", status: "VALIDADO" }],
+      companyId: "hold-1",
+      fields: { societaryType: "EIRELI" },
     });
     expect(parsed.success).toBe(false);
   });
-});
 
-describe("companyDetailDocUpdateSchema", () => {
-  it("aceita docType e status válidos", () => {
-    expect(
-      companyDetailDocUpdateSchema.safeParse({
-        companyId: "hold-1",
-        docType: "BALANCE_SHEET",
-        status: "NA",
-      }).success
-    ).toBe(true);
-  });
-});
-
-describe("docTypesForCompanyType", () => {
-  it("devolve os documentos internacionais apenas para a holding offshore", () => {
-    expect(docTypesForCompanyType("HOLDING_INTERNACIONAL")).toContain(
-      "SHARE_CERTIFICATE"
-    );
-    expect(docTypesForCompanyType("HOLDING_NACIONAL")).toContain(
-      "CONTRATO_SOCIAL"
-    );
-    expect(docTypesForCompanyType("SOCIEDADE_NACIONAL")).toContain(
-      "LIVRO_RAZAO_IMOBILIZADO"
-    );
-    expect(docTypesForCompanyType("HOLDING_NACIONAL")).not.toContain(
-      "SHARE_CERTIFICATE"
-    );
+  it("rejeita regime tributário fora do enum", () => {
+    const parsed = companyDetailsUpsertSchema.safeParse({
+      companyId: "hold-1",
+      fields: { taxRegime: "MEI" },
+    });
+    expect(parsed.success).toBe(false);
   });
 });

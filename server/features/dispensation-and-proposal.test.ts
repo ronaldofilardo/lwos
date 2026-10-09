@@ -128,12 +128,20 @@ describe("Regras de Negócio e Validações Jurídicas (LWOS)", () => {
     it("deve validar cadastro de investimentos, veículos e participações", () => {
       const valid = createAssetSchema.safeParse({
         familyId: "fam-1",
-        category: "INVESTIMENTO",
+        category: "INVESTIMENTOS",
         description: "Carteira de CDBs e Tesouro Direto - XP",
         declaredValue: 1200000,
-        marketValue: 1250000,
+        ownerPersonId: "pessoa-1",
       });
       expect(valid.success).toBe(true);
+
+      const semTitular = createAssetSchema.safeParse({
+        familyId: "fam-1",
+        category: "VEICULO_EMBARCACAO_AERONAVE",
+        description: "BMW X5",
+        declaredValue: 350000,
+      });
+      expect(semTitular.success).toBe(false);
     });
   });
 });

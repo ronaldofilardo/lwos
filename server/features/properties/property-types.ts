@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { encumbranceTypeValues } from "../../../drizzle/schema";
 
 export const propertyInputSchema = z.object({
   familyId: z.string().min(1),
@@ -8,7 +7,6 @@ export const propertyInputSchema = z.object({
   registrationNumber: z.string().max(120).optional(),
   alternativeDocType: z.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
   noRegistrationReason: z.string().max(1000).optional(),
-  registryOffice: z.string().max(160).optional(),
   propertyCity: z.string().min(2).max(120),
   registryCity: z.string().max(120).optional(),
   acquisitionDate: z.string().optional(),
@@ -22,12 +20,6 @@ export const propertyInputSchema = z.object({
 }, {
   message: "Imóveis sem matrícula exigem documento alternativo (Escritura Pública ou Contrato de Compra e Venda) e justificativa.",
   path: ["alternativeDocType"],
-});
-
-export const encumbranceInputSchema = z.object({
-  propertyId: z.string().min(1),
-  type: z.enum(encumbranceTypeValues),
-  description: z.string().max(1000).optional(),
 });
 
 export const propertyOwnerInputSchema = z.object({

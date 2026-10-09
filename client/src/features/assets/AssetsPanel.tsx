@@ -1,16 +1,39 @@
 import { useState } from "react";
-import { Coins, Plus, Wallet } from "lucide-react";
+import { Plus, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
+const categoryValues = [
+  "INVESTIMENTOS",
+  "VEICULO_EMBARCACAO_AERONAVE",
+  "SEMOVENTES",
+  "CREDITO",
+  "DINHEIRO_ESPECIE",
+  "CONTA_CORRENTE",
+  "ATIVOS_AGRO",
+  "OUTROS",
+] as const;
+
+type AssetCategory = (typeof categoryValues)[number];
+
+const categoryLabels: Record<AssetCategory, string> = {
+  INVESTIMENTOS: "Aplicações / Investimentos",
+  VEICULO_EMBARCACAO_AERONAVE: "Veículo / Embarcação / Aeronave",
+  SEMOVENTES: "Semoventes (animais)",
+  CREDITO: "Crédito / Direito creditório",
+  DINHEIRO_ESPECIE: "Dinheiro em espécie",
+  CONTA_CORRENTE: "Conta corrente / Depósitos",
+  ATIVOS_AGRO: "Ativos agropecuários",
+  OUTROS: "Outros ativos",
+};
+
 export function AssetsPanel({ familyId }: { familyId: string }) {
   const utils = trpc.useUtils();
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<"INVESTIMENTO" | "VEICULO" | "PARTICIPACAO_OUTRA" | "DIREITO" | "OUTRO">("INVESTIMENTO");
+  const [category, setCategory] = useState<AssetCategory>("INVESTIMENTOS");
   const [declaredValue, setDeclaredValue] = useState("");
-  const [marketValue, setMarketValue] = useState("");
   const [ownerPersonId, setOwnerPersonId] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -22,30 +45,20 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
       utils.assets.list.invalidate({ familyId });
       setDescription("");
       setDeclaredValue("");
-      setMarketValue("");
       setNotes("");
       toast.success("Ativo registrado na Due Diligence.");
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const categoryLabels: Record<string, string> = {
-    INVESTIMENTO: "Aplicação Financeira / Investimento",
-    VEICULO: "Veículo / Aeronave / Embarcação",
-    PARTICIPACAO_OUTRA: "Outra Participação / Quota",
-    DIREITO: "Direito Creditório / Precatório",
-    OUTRO: "Outro Ativo",
-  };
-
   const submit = () => {
-    if (!description.trim()) return;
+    if (!description.trim() || !declaredValue || !ownerPersonId) return;
     create.mutate({
       familyId,
       category,
       description: description.trim(),
-      declaredValue: declaredValue ? Number(declaredValue) : undefined,
-      marketValue: marketValue ? Number(marketValue) : undefined,
-      ownerPersonId: ownerPersonId || undefined,
+      declaredValue: Number(declaredValue),
+      ownerPersonId,
       notes: notes.trim() || undefined,
     });
   };
@@ -72,33 +85,27 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
         />
         <select
           value={category}
-          onChange={(e) => setCategory(e.target.value as typeof category)}
+          onChange={(e) => setCategory(e.target.value as AssetCategory)}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
-          <option value="INVESTIMENTO">Aplicação Financeira / Investimento</option>
-          <option value="VEICULO">Veículo / Aeronave / Embarcação</option>
-          <option value="PARTICIPACAO_OUTRA">Outra Participação / Quota</option>
-          <option value="DIREITO">Direito Creditório / Outro Direito</option>
-          <option value="OUTRO">Outro Ativo</option>
+          {categoryValues.map((value) => (
+            <option key={value} value={value}>
+              {categoryLabels[value]}
+            </option>
+          ))}
         </select>
         <Input
           inputMode="decimal"
           value={declaredValue}
           onChange={(e) => setDeclaredValue(e.target.value)}
-          placeholder="Valor declarado (IRPF/Balanço)"
-        />
-        <Input
-          inputMode="decimal"
-          value={marketValue}
-          onChange={(e) => setMarketValue(e.target.value)}
-          placeholder="Valor estimado de mercado"
+          placeholder="Valor declarado (IRPF/Balanço) *"
         />
         <select
           value={ownerPersonId}
           onChange={(e) => setOwnerPersonId(e.target.value)}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
-          <option value="">Titular do ativo (opcional)</option>
+          <option value="">Titular do ativo *</option>
           {people.data?.map((person) => (
             <option key={person.id} value={person.id}>
               {person.fullName}
@@ -114,7 +121,7 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
 
       <Button
         className="mt-3"
-        disabled={!description.trim() || create.isPending}
+        disabled={!description.trim() || !declaredValue || !ownerPersonId || create.isPending}
         onClick={submit}
       >
         <Plus className="mr-2 size-4" /> Cadastrar ativo
@@ -131,20 +138,15 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
               <div>
                 <p className="text-sm font-semibold text-lucathi-navy">{asset.description}</p>
                 <p className="text-xs text-lucathi-gray">
-                  {categoryLabels[asset.category] || asset.category}
+                  {categoryLabels[asset.category as AssetCategory] || asset.category}
                   {owner ? ` · Titular: ${owner.fullName}` : ""}
                   {asset.notes ? ` · ${asset.notes}` : ""}
                 </p>
               </div>
               <div className="text-right text-xs">
-                {asset.marketValue ? (
-                  <p className="font-semibold text-lucathi-navy">
-                    Mercado: R$ {Number(asset.marketValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </p>
-                ) : null}
                 {asset.declaredValue ? (
                   <p className="text-lucathi-gray">
-                    IRPF: R$ {Number(asset.declaredValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    Declarado: R$ {Number(asset.declaredValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </p>
                 ) : null}
               </div>

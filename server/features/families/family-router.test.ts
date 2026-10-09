@@ -135,8 +135,6 @@ describe("family-router consultas", () => {
 describe("family-router criação e acesso do cliente", () => {
   const input = {
     name: "Família Nova",
-    civilStatus: "CASADO",
-    maritalRegime: "CPB",
   };
 
   beforeEach(() => {

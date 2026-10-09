@@ -1,14 +1,12 @@
 /**
  * @description Cobre todos os procedimentos do companyRouter: consultas, criação de
- * sociedade/integralização/participações, detalhes holding (docs válidos por tipo) e
- * as permissões de equipe em cada mutação.
+ * sociedade/participações, detalhes holding e as permissões de equipe em cada mutação.
  * @see server/features/companies/company-router.ts
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const repoMocks = vi.hoisted(() => ({
   createCompanyRecord: vi.fn(),
-  createContributionRecord: vi.fn(),
   createStakeholderRecord: vi.fn(),
   getCompanyRecord: vi.fn(),
   listCompanyRecords: vi.fn(),
@@ -18,8 +16,6 @@ const repoMocks = vi.hoisted(() => ({
 }));
 const detailsMocks = vi.hoisted(() => ({
   getCompanyDetailsRecord: vi.fn(),
-  listCompanyDetailDocs: vi.fn(),
-  updateCompanyDetailDocRecord: vi.fn(),
   upsertCompanyDetailsRecord: vi.fn(),
   computePerShare: vi.fn(),
 }));
@@ -31,7 +27,6 @@ const docRequirementMocks = vi.hoisted(() => ({
   ensureDocumentRequirements: vi.fn(),
   COMPANY_DOCUMENT_CATEGORIES: ["CONTRATO_SOCIAL"],
 }));
-const propertyMocks = vi.hoisted(() => ({ getPropertyRecord: vi.fn() }));
 const peopleMocks = vi.hoisted(() => ({ listPeopleByFamily: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
 
@@ -39,7 +34,6 @@ vi.mock("./company-repository", () => repoMocks);
 vi.mock("./company-details-repository", () => detailsMocks);
 vi.mock("../certidoes/certidao-repository", () => certidaoMocks);
 vi.mock("../documents/document-requirements", () => docRequirementMocks);
-vi.mock("../properties/property-repository", () => propertyMocks);
 vi.mock("../people/person-repository", () => peopleMocks);
 vi.mock("../audit/audit-repository", () => auditMocks);
 
@@ -50,7 +44,7 @@ const company = {
   familyId: "fam-1",
   legalName: "Holding Alpha",
   taxNumber: "11122233344",
-  type: "HOLDING_NACIONAL",
+  isOffshore: false,
 };
 
 function caller(role: string = "SOCIO", ip = "1.1.1.1") {
@@ -70,7 +64,6 @@ describe("company-router consultas", () => {
     certidaoMocks.listCertidaoRecords.mockResolvedValue([]);
     peopleMocks.listPeopleByFamily.mockResolvedValue([]);
     detailsMocks.getCompanyDetailsRecord.mockResolvedValue(null);
-    detailsMocks.listCompanyDetailDocs.mockResolvedValue([]);
     detailsMocks.computePerShare.mockReturnValue(0);
   });
 
@@ -114,7 +107,7 @@ describe("company-router consultas", () => {
       id: "soc-1",
       legalName: "Holding Alpha",
       taxNumber: "11122233344",
-      type: "HOLDING_NACIONAL",
+      isOffshore: false,
     });
     expect(result.stakeholders.map(row => row.displayName)).toEqual([
       "Investidor Externo",
@@ -133,14 +126,12 @@ describe("company-router mutações", () => {
     vi.clearAllMocks();
     repoMocks.getCompanyRecord.mockResolvedValue(company);
     repoMocks.createCompanyRecord.mockResolvedValue("soc-9");
-    repoMocks.createContributionRecord.mockResolvedValue("int-1");
     repoMocks.createStakeholderRecord.mockResolvedValue("st-9");
     repoMocks.updateStakeholderRecord.mockResolvedValue(undefined);
     repoMocks.removeStakeholderRecord.mockResolvedValue(undefined);
     certidaoMocks.ensureCertidoesForSubject.mockResolvedValue(undefined);
     docRequirementMocks.ensureDocumentRequirements.mockResolvedValue(["r1", "r2"]);
     detailsMocks.upsertCompanyDetailsRecord.mockResolvedValue(undefined);
-    detailsMocks.updateCompanyDetailDocRecord.mockResolvedValue(undefined);
     auditMocks.recordAudit.mockResolvedValue(undefined);
   });
 
@@ -148,7 +139,7 @@ describe("company-router mutações", () => {
     const result = await caller().create({
       familyId: "fam-1",
       legalName: "Holding Beta",
-      type: "HOLDING_NACIONAL",
+      isOffshore: false,
     });
 
     expect(result).toEqual({ companyId: "soc-9" });
@@ -167,39 +158,16 @@ describe("company-router mutações", () => {
       expect.objectContaining({
         action: "SOCIEDADE_CRIADA",
         actorUserId: 1,
-        metadata: { type: "HOLDING_NACIONAL", requirements: 2 },
+        metadata: { isOffshore: false, requirements: 2 },
       })
     );
   });
 
   it("bloqueia criação para quem não é da equipe", async () => {
     await expect(
-      caller("CLIENTE").create({ familyId: "fam-1", legalName: "Holding Beta", type: "HOLDING_NACIONAL" })
+      caller("CLIENTE").create({ familyId: "fam-1", legalName: "Holding Beta", isOffshore: false })
     ).rejects.toThrow("Permiss");
     expect(repoMocks.createCompanyRecord).not.toHaveBeenCalled();
-  });
-
-  it("registra integralização no imóvel vinculado", async () => {
-    propertyMocks.getPropertyRecord.mockResolvedValue({ id: "im-1", familyId: "fam-1" });
-
-    await expect(
-      caller().createContribution({ propertyId: "im-1", companyId: "soc-1", percentage: 12.5 })
-    ).resolves.toEqual({ contributionId: "int-1" });
-    expect(auditMocks.recordAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "INTEGRALIZACAO_REGISTRADA",
-        familyId: "fam-1",
-        metadata: { contributionId: "int-1" },
-      })
-    );
-  });
-
-  it("falha quando o imóvel da integralização não existe", async () => {
-    propertyMocks.getPropertyRecord.mockResolvedValue(null);
-    await expect(
-      caller().createContribution({ propertyId: "im-x", companyId: "soc-1", percentage: 10 })
-    ).rejects.toThrow("Imóvel não encontrado.");
-    expect(repoMocks.createContributionRecord).not.toHaveBeenCalled();
   });
 
   it("adiciona participacao de membro e de nao-membro com metadados distintos", async () => {
@@ -251,15 +219,13 @@ describe("company-router detalhes da holding", () => {
     vi.clearAllMocks();
     repoMocks.getCompanyRecord.mockResolvedValue(company);
     detailsMocks.upsertCompanyDetailsRecord.mockResolvedValue(undefined);
-    detailsMocks.updateCompanyDetailDocRecord.mockResolvedValue(undefined);
     auditMocks.recordAudit.mockResolvedValue(undefined);
   });
 
-  it("salva detalhes e documentos permitidos para o tipo nacional", async () => {
+  it("salva os detalhes da holding e audita", async () => {
     const result = await caller().upsertDetails({
       companyId: "soc-1",
       fields: { capitalSocial: 5000, jurisdiction: null },
-      docs: [{ docType: "CONTRATO_SOCIAL", status: "RECEBIDO" }],
     });
 
     expect(result).toEqual({ success: true });
@@ -267,64 +233,28 @@ describe("company-router detalhes da holding", () => {
       companyId: "soc-1",
       fields: { capitalSocial: 5000, jurisdiction: null },
     });
-    expect(detailsMocks.updateCompanyDetailDocRecord).toHaveBeenCalledWith({
-      companyId: "soc-1",
-      docType: "CONTRATO_SOCIAL",
-      status: "RECEBIDO",
-    });
     expect(auditMocks.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "DETALHES_HOLDING_SALVOS",
-        metadata: { type: "HOLDING_NACIONAL", documents: 1, capitalSocial: 5000 },
+        metadata: { isOffshore: false, capitalSocial: 5000 },
       })
     );
   });
 
-  it("salva detalhes sem documentos quando o payload não traz a lista", async () => {
+  it("salva detalhes mesmo com campos vazios", async () => {
     await expect(
       caller().upsertDetails({ companyId: "soc-1", fields: {} })
     ).resolves.toEqual({ success: true });
-    expect(detailsMocks.updateCompanyDetailDocRecord).not.toHaveBeenCalled();
     expect(auditMocks.recordAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ metadata: expect.objectContaining({ documents: 0 }) })
+      expect.objectContaining({ metadata: expect.objectContaining({ capitalSocial: 0 }) })
     );
   });
 
-  it("rejeita documento inexistente no tipo da sociedade", async () => {
+  it("falha quando a sociedade não existe", async () => {
+    repoMocks.getCompanyRecord.mockResolvedValue(null);
     await expect(
-      caller().upsertDetails({
-        companyId: "soc-1",
-        fields: {},
-        docs: [{ docType: "BALANCE_SHEET", status: "PENDENTE" }],
-      })
-    ).rejects.toThrow("Documento inválido para o tipo desta sociedade.");
+      caller().upsertDetails({ companyId: "sumida", fields: {} })
+    ).rejects.toThrow("Sociedade não encontrada.");
     expect(detailsMocks.upsertCompanyDetailsRecord).not.toHaveBeenCalled();
-  });
-
-  it("atualiza o status de um documento permitido e recusa o incompativel", async () => {
-    await expect(
-      caller().updateDetailDoc({ companyId: "soc-1", docType: "ACORDO_SOCIOS", status: "NA" })
-    ).resolves.toEqual({ success: true });
-    expect(detailsMocks.updateCompanyDetailDocRecord).toHaveBeenCalledWith({
-      companyId: "soc-1",
-      docType: "ACORDO_SOCIOS",
-      status: "NA",
-    });
-    expect(auditMocks.recordAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "DETALHES_HOLDING_DOC_STATUS" })
-    );
-
-    await expect(
-      caller().updateDetailDoc({ companyId: "soc-1", docType: "SHARE_CERTIFICATE", status: "NA" })
-    ).rejects.toThrow("Documento inválido para o tipo desta sociedade.");
-    expect(detailsMocks.updateCompanyDetailDocRecord).toHaveBeenCalledTimes(1);
-  });
-
-  it("aceita documento internacional apenas em holding no exterior", async () => {
-    repoMocks.getCompanyRecord.mockResolvedValue({ ...company, type: "HOLDING_INTERNACIONAL" });
-
-    await expect(
-      caller().updateDetailDoc({ companyId: "soc-1", docType: "SHARE_CERTIFICATE", status: "NA" })
-    ).resolves.toEqual({ success: true });
   });
 });

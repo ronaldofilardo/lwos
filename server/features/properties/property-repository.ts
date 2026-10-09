@@ -1,10 +1,9 @@
 import { desc, eq, and } from "drizzle-orm";
-import { encumbrances, properties, propertyOwners } from "../../../drizzle/schema";
+import { properties, propertyOwners } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import type { z } from "zod";
 import type {
-  encumbranceInputSchema,
   propertyInputSchema,
   propertyOwnerDeleteSchema,
   propertyOwnerInputSchema,
@@ -43,10 +42,9 @@ export async function createPropertyRecord(input: z.infer<typeof propertyInputSc
     registrationNumber: input.hasRegistration ? (input.registrationNumber || null) : null,
     alternativeDocType: input.hasRegistration ? null : (input.alternativeDocType || null),
     noRegistrationReason: input.hasRegistration ? null : (input.noRegistrationReason || null),
-    registryOffice: input.registryOffice || null,
     registryCity: input.registryCity || null,
     acquisitionDate: input.acquisitionDate || null,
-    declaredValue: input.declaredValue?.toFixed(2) ?? null,
+    irpfBalanceValue: input.declaredValue?.toFixed(2) ?? null,
     marketValue: input.marketValue?.toFixed(2) ?? null,
   });
   return id;
@@ -61,18 +59,6 @@ export async function getPropertyRecord(propertyId: string) {
   const db = await requireDatabase();
   const result = await db.select().from(properties).where(eq(properties.id, propertyId)).limit(1);
   return result[0] ?? null;
-}
-
-export async function addEncumbranceRecord(input: z.infer<typeof encumbranceInputSchema>) {
-  const db = await requireDatabase();
-  const id = createId();
-  await db.insert(encumbrances).values({ ...input, id });
-  return id;
-}
-
-export async function listEncumbrances(propertyId: string) {
-  const db = await requireDatabase();
-  return db.select().from(encumbrances).where(eq(encumbrances.propertyId, propertyId));
 }
 
 export async function addPropertyOwnerRecord(input: z.infer<typeof propertyOwnerInputSchema>) {

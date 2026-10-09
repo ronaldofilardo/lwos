@@ -1,6 +1,6 @@
 /**
- * @description Ficha da holding no modal "Detalhes": upsert completo, criação
- * find-or-create dos documentos da variante e cálculo de valor por quota.
+ * @description Ficha da holding no modal "Detalhes": upsert completo e
+ * cálculo de valor por quota.
  * @see server/features/companies/company-details-repository.ts
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,8 +14,6 @@ vi.mock("../_shared/ids", () => idMocks);
 import {
   computePerShare,
   getCompanyDetailsRecord,
-  listCompanyDetailDocs,
-  updateCompanyDetailDocRecord,
   upsertCompanyDetailsRecord,
 } from "./company-details-repository";
 
@@ -66,8 +64,8 @@ const fields = {
   nire: "123",
   uf: "SP",
   sede: "São Paulo",
-  societaryType: "Ltda",
-  taxRegime: "Lucro presumido",
+  societaryType: "LTDA",
+  taxRegime: "LUCRO_PRESUMIDO",
   corporatePurpose: "Administração de bens",
   capitalSocial: 100000,
   shareQuantity: 1000,
@@ -110,6 +108,9 @@ describe("company-details-repository", () => {
       estimatedMarketValue: "250000.00",
       inventory: null,
       administrator2: null,
+      uf: "SP",
+      societaryType: "LTDA",
+      taxRegime: "LUCRO_PRESUMIDO",
       jurisdiction: null,
       notes: "observação",
     });
@@ -123,73 +124,6 @@ describe("company-details-repository", () => {
 
     const row = await getCompanyDetailsRecord("hold-1");
     expect(row?.nire).toBe("123");
-  });
-
-  it("cria só os documentos da variante e não duplica na segunda chamada", async () => {
-    const { db, state } = mockDb();
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-
-    const first = await listCompanyDetailDocs({
-      companyId: "hold-1",
-      companyType: "HOLDING_NACIONAL",
-    });
-    expect(first).toHaveLength(7);
-    expect(first[0].docType).toBe("CONTRATO_SOCIAL");
-    expect(state.inserted).toHaveLength(1);
-
-    state.inserted.length = 0;
-    const second = await listCompanyDetailDocs({
-      companyId: "hold-1",
-      companyType: "HOLDING_NACIONAL",
-    });
-    expect(second).toHaveLength(7);
-    expect(state.inserted).toHaveLength(0);
-  });
-
-  it("gera os documentos da holding internacional", async () => {
-    const { db } = mockDb();
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-
-    const rows = await listCompanyDetailDocs({
-      companyId: "hold-2",
-      companyType: "HOLDING_INTERNACIONAL",
-    });
-    expect(rows.map(row => row.docType)).toEqual([
-      "MEMORANDUM_ARTICLES",
-      "BALANCE_SHEET",
-      "CERTIFICATE_INCORPORATION",
-      "REGISTER_DIRECTORS",
-      "REGISTER_MEMBERS",
-      "CERTIFICATE_GOOD_STANDING",
-      "SHARE_CERTIFICATE",
-    ]);
-  });
-
-  it("atualiza o status de um documento existente", async () => {
-    const { db, state } = mockDb();
-    state.rows = [{ id: "doc-1" }];
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-
-    await updateCompanyDetailDocRecord({
-      companyId: "hold-1",
-      docType: "CONTRATO_SOCIAL",
-      status: "RECEBIDO",
-    });
-
-    expect(state.updated[0]).toMatchObject({ status: "RECEBIDO" });
-  });
-
-  it("falha quando o documento não existe na sociedade", async () => {
-    const { db } = mockDb();
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-
-    await expect(
-      updateCompanyDetailDocRecord({
-        companyId: "hold-1",
-        docType: "CONTRATO_SOCIAL",
-        status: "RECEBIDO",
-      })
-    ).rejects.toThrow("não encontrado");
   });
 });
 

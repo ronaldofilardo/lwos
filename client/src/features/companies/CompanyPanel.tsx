@@ -6,14 +6,6 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { CompanyDetailsModal } from "./CompanyDetailsModal";
 
-type CompanyType = "HOLDING_NACIONAL" | "HOLDING_INTERNACIONAL" | "SOCIEDADE_NACIONAL";
-
-const companyTypeLabels: Record<CompanyType, string> = {
-  HOLDING_NACIONAL: "Holding nacional",
-  HOLDING_INTERNACIONAL: "Holding internacional",
-  SOCIEDADE_NACIONAL: "Sociedade nacional",
-};
-
 type Person = { id: string; fullName: string };
 
 function StakeholderManager({
@@ -197,16 +189,12 @@ function StakeholderManager({
 export function CompanyPanel({ familyId }: { familyId: string }) {
   const utils = trpc.useUtils();
   const [name, setName] = useState("");
-  const [type, setType] = useState<CompanyType>("HOLDING_NACIONAL");
+  const [isOffshore, setIsOffshore] = useState(false);
   const [taxNumber, setTaxNumber] = useState("");
-  const [companyId, setCompanyId] = useState("");
   const [detailsCompanyId, setDetailsCompanyId] = useState<string | null>(null);
-  const [propertyId, setPropertyId] = useState("");
-  const [contributionPercentage, setContributionPercentage] = useState("100");
 
   const list = trpc.companies.list.useQuery({ familyId });
   const people = trpc.people.list.useQuery({ familyId });
-  const properties = trpc.properties.list.useQuery({ familyId });
 
   const create = trpc.companies.create.useMutation({
     onSuccess: () => {
@@ -217,11 +205,6 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
       setTaxNumber("");
       toast.success("Sociedade criada.");
     },
-    onError: e => toast.error(e.message),
-  });
-
-  const contribution = trpc.companies.createContribution.useMutation({
-    onSuccess: () => toast.success("Integralização registrada."),
     onError: e => toast.error(e.message),
   });
 
@@ -243,7 +226,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+      <div className="mt-4 grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
         <Input
           value={name}
           onChange={e => setName(e.target.value)}
@@ -255,16 +238,13 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
           placeholder="CNPJ (opcional)"
         />
         <select
-          value={type}
-          onChange={e => setType(e.target.value as CompanyType)}
+          value={isOffshore ? "internacional" : "nacional"}
+          onChange={e => setIsOffshore(e.target.value === "internacional")}
           className={selectClass}
           aria-label="Tipo de sociedade"
         >
-          {(Object.keys(companyTypeLabels) as CompanyType[]).map(value => (
-            <option key={value} value={value}>
-              {companyTypeLabels[value]}
-            </option>
-          ))}
+          <option value="nacional">Nacional</option>
+          <option value="internacional">Internacional (offshore)</option>
         </select>
         <Button
           disabled={!name || create.isPending}
@@ -273,7 +253,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
               familyId,
               legalName: name,
               taxNumber: taxNumber || undefined,
-              type,
+              isOffshore,
             })
           }
         >
@@ -288,7 +268,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
               <div>
                 <p className="text-sm font-medium">{item.legalName}</p>
                 <p className="text-xs text-lucathi-gray">
-                  {companyTypeLabels[item.type as CompanyType] ?? item.type}
+                  {item.isOffshore ? "Internacional (offshore)" : "Nacional"}
                   {item.taxNumber ? ` · CNPJ ${item.taxNumber}` : ""}
                 </p>
               </div>
@@ -314,55 +294,6 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
           </p>
         ) : null}
       </div>
-
-      {list.data?.length && properties.data?.length ? (
-        <div className="mt-5 grid gap-2 md:grid-cols-2">
-          <select
-            value={companyId}
-            onChange={e => setCompanyId(e.target.value)}
-            className={selectClass}
-            aria-label="Sociedade"
-          >
-            <option value="">Sociedade</option>
-            {list.data.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.legalName}
-              </option>
-            ))}
-          </select>
-          <select
-            value={propertyId}
-            onChange={e => setPropertyId(e.target.value)}
-            className={selectClass}
-            aria-label="Imóvel para integralizar"
-          >
-            <option value="">Imóvel para integralizar</option>
-            {properties.data.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.description}
-              </option>
-            ))}
-          </select>
-          <Input
-            value={contributionPercentage}
-            onChange={e => setContributionPercentage(e.target.value)}
-            inputMode="decimal"
-            placeholder="Participação (%)"
-          />
-          <Button
-            disabled={!companyId || !propertyId || contribution.isPending}
-            onClick={() =>
-              contribution.mutate({
-                companyId,
-                propertyId,
-                percentage: Number(contributionPercentage.replace(',', '.')),
-              })
-            }
-          >
-            Vincular integralização
-          </Button>
-        </div>
-      ) : null}
 
       <CompanyDetailsModal
         familyId={familyId}
