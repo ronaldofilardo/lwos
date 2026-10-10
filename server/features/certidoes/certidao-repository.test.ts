@@ -166,6 +166,25 @@ describe("ensureFamilyCertidoes", () => {
     await expect(ensureFamilyCertidoes("fam-vazia")).resolves.toBe(0);
     expect(transaction).not.toHaveBeenCalled();
   });
+
+  it("não gera certidões nacionais para offshore", async () => {
+    const { db, certidaoValues } = certidaoDb({
+      peopleRows: [],
+      companyRows: [
+        { id: "off-1", name: "Offshore Beta", isOffshore: true },
+        { id: "ltda-1", name: "Alpha LTDA", isOffshore: false },
+      ],
+      existingQueue: [[], []],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idsMocks.createId.mockReturnValue("cert-novo");
+
+    await expect(ensureFamilyCertidoes("fam-1")).resolves.toBe(
+      certidaoTypeValues.length
+    );
+    // Uma chamada por sujeito: só a LTDA (a offshore foi pulada).
+    expect(certidaoValues).toHaveBeenCalledTimes(certidaoTypeValues.length);
+  });
 });
 
 describe("consulta e atualização de certidões", () => {

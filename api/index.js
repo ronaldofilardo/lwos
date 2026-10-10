@@ -1533,7 +1533,7 @@ async function ensureFamilyCertidoes(familyId) {
   const db = await requireDatabase();
   const [peopleRows, companyRows] = await Promise.all([
     db.select({ id: people.id }).from(people).where(eq4(people.familyId, familyId)),
-    db.select({ id: companies.id }).from(companies).where(eq4(companies.familyId, familyId))
+    db.select({ id: companies.id, isOffshore: companies.isOffshore }).from(companies).where(eq4(companies.familyId, familyId))
   ]);
   let created = 0;
   for (const person of peopleRows) {
@@ -1544,6 +1544,7 @@ async function ensureFamilyCertidoes(familyId) {
     });
   }
   for (const company of companyRows) {
+    if (company.isOffshore) continue;
     created += await ensureCertidoesForSubject({
       familyId,
       scope: "SOCIEDADE",

@@ -11,6 +11,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "e2e": "tsx scripts/e2e-full-project.ts",
+    "migrations:fresh": "tsx scripts/check-migrations-fresh.ts",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {

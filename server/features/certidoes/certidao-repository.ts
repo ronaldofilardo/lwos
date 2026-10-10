@@ -78,7 +78,10 @@ export async function ensureFamilyCertidoes(familyId: string) {
   const db = await requireDatabase();
   const [peopleRows, companyRows] = await Promise.all([
     db.select({ id: people.id }).from(people).where(eq(people.familyId, familyId)),
-    db.select({ id: companies.id }).from(companies).where(eq(companies.familyId, familyId)),
+    db
+      .select({ id: companies.id, isOffshore: companies.isOffshore })
+      .from(companies)
+      .where(eq(companies.familyId, familyId)),
   ]);
 
   let created = 0;
@@ -89,7 +92,9 @@ export async function ensureFamilyCertidoes(familyId: string) {
       subjectId: person.id,
     });
   }
+  // Certidões nacionais não se aplicam a offshore (mesma regra do create).
   for (const company of companyRows) {
+    if (company.isOffshore) continue;
     created += await ensureCertidoesForSubject({
       familyId,
       scope: "SOCIEDADE",

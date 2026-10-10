@@ -116,3 +116,6 @@ temp/
 
 # vitest config snapshot (temp, recriado a cada `pnpm test`)
 vitest.config.ts.timestamp*
+
+# Entrega final (zip gerado localmente - ver LEIA-ME.md)
+/entrega/
