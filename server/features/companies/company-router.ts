@@ -5,7 +5,10 @@ import { requireRole } from "../access/authorization";
 import { assertFamilyAccess } from "../access/family-access";
 import { recordAudit } from "../audit/audit-repository";
 import { ensureCertidoesForSubject, listCertidaoRecords } from "../certidoes/certidao-repository";
-import { COMPANY_DOCUMENT_CATEGORIES, ensureDocumentRequirements } from "../documents/document-requirements";
+import {
+  computeCompanyCategories,
+  reconcileEntityDocuments,
+} from "../documents/document-requirements";
 import { listPeopleByFamily } from "../people/person-repository";
 import {
   createCompanyRecord,
@@ -60,14 +63,17 @@ export const companyRouter = router({
         scope: "SOCIEDADE",
         subjectId: companyId,
       });
-      const requirements = await ensureDocumentRequirements({
-        familyId: input.familyId,
-        entityType: "SOCIEDADE",
-        entityId: companyId,
-        categories: COMPANY_DOCUMENT_CATEGORIES,
-      });
-      requirementsCount = requirements.length;
     }
+    const reconciled = await reconcileEntityDocuments({
+      familyId: input.familyId,
+      entityType: "SOCIEDADE",
+      entityId: companyId,
+      categories: computeCompanyCategories({
+        isOffshore: input.isOffshore,
+        societaryType: null,
+      }),
+    });
+    requirementsCount = reconciled.created;
     await recordAudit({
       action: "SOCIEDADE_CRIADA",
       entityType: "SOCIEDADE",
@@ -171,6 +177,15 @@ export const companyRouter = router({
       }
     }
     await upsertCompanyDetailsRecord({ companyId: company.id, fields: input.fields });
+    const { created, removed } = await reconcileEntityDocuments({
+      familyId: company.familyId,
+      entityType: "SOCIEDADE",
+      entityId: company.id,
+      categories: computeCompanyCategories({
+        isOffshore: company.isOffshore,
+        societaryType: input.fields.societaryType ?? null,
+      }),
+    });
     await recordAudit({
       action: "DETALHES_HOLDING_SALVOS",
       entityType: "SOCIEDADE",
@@ -180,6 +195,8 @@ export const companyRouter = router({
       metadata: {
         isOffshore: company.isOffshore,
         capitalSocial: input.fields.capitalSocial ?? 0,
+        requirementsCreated: created,
+        requirementsRemoved: removed,
       },
     });
     return { success: true };

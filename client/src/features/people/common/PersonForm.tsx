@@ -38,6 +38,7 @@ export type PersonFormSubmit = {
   spouseName?: string;
   civilStatus?: CivilStatus;
   maritalRegime?: MaritalRegime;
+  isDependent?: boolean;
   addressSameAsPrimary?: boolean;
   cep?: string;
   street?: string;
@@ -97,6 +98,9 @@ export function PersonForm({
     initial?.maritalRegime ?? "CPB"
   );
   const [spouseName, setSpouseName] = useState(initial?.spouseName ?? "");
+  const [isDependent, setIsDependent] = useState(
+    initial?.isDependent ?? false
+  );
   const [addressSameAsPrimary, setAddressSameAsPrimary] = useState(
     initial?.addressSameAsPrimary ?? false
   );
@@ -170,6 +174,7 @@ export function PersonForm({
       spouseName: married ? spouseName : undefined,
       civilStatus: showCivilStatus ? effectiveCivilStatus : undefined,
       maritalRegime: married ? maritalRegime : undefined,
+      isDependent: isTitular ? undefined : isDependent,
       addressSameAsPrimary: isTitular ? false : addressSameAsPrimary,
       cep,
       street,
@@ -188,6 +193,7 @@ export function PersonForm({
       setNote("");
       setParentPersonId("");
       setSpouseName("");
+      setIsDependent(false);
       setAddressSameAsPrimary(false);
       setCep("");
       setStreet("");
@@ -338,6 +344,17 @@ export function PersonForm({
         <p className="text-xs text-lucathi-gray">
           Menor de 18 anos: estado civil «Solteiro» (automático).
         </p>
+      ) : null}
+      {!isTitular ? (
+        <label className="flex items-center gap-2 text-sm text-lucathi-navy">
+          <input
+            type="checkbox"
+            className="size-4 accent-lucathi-deep"
+            checked={isDependent}
+            onChange={e => setIsDependent(e.target.checked)}
+          />
+          Dependente — herda o IRPF do titular
+        </label>
       ) : null}
       {parentTooClose ? (
         <p className="text-xs text-amber-700">

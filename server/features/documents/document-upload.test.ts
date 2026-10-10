@@ -13,6 +13,10 @@ const storageMocks = vi.hoisted(() => ({ storagePut: vi.fn() }));
 const folderMocks = vi.hoisted(() => ({ resolveFamilyStorageFolder: vi.fn() }));
 const coupleMocks = vi.hoisted(() => ({ releaseSpouseCoupleDocs: vi.fn() }));
 const repositoryMocks = vi.hoisted(() => ({ getDocumentRecord: vi.fn() }));
+const dependentMocks = vi.hoisted(() => ({
+  assertIrpfUploadAllowed: vi.fn(),
+  syncDependentIrpfStatus: vi.fn(),
+}));
 
 vi.mock("../_shared/database", () => databaseMocks);
 vi.mock("../_shared/ids", () => idsMocks);
@@ -20,6 +24,7 @@ vi.mock("../../storage", () => storageMocks);
 vi.mock("../../lib/family-storage-path", () => folderMocks);
 vi.mock("./couple-docs", () => coupleMocks);
 vi.mock("./document-repository", () => repositoryMocks);
+vi.mock("./dependent-irpf", () => dependentMocks);
 
 import { documentVersions, documents } from "../../../drizzle/schema";
 import { storeDocumentVersion } from "./document-upload";
@@ -59,6 +64,8 @@ describe("storeDocumentVersion", () => {
     folderMocks.resolveFamilyStorageFolder.mockResolvedValue("11122233344");
     storageMocks.storagePut.mockResolvedValue({ key: "11122233344/doc-1/v3/rg.pdf" });
     coupleMocks.releaseSpouseCoupleDocs.mockResolvedValue(undefined);
+    dependentMocks.assertIrpfUploadAllowed.mockResolvedValue(undefined);
+    dependentMocks.syncDependentIrpfStatus.mockResolvedValue(1);
     repositoryMocks.getDocumentRecord.mockResolvedValue(documentRecord);
   });
 
@@ -126,5 +133,37 @@ describe("storeDocumentVersion", () => {
       entityId: "p-1",
       category: "RG",
     });
+    expect(dependentMocks.assertIrpfUploadAllowed).toHaveBeenCalledWith(
+      documentRecord
+    );
+    expect(dependentMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia o upload quando o IRPF é de um dependente", async () => {
+    dependentMocks.assertIrpfUploadAllowed.mockRejectedValue(
+      new Error("O IRPF do dependente herda o IRPF do titular — upload bloqueado.")
+    );
+
+    await expect(storeDocumentVersion(baseInput)).rejects.toThrow(
+      "upload bloqueado"
+    );
+    expect(storageMocks.storagePut).not.toHaveBeenCalled();
+    expect(dependentMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
+  });
+
+  it("sincroniza o IRPF dos dependentes após enviar o IRPF do titular", async () => {
+    repositoryMocks.getDocumentRecord.mockResolvedValue({
+      ...documentRecord,
+      category: "IRPF",
+    });
+    const { db } = fakeTx();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await storeDocumentVersion(baseInput);
+
+    expect(dependentMocks.syncDependentIrpfStatus).toHaveBeenCalledWith("fam-1");
+    expect(coupleMocks.releaseSpouseCoupleDocs).toHaveBeenCalledWith(
+      expect.objectContaining({ category: "IRPF" })
+    );
   });
 });

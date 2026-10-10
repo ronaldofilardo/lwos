@@ -14,7 +14,8 @@ import {
 } from "../../lib/family-storage-path";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
-import { documentCategoriesForVinculo } from "../documents/person-document-categories";
+import { computePersonCategories } from "../documents/person-document-categories";
+import { syncDependentIrpfStatus } from "../documents/dependent-irpf";
 import {
   collectPersonIssues,
   isMarriedStatus,
@@ -155,6 +156,44 @@ async function assertConjugeNotDuplicated(familyId: string) {
   }
 }
 
+/**
+ * Marcar isDependent exige que o IRPF do titular já esteja recebido
+ * (RECEBIDO_EM_ANALISE ou VALIDADO) — o dependente herda o IRPF do titular.
+ */
+async function assertTitularIrpfReceived(familyId: string) {
+  const db = await requireDatabase();
+  const [titular] = await db
+    .select({ id: people.id })
+    .from(people)
+    .where(
+      and(eq(people.familyId, familyId), eq(people.isPrimaryContact, true))
+    )
+    .limit(1);
+  if (!titular) {
+    throw new Error("Defina o titular antes de marcar um dependente.");
+  }
+  const [irpf] = await db
+    .select({ status: documents.status })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.familyId, familyId),
+        eq(documents.entityType, "PESSOA"),
+        eq(documents.entityId, titular.id),
+        eq(documents.category, "IRPF")
+      )
+    )
+    .limit(1);
+  if (
+    !irpf ||
+    (irpf.status !== "RECEBIDO_EM_ANALISE" && irpf.status !== "VALIDADO")
+  ) {
+    throw new Error(
+      "O IRPF do titular precisa estar recebido para marcar um dependente."
+    );
+  }
+}
+
 /** Coerência entre gerações: filho não pode nascer antes do pai/mãe. */
 async function assertBirthAfterParent(
   familyId: string,
@@ -206,6 +245,10 @@ export async function addPersonRecord(
 
   const { civilStatus, maritalRegime } = resolveCivilFields(input);
 
+  if (input.isDependent && input.vinculo !== "TITULAR") {
+    await assertTitularIrpfReceived(input.familyId);
+  }
+
   await db.transaction(async tx => {
     if (input.isPrimaryContact && input.taxId) {
       await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
@@ -228,6 +271,7 @@ export async function addPersonRecord(
       parentPersonId: input.parentPersonId || null,
       spouseName: input.spouseName?.trim() || null,
       isPrimaryContact: input.isPrimaryContact ?? false,
+      isDependent: input.isDependent ?? false,
       phone: input.phone || null,
       addressSameAsPrimary: input.addressSameAsPrimary ?? false,
       cep: input.addressSameAsPrimary ? null : input.cep || null,
@@ -241,7 +285,10 @@ export async function addPersonRecord(
     // Cônjuge não recebe os documentos do casal (certidão/endereço) — só o
     // titular apresenta; ver person-document-categories.ts.
     await tx.insert(documents).values(
-      documentCategoriesForVinculo(input.vinculo).map(category => ({
+      computePersonCategories({
+        vinculo: input.vinculo,
+        civilStatus,
+      }).map(category => ({
         id: createId(),
         familyId: input.familyId,
         entityType: "PESSOA" as const,
@@ -254,6 +301,9 @@ export async function addPersonRecord(
       }))
     );
   });
+  if (input.isDependent && input.vinculo !== "TITULAR") {
+    await syncDependentIrpfStatus(input.familyId);
+  }
   return id;
 }
 
@@ -297,6 +347,11 @@ export async function updatePersonRecord(
     birthDate: input.birthDate,
   });
 
+  const isDependent = input.isDependent ?? person.isDependent ?? false;
+  if (isDependent && person.vinculo !== "TITULAR") {
+    await assertTitularIrpfReceived(input.familyId);
+  }
+
   const taxChanged = Boolean(input.taxId) && input.taxId !== person.taxId;
   const needsMigration = taxChanged && person.isPrimaryContact && Boolean(input.taxId);
   let oldFolder = "";
@@ -318,6 +373,7 @@ export async function updatePersonRecord(
         maritalRegime: maritalRegime!,
         exSpouseNote: input.exSpouseNote || null,
         spouseName: input.spouseName?.trim() || null,
+        isDependent,
         phone: input.phone || null,
         addressSameAsPrimary: input.addressSameAsPrimary ?? false,
         cep: input.addressSameAsPrimary ? null : input.cep || null,
@@ -338,6 +394,10 @@ export async function updatePersonRecord(
       oldFolder,
       newFolder
     )).migratedFiles;
+  }
+
+  if (isDependent && person.vinculo !== "TITULAR") {
+    await syncDependentIrpfStatus(input.familyId);
   }
 
   return { personId: input.personId, migratedFiles };

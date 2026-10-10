@@ -8,6 +8,12 @@ import { ensureCertidoesForSubject } from "../certidoes/certidao-repository";
 import { findOrCreateDocumentRecord } from "../documents/document-repository";
 import { storeDocumentVersion } from "../documents/document-upload";
 import {
+  computePersonCategories,
+} from "../documents/person-document-categories";
+import {
+  reconcileEntityDocuments,
+} from "../documents/document-requirements";
+import {
   addPersonRecord,
   getPersonRecord,
   listPeopleByFamily,
@@ -40,12 +46,14 @@ export const personRouter = router({
         scope: "PESSOA",
         subjectId: personId,
       });
+      const person = await getPersonRecord(personId);
       await recordAudit({
         action: "PESSOA_CRIADA",
         entityType: "PESSOA",
         entityId: personId,
         actorUserId: user.id,
         familyId: input.familyId,
+        metadata: { isDependent: person?.isDependent ?? false },
       });
       return { personId };
     }),
@@ -55,13 +63,34 @@ export const personRouter = router({
       const user = requireRole(ctx, TEAM_ROLES);
       await assertFamilyAccess(ctx, input.familyId);
       const result = await updatePersonRecord(input);
+      const person = await getPersonRecord(input.personId);
+      let requirementsCreated = 0;
+      let requirementsRemoved = 0;
+      if (person) {
+        const { created, removed } = await reconcileEntityDocuments({
+          familyId: input.familyId,
+          entityType: "PESSOA",
+          entityId: input.personId,
+          categories: computePersonCategories({
+            vinculo: person.vinculo,
+            civilStatus: person.civilStatus,
+          }),
+        });
+        requirementsCreated = created;
+        requirementsRemoved = removed;
+      }
       await recordAudit({
         action: "PESSOA_ATUALIZADA",
         entityType: "PESSOA",
         entityId: input.personId,
         actorUserId: user.id,
         familyId: input.familyId,
-        metadata: { migratedFiles: result.migratedFiles },
+        metadata: {
+          migratedFiles: result.migratedFiles,
+          requirementsCreated,
+          requirementsRemoved,
+          isDependent: person?.isDependent ?? false,
+        },
       });
       return result;
     }),

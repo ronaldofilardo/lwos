@@ -184,7 +184,7 @@ describe("buildDocumentSections", () => {
     assets: [{ id: "at1", description: "Ações Itaú" }],
   };
 
-  it("organiza as 4 seções na ordem Familiares, Imóveis, Sociedades e Ativos", () => {
+  it("organiza as 4 seções na ordem Família, Imóveis, Sociedades e Ativos", () => {
     const groups = groupDocumentsByMember(
       [
         doc({ id: "d1", entityType: "FAMILIA", entityId: "f1" }),
@@ -204,7 +204,7 @@ describe("buildDocumentSections", () => {
       "SOCIEDADE",
       "ATIVO",
     ]);
-    expect(sections[0].title).toBe("Familiares");
+    expect(sections[0].title).toBe("Família (Pessoas)");
     expect(sections[0].groups.map(group => group.title)).toEqual([
       "Família Costa",
       "Ana Costa",

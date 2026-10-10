@@ -35,7 +35,7 @@ export function useDocumentActions(familyId: string) {
     });
   const review = (
     documentId: string,
-    status: "VALIDADO" | "REJEITADO",
+    status: "VALIDADO" | "REJEITADO" | "NAO_POSSUI",
     rejectionReason?: string
   ) => reviewMutation.mutateAsync({ documentId, status, rejectionReason });
   const dispense = (documentId: string, reason: string, requestedBy?: string) =>

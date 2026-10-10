@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const databaseMocks = vi.hoisted(() => ({ requireDatabase: vi.fn() }));
 const repositoryMocks = vi.hoisted(() => ({ getDocumentRecord: vi.fn() }));
 const coupleMocks = vi.hoisted(() => ({ releaseSpouseCoupleDocs: vi.fn() }));
+const dependentMocks = vi.hoisted(() => ({
+  syncDependentIrpfStatus: vi.fn(),
+}));
 
 vi.mock("../_shared/database", () => databaseMocks);
 vi.mock("./document-repository", () => repositoryMocks);
 vi.mock("./couple-docs", () => coupleMocks);
+vi.mock("./dependent-irpf", () => dependentMocks);
 
 import { reviewDocumentRecord } from "./document-review";
 
@@ -21,6 +25,7 @@ describe("reviewDocumentRecord", () => {
       }),
     });
     coupleMocks.releaseSpouseCoupleDocs.mockResolvedValue(0);
+    dependentMocks.syncDependentIrpfStatus.mockResolvedValue(1);
     repositoryMocks.getDocumentRecord.mockResolvedValue({
       familyId: "fam-1",
       entityType: "PESSOA",
@@ -55,5 +60,42 @@ describe("reviewDocumentRecord", () => {
       rejectionReason: "ilegível",
     });
     expect(coupleMocks.releaseSpouseCoupleDocs).not.toHaveBeenCalled();
+  });
+
+  it("aceita NAO_POSSUI sem liberar o casal nem sincronizar IRPF", async () => {
+    await reviewDocumentRecord({
+      documentId: "documento-1",
+      status: "NAO_POSSUI",
+    });
+    expect(coupleMocks.releaseSpouseCoupleDocs).not.toHaveBeenCalled();
+    expect(dependentMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
+  });
+
+  it("sincroniza o IRPF dos dependentes ao revisar o IRPF do titular", async () => {
+    repositoryMocks.getDocumentRecord.mockResolvedValue({
+      familyId: "fam-1",
+      entityType: "PESSOA",
+      entityId: "pessoa-1",
+      category: "IRPF",
+    });
+
+    await reviewDocumentRecord({
+      documentId: "documento-1",
+      status: "VALIDADO",
+    });
+    expect(dependentMocks.syncDependentIrpfStatus).toHaveBeenCalledWith(
+      "fam-1"
+    );
+  });
+
+  it("não libera casal nem sincroniza quando o documento não existe mais", async () => {
+    repositoryMocks.getDocumentRecord.mockResolvedValue(null);
+
+    await reviewDocumentRecord({
+      documentId: "documento-1",
+      status: "VALIDADO",
+    });
+    expect(coupleMocks.releaseSpouseCoupleDocs).not.toHaveBeenCalled();
+    expect(dependentMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
   });
 });

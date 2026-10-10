@@ -2,11 +2,12 @@ import { eq } from "drizzle-orm";
 import { documents } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { releaseSpouseCoupleDocs } from "./couple-docs";
+import { syncDependentIrpfStatus } from "./dependent-irpf";
 import { getDocumentRecord } from "./document-repository";
 
 export async function reviewDocumentRecord(input: {
   documentId: string;
-  status: "VALIDADO" | "REJEITADO";
+  status: "VALIDADO" | "REJEITADO" | "NAO_POSSUI";
   rejectionReason?: string;
 }) {
   if (input.status === "REJEITADO" && !input.rejectionReason) {
@@ -30,6 +31,14 @@ export async function reviewDocumentRecord(input: {
       entityId: document.entityId,
       category: document.category,
     });
+  }
+  // IRPF do titular revisado → espelha status nos dependentes.
+  if (
+    document &&
+    document.entityType === "PESSOA" &&
+    document.category === "IRPF"
+  ) {
+    await syncDependentIrpfStatus(document.familyId);
   }
 }
 

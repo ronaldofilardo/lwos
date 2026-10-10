@@ -21,7 +21,7 @@ import {
   uploadVersionSchema,
 } from "./document-types";
 import { storeDocumentVersion } from "./document-upload";
-import { ensureFamilyDocumentRequirements } from "./document-requirements";
+import { reconcileFamilyDocumentRequirements } from "./document-requirements";
 
 export const documentRouter = router({
   list: protectedProcedure
@@ -58,16 +58,18 @@ export const documentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const user = requireRole(ctx, TEAM_ROLES);
       await assertFamilyAccess(ctx, input.familyId);
-      const created = await ensureFamilyDocumentRequirements(input.familyId);
+      const { created, removed } = await reconcileFamilyDocumentRequirements(
+        input.familyId
+      );
       await recordAudit({
         action: "REQUISITOS_DOCUMENTAIS_GERADOS",
         entityType: "FAMILIA",
         entityId: input.familyId,
         actorUserId: user.id,
         familyId: input.familyId,
-        metadata: { created },
+        metadata: { created, removed },
       });
-      return { created };
+      return { created, removed };
     }),
   uploadVersion: protectedProcedure
     .input(uploadVersionSchema)

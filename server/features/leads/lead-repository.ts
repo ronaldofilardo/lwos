@@ -9,7 +9,7 @@ import {
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import { storagePut, storageGetSignedUrl } from "../../storage";
-import { documentCategoriesForVinculo } from "../documents/person-document-categories";
+import { computePersonCategories } from "../documents/person-document-categories";
 import { ensureCertidoesForSubject } from "../certidoes/certidao-repository";
 import {
   ALLOWED_LEAD_MIME_TYPES,
@@ -170,7 +170,10 @@ export async function acceptLeadRecord(
       isPrimaryContact: true,
     });
     await tx.insert(documents).values(
-      documentCategoriesForVinculo("TITULAR").map(category => ({
+      computePersonCategories({
+        vinculo: "TITULAR",
+        civilStatus: input.civilStatus,
+      }).map(category => ({
         id: createId(),
         familyId,
         entityType: "PESSOA" as const,

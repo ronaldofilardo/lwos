@@ -24,8 +24,8 @@ const certidaoMocks = vi.hoisted(() => ({
   listCertidaoRecords: vi.fn(),
 }));
 const docRequirementMocks = vi.hoisted(() => ({
-  ensureDocumentRequirements: vi.fn(),
-  COMPANY_DOCUMENT_CATEGORIES: ["CONTRATO_SOCIAL"],
+  reconcileEntityDocuments: vi.fn(),
+  computeCompanyCategories: vi.fn(),
 }));
 const peopleMocks = vi.hoisted(() => ({ listPeopleByFamily: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
@@ -130,7 +130,13 @@ describe("company-router mutações", () => {
     repoMocks.updateStakeholderRecord.mockResolvedValue(undefined);
     repoMocks.removeStakeholderRecord.mockResolvedValue(undefined);
     certidaoMocks.ensureCertidoesForSubject.mockResolvedValue(undefined);
-    docRequirementMocks.ensureDocumentRequirements.mockResolvedValue(["r1", "r2"]);
+    docRequirementMocks.reconcileEntityDocuments.mockResolvedValue({
+      created: 2,
+      removed: 0,
+    });
+    docRequirementMocks.computeCompanyCategories.mockReturnValue([
+      "CONTRATO_SOCIAL",
+    ]);
     detailsMocks.upsertCompanyDetailsRecord.mockResolvedValue(undefined);
     auditMocks.recordAudit.mockResolvedValue(undefined);
   });
@@ -149,7 +155,7 @@ describe("company-router mutações", () => {
       scope: "SOCIEDADE",
       subjectId: "soc-9",
     });
-    expect(docRequirementMocks.ensureDocumentRequirements).toHaveBeenCalledWith({
+    expect(docRequirementMocks.reconcileEntityDocuments).toHaveBeenCalledWith({
       familyId: "fam-1",
       entityType: "SOCIEDADE",
       entityId: "soc-9",
@@ -246,6 +252,13 @@ describe("company-router detalhes da holding", () => {
     vi.clearAllMocks();
     repoMocks.getCompanyRecord.mockResolvedValue(company);
     detailsMocks.upsertCompanyDetailsRecord.mockResolvedValue(undefined);
+    docRequirementMocks.reconcileEntityDocuments.mockResolvedValue({
+      created: 0,
+      removed: 0,
+    });
+    docRequirementMocks.computeCompanyCategories.mockReturnValue([
+      "CONTRATO_SOCIAL",
+    ]);
     auditMocks.recordAudit.mockResolvedValue(undefined);
   });
 
@@ -263,7 +276,10 @@ describe("company-router detalhes da holding", () => {
     expect(auditMocks.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "DETALHES_HOLDING_SALVOS",
-        metadata: { isOffshore: false, capitalSocial: 5000 },
+        metadata: expect.objectContaining({
+          isOffshore: false,
+          capitalSocial: 5000,
+        }),
       })
     );
   });

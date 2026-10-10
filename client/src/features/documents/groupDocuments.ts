@@ -74,7 +74,11 @@ const entityRank: Record<DocumentEntityType, number> = {
 };
 
 export function isResolvedStatus(status: string): boolean {
-  return status === "VALIDADO" || status === "DISPENSADO";
+  return (
+    status === "VALIDADO" ||
+    status === "DISPENSADO" ||
+    status === "NAO_POSSUI"
+  );
 }
 
 export function groupDocumentsByMember(
@@ -122,7 +126,7 @@ export function groupDocumentsByMember(
         (person ? ctx.people.findIndex(p => p.id === person.id) : 99);
     } else if (doc.entityType === "IMOVEL") {
       title = propertyById.get(doc.entityId)?.description ?? "Imóvel";
-      subtitle = "Imóvel · Requisitos documentais";
+      subtitle = null;
       sort =
         entityRank.IMOVEL * 1000 +
         (propertyById.has(doc.entityId)
@@ -130,7 +134,7 @@ export function groupDocumentsByMember(
           : 99);
     } else if (doc.entityType === "SOCIEDADE") {
       title = companyById.get(doc.entityId)?.legalName ?? "Sociedade";
-      subtitle = "Sociedade / Holding · Requisitos documentais";
+      subtitle = null;
       sort =
         entityRank.SOCIEDADE * 1000 +
         (companyById.has(doc.entityId)
@@ -172,8 +176,8 @@ const SECTION_META: Record<
   { title: string; description: string; entityTypes: DocumentEntityType[] }
 > = {
   FAMILIARES: {
-    title: "Familiares",
-    description: "Requisitos da família e de cada membro.",
+    title: "Família (Pessoas)",
+    description: "Requisitos da família e de cada membro, com certidões.",
     entityTypes: ["FAMILIA", "PESSOA"],
   },
   IMOVEL: {

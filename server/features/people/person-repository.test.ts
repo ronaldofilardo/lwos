@@ -17,12 +17,16 @@ const migrationMocks = vi.hoisted(() => ({
   migrateFamilyStorageFolder: vi.fn(),
 }));
 const idMocks = vi.hoisted(() => ({ createId: vi.fn() }));
+const dependentIrpfMocks = vi.hoisted(() => ({
+  syncDependentIrpfStatus: vi.fn(),
+}));
 
 vi.mock("../_shared/database", () => databaseMocks);
 vi.mock("../families/family-repository", () => familyMocks);
 vi.mock("../../lib/family-storage-path", () => pathMocks);
 vi.mock("../../lib/family-storage-migration", () => migrationMocks);
 vi.mock("../_shared/ids", () => idMocks);
+vi.mock("../documents/dependent-irpf", () => dependentIrpfMocks);
 
 import {
   addPersonRecord,
@@ -808,5 +812,140 @@ describe("person-repository titular e storage", () => {
       "cpf-antigo",
       "cpf-novo"
     );
+  });
+});
+
+describe("person-repository dependente (IRPF do titular)", () => {
+  const dependenteInput = {
+    familyId: "familia-1",
+    fullName: "Pedro Silva",
+    email: "pedro@example.com",
+    taxId: "12345678909",
+    birthDate: "2005-06-15",
+    phone: "11999997777",
+    vinculo: "FILHO",
+    civilStatus: "SOLTEIRO",
+    city: "São Paulo",
+    uf: "SP",
+    isDependent: true,
+  } as never;
+
+  const filhoDaCasa = {
+    id: "pessoa-1",
+    familyId: "familia-1",
+    vinculo: "FILHO",
+    taxId: "52998224725",
+    isPrimaryContact: false,
+    parentPersonId: null,
+    civilStatus: "SOLTEIRO",
+    maritalRegime: "NA",
+    isDependent: false,
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("recusa marcar dependente quando a família ainda não tem titular", async () => {
+    const { db } = queuedDb([[], []]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(addPersonRecord(dependenteInput)).rejects.toThrow(
+      "Defina o titular antes de marcar um dependente."
+    );
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(dependentIrpfMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
+  });
+
+  it("recusa marcar dependente enquanto o IRPF do titular não existe", async () => {
+    const { db } = queuedDb([[], [{ id: "titular-1" }], []]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(addPersonRecord(dependenteInput)).rejects.toThrow(
+      "O IRPF do titular precisa estar recebido para marcar um dependente."
+    );
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("recusa marcar dependente com o IRPF do titular ainda pendente", async () => {
+    const { db } = queuedDb([
+      [],
+      [{ id: "titular-1" }],
+      [{ status: "PENDENTE" }],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(addPersonRecord(dependenteInput)).rejects.toThrow(
+      "O IRPF do titular precisa estar recebido para marcar um dependente."
+    );
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("cria dependente com IRPF do titular recebido e sincroniza o status", async () => {
+    const { db, insertValues } = queuedDb([
+      [],
+      [{ id: "titular-1" }],
+      [{ status: "RECEBIDO_EM_ANALISE" }],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    dependentIrpfMocks.syncDependentIrpfStatus.mockResolvedValue(1);
+    idMocks.createId.mockReturnValueOnce("pessoa-1").mockReturnValue("doc");
+
+    await expect(addPersonRecord(dependenteInput)).resolves.toBe("pessoa-1");
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ isDependent: true, vinculo: "FILHO" })
+    );
+    expect(dependentIrpfMocks.syncDependentIrpfStatus).toHaveBeenCalledWith(
+      "familia-1"
+    );
+  });
+
+  it("marca o dependente na edição quando o IRPF do titular já foi recebido", async () => {
+    const { db } = queuedDb([
+      [filhoDaCasa],
+      [{ id: "titular-1" }],
+      [{ status: "VALIDADO" }],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    dependentIrpfMocks.syncDependentIrpfStatus.mockResolvedValue(1);
+
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "pessoa-1",
+        fullName: "Pedro Silva",
+        taxId: "52998224725",
+        birthDate: "2005-06-15",
+        email: "pedro@example.com",
+        phone: "11999997777",
+        city: "São Paulo",
+        uf: "SP",
+        civilStatus: "SOLTEIRO",
+        isDependent: true,
+      } as never)
+    ).resolves.toEqual({ personId: "pessoa-1", migratedFiles: 0 });
+    expect(dependentIrpfMocks.syncDependentIrpfStatus).toHaveBeenCalledWith(
+      "familia-1"
+    );
+  });
+
+  it("usa o isDependent já gravado na edição e valida o IRPF do titular", async () => {
+    const { db } = queuedDb([[{ ...filhoDaCasa, isDependent: true }], []]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      updatePersonRecord({
+        familyId: "familia-1",
+        personId: "pessoa-1",
+        fullName: "Pedro Silva",
+        taxId: "52998224725",
+        birthDate: "2005-06-15",
+        email: "pedro@example.com",
+        phone: "11999997777",
+        city: "São Paulo",
+        uf: "SP",
+        civilStatus: "SOLTEIRO",
+      } as never)
+    ).rejects.toThrow("Defina o titular antes de marcar um dependente.");
+    expect(dependentIrpfMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
   });
 });

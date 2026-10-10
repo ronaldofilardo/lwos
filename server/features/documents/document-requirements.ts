@@ -1,139 +1,256 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   companies,
+  companyDetails,
   documents,
   otherAssets,
   people,
   properties,
 } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
-import { documentCategoriesForVinculo } from "./person-document-categories";
+import {
+  computePersonCategories,
+} from "./person-document-categories";
 import { createId } from "../_shared/ids";
 
 /**
- * Matriz de requisitos documentais por escopo patrimonial.
- * Imóveis e sociedades seguem o TBD-05 (docs/tbd-registry.md).
+ * Matriz pura de requisitos documentais por escopo patrimonial (Fase 8).
+ * Todas as funções `compute*` são puras — testáveis sem banco. A reconciliação
+ * (`reconcileEntityDocuments`) é a única camada que persiste: cria o que falta
+ * e remove apenas pendências obsoletas (status PENDENTE, sem arquivo).
  */
-export const PROPERTY_DOCUMENT_CATEGORIES = {
-  withRegistration: ["Matrícula atualizada", "IPTU ou ITR"],
-  withoutRegistration: [
-    "Escritura ou contrato de compra e venda",
-    "IPTU ou ITR",
-  ],
-} as const;
 
-export const COMPANY_DOCUMENT_CATEGORIES = [
-  "Contrato social e alterações consolidadas",
-  "CNPJ (comprovante de situação)",
-  "Estatuto social e atas (se S/A)",
+export function computePropertyCategories(property: {
+  kind?: string | null;
+  hasRegistration?: boolean | null;
+}): string[] {
+  const registrationDoc =
+    property.hasRegistration === false
+      ? "Escritura ou contrato de compra e venda"
+      : "Matrícula atualizada";
+  if (property.kind === "RURAL") {
+    return ["ITR", registrationDoc, "CAR", "CCIR"];
+  }
+  if (property.kind === "URBANO") {
+    return ["IPTU", registrationDoc];
+  }
+  // kind não informado (cadastro legado): mantém a lista histórica.
+  return property.hasRegistration === false
+    ? ["Escritura ou contrato de compra e venda", "IPTU ou ITR"]
+    : ["Matrícula atualizada", "IPTU ou ITR"];
+}
+
+export const COMPANY_LTD_CATEGORIES = [
+  "Comprovante de Inscrição no CNPJ",
+  "Contrato Social Consolidado",
+  "Balanço Fechado",
+  "Balancete Atualizado",
+  "Acordo de Sócios",
+  "Livro Razão do Imobilizado",
 ] as const;
 
-export const ASSET_DOCUMENT_CATEGORIES = [
-  "Comprovação de titularidade",
-  "Avaliação ou laudo de lastro",
+export const COMPANY_SA_EXTRA_CATEGORIES = [
+  "Livro de Registro de Ações Nominativas",
+  "Livro de Transferência de Ações",
 ] as const;
+
+export const COMPANY_OFFSHORE_CATEGORIES = [
+  "Certificate of Incorporation",
+  "Memorandum & Articles of Association",
+  "Register of Members",
+  "Register of Directors",
+  "Share Certificate(s)",
+  "Certificate of Good Standing",
+  "Balance Sheet",
+  "Conferência de IRPF/Declaração ao Banco Central",
+  "Cláusulas sucessórias",
+  "Testamento local da jurisdição",
+] as const;
+
+export function computeCompanyCategories(company: {
+  isOffshore?: boolean | null;
+  societaryType?: string | null;
+}): string[] {
+  if (company.isOffshore) return [...COMPANY_OFFSHORE_CATEGORIES];
+  if (company.societaryType === "SA") {
+    return [...COMPANY_LTD_CATEGORIES, ...COMPANY_SA_EXTRA_CATEGORIES];
+  }
+  // LTDA, SCP e não informado (default): lista nacional padrão.
+  return [...COMPANY_LTD_CATEGORIES];
+}
+
+export function computeAssetCategories(): string[] {
+  return ["Comprovação de titularidade"];
+}
+
+type EntityType = "PESSOA" | "IMOVEL" | "SOCIEDADE" | "ATIVO";
 
 type RequirementInput = {
   familyId: string;
-  entityType: "PESSOA" | "IMOVEL" | "SOCIEDADE" | "ATIVO";
+  entityType: EntityType;
   entityId: string;
   categories: readonly string[];
 };
 
+type ReconcileResult = { created: number; removed: number };
+
 /**
- * Cria apenas as categorias que ainda não existem para a entidade.
- * Retorna os ids criados (vazio quando tudo já foi gerado).
+ * Reconcilia os documentos de uma entidade com a matriz pura: cria as
+ * categorias que faltam (PENDENTE) e remove apenas as pendências obsoletas
+ * (status PENDENTE, currentVersion 0 — nunca um arquivo enviado). Idempotente.
  */
-export async function ensureDocumentRequirements(input: RequirementInput) {
-  if (!input.categories.length) return [];
+export async function reconcileEntityDocuments(
+  input: RequirementInput
+): Promise<ReconcileResult> {
+  if (!input.categories.length) return { created: 0, removed: 0 };
   const db = await requireDatabase();
   const existing = await db
-    .select({ category: documents.category })
+    .select({
+      id: documents.id,
+      category: documents.category,
+      status: documents.status,
+      currentVersion: documents.currentVersion,
+    })
     .from(documents)
     .where(
       and(
+        eq(documents.familyId, input.familyId),
         eq(documents.entityType, input.entityType),
         eq(documents.entityId, input.entityId)
       )
     );
-  const known = new Set(existing.map(row => row.category));
-  const missing = Array.from(new Set(input.categories)).filter(
-    category => !known.has(category)
-  );
-  if (!missing.length) return [];
 
-  const ids = missing.map(() => createId());
-  await db.insert(documents).values(
-    missing.map((category, index) => ({
-      id: ids[index],
-      familyId: input.familyId,
-      entityType: input.entityType,
-      entityId: input.entityId,
-      category,
-      status: "PENDENTE" as const,
-      currentVersion: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }))
-  );
-  return ids;
+  const required = Array.from(new Set(input.categories));
+  const known = new Set(existing.map(row => row.category));
+  const missing = required.filter(category => !known.has(category));
+
+  let created = 0;
+  if (missing.length) {
+    const ids = missing.map(() => createId());
+    await db.insert(documents).values(
+      missing.map((category, index) => ({
+        id: ids[index],
+        familyId: input.familyId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        category,
+        status: "PENDENTE" as const,
+        currentVersion: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }))
+    );
+    created = missing.length;
+  }
+
+  const requiredSet = new Set(required);
+  const staleIds = existing
+    .filter(
+      row =>
+        !requiredSet.has(row.category) &&
+        row.status === "PENDENTE" &&
+        row.currentVersion === 0
+    )
+    .map(row => row.id);
+  let removed = 0;
+  if (staleIds.length) {
+    await db.delete(documents).where(inArray(documents.id, staleIds));
+    removed = staleIds.length;
+  }
+
+  return { created, removed };
 }
 
 /**
- * Backfill: gera os requisitos que faltam para todas as entidades já
- * cadastradas da família (pessoas, imóveis, sociedades e ativos).
+ * Backfill/reconcile da família inteira: pessoas, imóveis, sociedades
+ * (com tipo societário) e ativos. Retorna o total criado e removido.
  */
-export async function ensureFamilyDocumentRequirements(familyId: string) {
+export async function reconcileFamilyDocumentRequirements(
+  familyId: string
+): Promise<ReconcileResult> {
   const db = await requireDatabase();
-  const [peopleRows, propertyRows, companyRows, assetRows] = await Promise.all([
-    db.select().from(people).where(eq(people.familyId, familyId)),
-    db.select().from(properties).where(eq(properties.familyId, familyId)),
-    db.select().from(companies).where(eq(companies.familyId, familyId)),
-    db.select().from(otherAssets).where(eq(otherAssets.familyId, familyId)),
-  ]);
+  const [peopleRows, propertyRows, companyRows, assetRows] =
+    await Promise.all([
+      db
+        .select({
+          id: people.id,
+          vinculo: people.vinculo,
+          civilStatus: people.civilStatus,
+        })
+        .from(people)
+        .where(eq(people.familyId, familyId)),
+      db
+        .select({
+          id: properties.id,
+          kind: properties.kind,
+          hasRegistration: properties.hasRegistration,
+        })
+        .from(properties)
+        .where(eq(properties.familyId, familyId)),
+      db
+        .select({ id: companies.id, isOffshore: companies.isOffshore })
+        .from(companies)
+        .where(eq(companies.familyId, familyId)),
+      db
+        .select({ id: otherAssets.id })
+        .from(otherAssets)
+        .where(eq(otherAssets.familyId, familyId)),
+    ]);
+  const detailRows = companyRows.length
+    ? await db
+        .select({
+          companyId: companyDetails.companyId,
+          societaryType: companyDetails.societaryType,
+        })
+        .from(companyDetails)
+        .where(inArray(companyDetails.companyId, companyRows.map(row => row.id)))
+    : [];
+  const societaryByCompany = new Map(
+    detailRows.map(row => [row.companyId, row.societaryType])
+  );
 
   let created = 0;
+  let removed = 0;
+  const reconcile = async (input: Omit<RequirementInput, "familyId">) => {
+    const result = await reconcileEntityDocuments({ familyId, ...input });
+    created += result.created;
+    removed += result.removed;
+  };
+
   for (const person of peopleRows) {
-    created += (
-      await ensureDocumentRequirements({
-        familyId,
-        entityType: "PESSOA",
-        entityId: person.id,
-        categories: documentCategoriesForVinculo(person.vinculo),
-      })
-    ).length;
+    await reconcile({
+      entityType: "PESSOA",
+      entityId: person.id,
+      categories: computePersonCategories({
+        vinculo: person.vinculo,
+        civilStatus: person.civilStatus,
+      }),
+    });
   }
   for (const property of propertyRows) {
-    created += (
-      await ensureDocumentRequirements({
-        familyId,
-        entityType: "IMOVEL",
-        entityId: property.id,
-        categories: property.hasRegistration
-          ? PROPERTY_DOCUMENT_CATEGORIES.withRegistration
-          : PROPERTY_DOCUMENT_CATEGORIES.withoutRegistration,
-      })
-    ).length;
+    await reconcile({
+      entityType: "IMOVEL",
+      entityId: property.id,
+      categories: computePropertyCategories(property),
+    });
   }
   for (const company of companyRows) {
-    created += (
-      await ensureDocumentRequirements({
-        familyId,
-        entityType: "SOCIEDADE",
-        entityId: company.id,
-        categories: COMPANY_DOCUMENT_CATEGORIES,
-      })
-    ).length;
+    await reconcile({
+      entityType: "SOCIEDADE",
+      entityId: company.id,
+      categories: computeCompanyCategories({
+        isOffshore: company.isOffshore,
+        societaryType: societaryByCompany.get(company.id) ?? null,
+      }),
+    });
   }
   for (const asset of assetRows) {
-    created += (
-      await ensureDocumentRequirements({
-        familyId,
-        entityType: "ATIVO",
-        entityId: asset.id,
-        categories: ASSET_DOCUMENT_CATEGORIES,
-      })
-    ).length;
+    await reconcile({
+      entityType: "ATIVO",
+      entityId: asset.id,
+      categories: computeAssetCategories(),
+    });
   }
-  return created;
+
+  return { created, removed };
 }

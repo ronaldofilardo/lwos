@@ -20,11 +20,8 @@ const propertyRepoMocks = vi.hoisted(() => ({
 }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
 const documentRequirementMocks = vi.hoisted(() => ({
-  ensureDocumentRequirements: vi.fn(),
-  PROPERTY_DOCUMENT_CATEGORIES: {
-    withRegistration: ["MATRICULA"],
-    withoutRegistration: ["IPTU"],
-  },
+  reconcileEntityDocuments: vi.fn(),
+  computePropertyCategories: vi.fn(),
 }));
 const accessMocks = vi.hoisted(() => ({
   assertFamilyAccess: vi.fn(),
@@ -34,8 +31,8 @@ const accessMocks = vi.hoisted(() => ({
 vi.mock("./property-repository", () => propertyRepoMocks);
 vi.mock("../audit/audit-repository", () => auditMocks);
 vi.mock("../documents/document-requirements", () => ({
-  ensureDocumentRequirements: documentRequirementMocks.ensureDocumentRequirements,
-  PROPERTY_DOCUMENT_CATEGORIES: documentRequirementMocks.PROPERTY_DOCUMENT_CATEGORIES,
+  reconcileEntityDocuments: documentRequirementMocks.reconcileEntityDocuments,
+  computePropertyCategories: documentRequirementMocks.computePropertyCategories,
 }));
 vi.mock("../access/family-access", () => ({
   assertFamilyAccess: accessMocks.assertFamilyAccess,
@@ -76,10 +73,14 @@ describe("propertyRouter", () => {
     }));
     accessMocks.assertFamilyAccess.mockResolvedValue(undefined);
     auditMocks.recordAudit.mockResolvedValue(undefined);
-    documentRequirementMocks.ensureDocumentRequirements.mockResolvedValue([
-      { id: "req-1" },
-      { id: "req-2" },
-    ]);
+    documentRequirementMocks.reconcileEntityDocuments.mockResolvedValue({
+      created: 2,
+      removed: 0,
+    });
+    documentRequirementMocks.computePropertyCategories.mockImplementation(
+      (property: { hasRegistration?: boolean | null }) =>
+        property.hasRegistration === false ? ["IPTU"] : ["MATRICULA", "IPTU"]
+    );
     propertyRepoMocks.listPropertyRecords.mockResolvedValue([{ id: "imovel-1" }]);
     propertyRepoMocks.getPropertyRecord.mockResolvedValue({
       id: "imovel-1",
@@ -128,7 +129,7 @@ describe("propertyRouter", () => {
       propertyId: "imovel-9",
     });
     expect(
-      documentRequirementMocks.ensureDocumentRequirements
+      documentRequirementMocks.reconcileEntityDocuments
     ).toHaveBeenCalledWith(
       expect.objectContaining({ familyId: "fam-1", entityType: "IMOVEL" })
     );
@@ -139,7 +140,7 @@ describe("propertyRouter", () => {
         entityId: "imovel-9",
         actorUserId: 7,
         familyId: "fam-1",
-        metadata: { requirements: 2 },
+        metadata: { requirements: 2, requirementsRemoved: 0 },
       })
     );
   });
@@ -154,11 +155,10 @@ describe("propertyRouter", () => {
       } as never)
     ).resolves.toEqual({ propertyId: "imovel-9" });
     expect(
-      documentRequirementMocks.ensureDocumentRequirements
+      documentRequirementMocks.reconcileEntityDocuments
     ).toHaveBeenCalledWith(
       expect.objectContaining({
-        categories: documentRequirementMocks.PROPERTY_DOCUMENT_CATEGORIES
-          .withoutRegistration,
+        categories: ["IPTU"],
       })
     );
   });

@@ -14,7 +14,6 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { PeoplePanel } from "@/features/people/PeoplePanel";
 import { DocumentPanel } from "@/features/documents/DocumentPanel";
-import { CertidaoPanel } from "@/features/certidoes/CertidaoPanel";
 import { PropertyPanel } from "@/features/properties/PropertyPanel";
 import { CompanyPanel } from "@/features/companies/CompanyPanel";
 import { AssetsPanel } from "@/features/assets/AssetsPanel";
@@ -132,7 +131,7 @@ export function FamilyWorkspacePage() {
             value="documentos"
             className="data-[state=active]:bg-white data-[state=active]:text-lucathi-navy data-[state=active]:shadow-sm rounded-lg px-4 py-2 text-xs font-semibold gap-2"
           >
-            <FileStack className="size-4" /> Matriz Documental & Certidões
+            <FileStack className="size-4" /> Documentos e Certidões
           </TabsTrigger>
           <TabsTrigger
             value="portal-auditoria"
@@ -184,9 +183,9 @@ export function FamilyWorkspacePage() {
           </div>
         </TabsContent>
 
-        {/* ABA 3: MATRIZ DOCUMENTAL, SEÇÕES E CERTIDÕES */}
+        {/* ABA 3: DOCUMENTOS E CERTIDÕES */}
         <TabsContent value="documentos" className="space-y-6">
-          <DocumentPanel familyId={familyId} sociedadesExtras={<CertidaoPanel familyId={familyId} />} />
+          <DocumentPanel familyId={familyId} />
         </TabsContent>
 
         {/* ABA 4: PORTAL & AUDITORIA */}

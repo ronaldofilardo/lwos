@@ -24,6 +24,10 @@ const documentRepoMocks = vi.hoisted(() => ({
 const documentUploadMocks = vi.hoisted(() => ({
   storeDocumentVersion: vi.fn(),
 }));
+const requirementsMocks = vi.hoisted(() => ({
+  reconcileEntityDocuments: vi.fn(),
+  computePersonCategories: vi.fn(),
+}));
 const accessMocks = vi.hoisted(() => ({
   assertFamilyAccess: vi.fn(),
   requireRole: vi.fn(),
@@ -34,6 +38,10 @@ vi.mock("../audit/audit-repository", () => auditMocks);
 vi.mock("../certidoes/certidao-repository", () => certidaoMocks);
 vi.mock("../documents/document-repository", () => documentRepoMocks);
 vi.mock("../documents/document-upload", () => documentUploadMocks);
+vi.mock("../documents/document-requirements", () => requirementsMocks);
+vi.mock("../documents/person-document-categories", () => ({
+  computePersonCategories: requirementsMocks.computePersonCategories,
+}));
 vi.mock("./../access/family-access", () => ({
   assertFamilyAccess: accessMocks.assertFamilyAccess,
 }));
@@ -85,6 +93,23 @@ describe("personRouter", () => {
     auditMocks.recordAudit.mockResolvedValue(undefined);
     certidaoMocks.ensureCertidoesForSubject.mockResolvedValue(undefined);
     personRepoMocks.addPersonRecord.mockResolvedValue("pessoa-1");
+    personRepoMocks.getPersonRecord.mockResolvedValue({
+      id: "p-1",
+      vinculo: "TITULAR",
+      civilStatus: "CASADO",
+      isDependent: false,
+    });
+    requirementsMocks.reconcileEntityDocuments.mockResolvedValue({
+      created: 1,
+      removed: 0,
+    });
+    requirementsMocks.computePersonCategories.mockReturnValue([
+      "IRPF",
+      "CPF/RG ou CNH",
+      "Certidão de casamento",
+      "Comprovante de endereço",
+      "Passaporte",
+    ]);
     personRepoMocks.listPeopleByFamily.mockResolvedValue([{ id: "p-1" }]);
     personRepoMocks.updatePersonRecord.mockResolvedValue({
       personId: "p-1",
@@ -145,7 +170,16 @@ describe("personRouter", () => {
       expect.objectContaining({
         action: "PESSOA_ATUALIZADA",
         entityId: "p-1",
-        metadata: { migratedFiles: 3 },
+        metadata: expect.objectContaining({ migratedFiles: 3 }),
+      })
+    );
+    expect(
+      requirementsMocks.reconcileEntityDocuments
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        familyId: "fam-1",
+        entityType: "PESSOA",
+        entityId: "p-1",
       })
     );
   });

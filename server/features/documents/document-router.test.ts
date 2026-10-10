@@ -17,7 +17,9 @@ const reviewMocks = vi.hoisted(() => ({
   reviewDocumentRecord: vi.fn(),
 }));
 const uploadMocks = vi.hoisted(() => ({ storeDocumentVersion: vi.fn() }));
-const requirementsMocks = vi.hoisted(() => ({ ensureFamilyDocumentRequirements: vi.fn() }));
+const requirementsMocks = vi.hoisted(() => ({
+  reconcileFamilyDocumentRequirements: vi.fn(),
+}));
 const accessMocks = vi.hoisted(() => ({ assertFamilyAccess: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
 
@@ -84,7 +86,10 @@ describe("document-router criação e requisitos", () => {
     vi.clearAllMocks();
     accessMocks.assertFamilyAccess.mockResolvedValue(user);
     repositoryMocks.findOrCreateDocumentRecord.mockResolvedValue("doc-9");
-    requirementsMocks.ensureFamilyDocumentRequirements.mockResolvedValue(4);
+    requirementsMocks.reconcileFamilyDocumentRequirements.mockResolvedValue({
+      created: 4,
+      removed: 1,
+    });
     auditMocks.recordAudit.mockResolvedValue(undefined);
   });
 
@@ -111,12 +116,15 @@ describe("document-router criação e requisitos", () => {
   it("gera os requisitos da família e audita a contagem", async () => {
     await expect(caller().generateRequirements({ familyId: "fam-1" })).resolves.toEqual({
       created: 4,
+      removed: 1,
     });
-    expect(requirementsMocks.ensureFamilyDocumentRequirements).toHaveBeenCalledWith("fam-1");
+    expect(
+      requirementsMocks.reconcileFamilyDocumentRequirements
+    ).toHaveBeenCalledWith("fam-1");
     expect(auditMocks.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "REQUISITOS_DOCUMENTAIS_GERADOS",
-        metadata: { created: 4 },
+        metadata: { created: 4, removed: 1 },
       })
     );
   });
@@ -125,7 +133,9 @@ describe("document-router criação e requisitos", () => {
     await expect(caller("CLIENTE").generateRequirements({ familyId: "fam-1" })).rejects.toThrow(
       "Permissão insuficiente."
     );
-    expect(requirementsMocks.ensureFamilyDocumentRequirements).not.toHaveBeenCalled();
+    expect(
+      requirementsMocks.reconcileFamilyDocumentRequirements
+    ).not.toHaveBeenCalled();
   });
 });
 

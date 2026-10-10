@@ -10,7 +10,7 @@ type Props = {
   disabled?: boolean;
   onUpload: (file: File) => Promise<unknown>;
   onReview: (
-    status: "VALIDADO" | "REJEITADO",
+    status: "VALIDADO" | "REJEITADO" | "NAO_POSSUI",
     reason?: string
   ) => Promise<unknown>;
   onDispense: (reason: string) => Promise<unknown>;
@@ -118,6 +118,18 @@ export function DocumentActions({
                 onClick={() => setShowDispense(!showDispense)}
               >
                 <Ban className="mr-1 size-3" /> Dispensar
+              </Button>
+            )}
+
+            {isDispensed ? null : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-purple-700 border-purple-200 hover:bg-purple-50"
+                disabled={busy || disabled}
+                onClick={() => onReview("NAO_POSSUI")}
+              >
+                Não possui
               </Button>
             )}
 

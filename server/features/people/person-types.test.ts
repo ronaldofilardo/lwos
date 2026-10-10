@@ -188,4 +188,27 @@ describe("personInputSchema", () => {
       personInputSchema.parse({ ...base, vinculo: "FILHO" })
     ).toThrow(/estado civil/);
   });
+
+  it("impede o titular de ser marcado como dependente", () => {
+    expect(() =>
+      personInputSchema.parse({
+        ...base,
+        vinculo: "TITULAR",
+        civilStatus: "CASADO",
+        maritalRegime: "CPB",
+        spouseName: "João Silva",
+        isDependent: true,
+      })
+    ).toThrow(/titular não pode ser marcado como dependente/);
+  });
+
+  it("aceita filho marcado como dependente", () => {
+    const parsed = personInputSchema.parse({
+      ...base,
+      vinculo: "FILHO",
+      civilStatus: "SOLTEIRO",
+      isDependent: true,
+    });
+    expect(parsed.isDependent).toBe(true);
+  });
 });

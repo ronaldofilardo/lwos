@@ -9,6 +9,7 @@ export const documentStatusSchema = z.enum([
   "REJEITADO",
   "VENCIDO",
   "DISPENSADO",
+  "NAO_POSSUI",
   "NA",
 ]);
 
@@ -34,7 +35,7 @@ export const uploadVersionSchema = z.object({
 
 export const reviewDocumentSchema = z.object({
   documentId: z.string().min(1),
-  status: z.enum(["VALIDADO", "REJEITADO"]),
+  status: z.enum(["VALIDADO", "REJEITADO", "NAO_POSSUI"]),
   rejectionReason: z.string().min(3).max(1000).optional(),
 });
 

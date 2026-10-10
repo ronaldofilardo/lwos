@@ -6,6 +6,10 @@ import { storagePut } from "../../storage";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import { releaseSpouseCoupleDocs } from "./couple-docs";
+import {
+  assertIrpfUploadAllowed,
+  syncDependentIrpfStatus,
+} from "./dependent-irpf";
 import { getDocumentRecord } from "./document-repository";
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -27,6 +31,7 @@ export async function storeDocumentVersion(input: {
     throw new Error("Tipo de arquivo não permitido.");
   const document = await getDocumentRecord(input.documentId);
   if (!document) throw new Error("Documento não encontrado.");
+  await assertIrpfUploadAllowed(document);
   const bytes = Buffer.from(input.base64Data, "base64");
   if (!bytes.length || bytes.length > 5 * 1024 * 1024)
     throw new Error("Arquivo inválido ou maior que 5 MB.");
@@ -67,5 +72,9 @@ export async function storeDocumentVersion(input: {
     entityId: document.entityId,
     category: document.category,
   });
+  // IRPF do titular enviado → espelha status nos dependentes.
+  if (document.entityType === "PESSOA" && document.category === "IRPF") {
+    await syncDependentIrpfStatus(document.familyId);
+  }
   return { versionNumber: nextVersion, sha256, storageKey: stored.key };
 }

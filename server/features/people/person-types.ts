@@ -37,6 +37,7 @@ export type PersonRuleData = {
   city?: string | null;
   uf?: string | null;
   parentPersonId?: string | null;
+  isDependent?: boolean;
 };
 
 /**
@@ -90,6 +91,12 @@ export function collectPersonIssues(
       issues.push({
         path: ["phone"],
         message: "Telefone obrigatório para o titular (DDD + número).",
+      });
+    }
+    if (data.isDependent) {
+      issues.push({
+        path: ["isDependent"],
+        message: "O titular não pode ser marcado como dependente.",
       });
     }
   }
@@ -175,6 +182,7 @@ const personBaseSchema = z.object({
   maritalRegime: maritalRegimeSchema.optional(),
   exSpouseNote: z.string().max(1000).optional(),
   isPrimaryContact: z.boolean().optional(),
+  isDependent: z.boolean().optional(),
   addressSameAsPrimary: z.boolean().optional(),
   cep: z.string().max(8).optional().or(z.literal("")),
   street: z.string().max(160).optional().or(z.literal("")),

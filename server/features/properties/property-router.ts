@@ -4,7 +4,10 @@ import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { assertFamilyAccess } from "../access/family-access";
 import { requireRole } from "../access/authorization";
 import { recordAudit } from "../audit/audit-repository";
-import { ensureDocumentRequirements, PROPERTY_DOCUMENT_CATEGORIES } from "../documents/document-requirements";
+import {
+  computePropertyCategories,
+  reconcileEntityDocuments,
+} from "../documents/document-requirements";
 import {
   addPropertyOwnerRecord,
   assertCompanyOwnershipAllowed,
@@ -40,13 +43,11 @@ export const propertyRouter = router({
   create: protectedProcedure.input(propertyInputSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
     const propertyId = await createPropertyRecord(input);
-    const requirements = await ensureDocumentRequirements({
+    const { created, removed } = await reconcileEntityDocuments({
       familyId: input.familyId,
       entityType: "IMOVEL",
       entityId: propertyId,
-      categories: input.hasRegistration
-        ? PROPERTY_DOCUMENT_CATEGORIES.withRegistration
-        : PROPERTY_DOCUMENT_CATEGORIES.withoutRegistration,
+      categories: computePropertyCategories(input),
     });
     await recordAudit({
       action: "IMOVEL_CRIADO",
@@ -54,7 +55,7 @@ export const propertyRouter = router({
       entityId: propertyId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { requirements: requirements.length },
+      metadata: { requirements: created, requirementsRemoved: removed },
     });
     return { propertyId };
   }),
@@ -64,12 +65,26 @@ export const propertyRouter = router({
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
     const result = await updatePropertyRecord(input);
+    const updated = await getPropertyRecord(input.propertyId);
+    let requirementsCreated = 0;
+    let requirementsRemoved = 0;
+    if (updated) {
+      const reconciled = await reconcileEntityDocuments({
+        familyId: property.familyId,
+        entityType: "IMOVEL",
+        entityId: input.propertyId,
+        categories: computePropertyCategories(updated),
+      });
+      requirementsCreated = reconciled.created;
+      requirementsRemoved = reconciled.removed;
+    }
     await recordAudit({
       action: "IMOVEL_ATUALIZADO",
       entityType: "IMOVEL",
       entityId: input.propertyId,
       actorUserId: user.id,
       familyId: property.familyId,
+      metadata: { requirementsCreated, requirementsRemoved },
     });
     return result;
   }),

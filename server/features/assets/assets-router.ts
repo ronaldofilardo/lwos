@@ -12,7 +12,7 @@ import {
   updateAssetRecord,
 } from "./assets-repository";
 import { createAssetSchema, removeAssetSchema, updateAssetSchema } from "./assets-types";
-import { ASSET_DOCUMENT_CATEGORIES, ensureDocumentRequirements } from "../documents/document-requirements";
+import { computeAssetCategories, reconcileEntityDocuments } from "../documents/document-requirements";
 
 export const assetRouter = router({
   list: protectedProcedure.input(z.object({ familyId: z.string() })).query(async ({ ctx, input }) => {
@@ -23,11 +23,11 @@ export const assetRouter = router({
     const user = requireRole(ctx, TEAM_ROLES);
     await assertFamilyAccess(ctx, input.familyId);
     const assetId = await createAssetRecord(input);
-    const requirements = await ensureDocumentRequirements({
+    const { created, removed } = await reconcileEntityDocuments({
       familyId: input.familyId,
       entityType: "ATIVO",
       entityId: assetId,
-      categories: ASSET_DOCUMENT_CATEGORIES,
+      categories: computeAssetCategories(),
     });
     await recordAudit({
       action: "ATIVO_CRIADO",
@@ -35,7 +35,7 @@ export const assetRouter = router({
       entityId: assetId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { category: input.category, description: input.description, requirements: requirements.length },
+      metadata: { category: input.category, description: input.description, requirements: created, requirementsRemoved: removed },
     });
     return { assetId };
   }),
@@ -45,13 +45,19 @@ export const assetRouter = router({
     if (!asset) throw new Error("Ativo não encontrado.");
     await assertFamilyAccess(ctx, asset.familyId);
     const result = await updateAssetRecord(input);
+    const { created, removed } = await reconcileEntityDocuments({
+      familyId: asset.familyId,
+      entityType: "ATIVO",
+      entityId: input.assetId,
+      categories: computeAssetCategories(),
+    });
     await recordAudit({
       action: "ATIVO_ATUALIZADO",
       entityType: "ATIVO",
       entityId: input.assetId,
       actorUserId: user.id,
       familyId: asset.familyId,
-      metadata: { category: input.category, description: input.description },
+      metadata: { category: input.category, description: input.description, requirementsCreated: created, requirementsRemoved: removed },
     });
     return result;
   }),

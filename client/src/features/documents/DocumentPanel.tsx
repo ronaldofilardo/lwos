@@ -1,10 +1,14 @@
-import { FileStack, RefreshCw } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { ChevronDown, FileStack, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { StatusBadge } from "@/components/lucathi/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import {
+  certidaoStatusLabels,
+  certidaoStatusValues,
+} from "@/features/certidoes/types";
 import { DocumentActions } from "./common/DocumentActions";
 import { DocumentVersionHistory } from "./common/DocumentVersionHistory";
 import { useDocumentActions } from "./hooks/useDocumentActions";
@@ -15,13 +19,7 @@ import {
   isResolvedStatus,
 } from "./groupDocuments";
 
-export function DocumentPanel({
-  familyId,
-  sociedadesExtras,
-}: {
-  familyId: string;
-  sociedadesExtras?: ReactNode;
-}) {
+export function DocumentPanel({ familyId }: { familyId: string }) {
   const { documents, loading } = useDocuments(familyId);
   const { user } = useAuth();
   const actions = useDocumentActions(familyId);
@@ -31,6 +29,9 @@ export function DocumentPanel({
   const [reviewModalReason, setReviewModalReason] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [sameAddressState, setSameAddressState] = useState<Record<string, boolean>>({});
+  // Blocos e membros começam contraídos (Fase 8): estado por chave.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   const family = trpc.families.get.useQuery(
     { familyId },
@@ -40,22 +41,44 @@ export function DocumentPanel({
   const properties = trpc.properties.list.useQuery({ familyId });
   const companies = trpc.companies.list.useQuery({ familyId });
   const assets = trpc.assets.list.useQuery({ familyId });
+  const certidoes = trpc.certidoes.list.useQuery({ familyId });
   const utils = trpc.useUtils();
+
+  const updateCertidao = trpc.certidoes.updateStatus.useMutation({
+    onSuccess: () => {
+      utils.certidoes.list.invalidate({ familyId });
+      utils.documents.list.invalidate({ familyId });
+      toast.success("Situação da certidão atualizada.");
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const generate = trpc.documents.generateRequirements.useMutation({
     onSuccess: result => {
       utils.documents.list.invalidate({ familyId });
       toast.success(
-        result.created > 0
-          ? `${result.created} requisito(s) documentais criados.`
-          : "Todos os requisitos já estavam gerados."
+        result.created > 0 || result.removed > 0
+          ? `${result.created} requisito(s) criado(s) · ${result.removed} pendência(s) obsoleta(s) removida(s).`
+          : "Matriz documental já está em dia."
       );
     },
     onError: error => toast.error(error.message),
     onSettled: () => setSyncing(false),
   });
 
-  // As certidões têm seção própria (/famílias → Certidões), não entram aqui.
-  const matrixDocuments = documents.filter(d => d.entityType !== "CERTIDAO");
+  // Certidões entram na matriz: o documento (entityType CERTIDAO) é reagrupado
+  // dentro do membro/sociedade dono da certidão (Fase 8).
+  const certidaoByDocumentId = new Map(
+    (certidoes.data ?? [])
+      .filter(row => row.documentId)
+      .map(row => [row.documentId as string, row])
+  );
+  const matrixDocuments = documents.map(doc => {
+    if (doc.entityType !== "CERTIDAO") return doc;
+    const certidao = certidaoByDocumentId.get(doc.id);
+    if (!certidao) return doc;
+    return { ...doc, entityType: certidao.scope, entityId: certidao.subjectId };
+  });
 
   const groups = groupDocumentsByMember(matrixDocuments, {
     familyName: family.data?.name ?? null,
@@ -80,6 +103,11 @@ export function DocumentPanel({
     isResolvedStatus(d.status)
   ).length;
 
+  const toggleSection = (key: string) =>
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleGroup = (key: string) =>
+    setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
+
   return (
     <section className="rounded-2xl border border-lucathi-line bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -89,11 +117,11 @@ export function DocumentPanel({
           </div>
           <div>
             <h2 className="font-display text-2xl text-lucathi-navy">
-              Matriz Documental & Compliance
+              Documentos e Certidões
             </h2>
             <p className="text-sm text-lucathi-gray">
-              Organizada por membro do caso. Versões preservadas com SHA-256;
-              validação e dispensa pelo SOCIO.
+              Organizada por membro do caso, com certidões integradas. Versões
+              preservadas com SHA-256; validação e dispensa pelo SOCIO.
             </p>
           </div>
         </div>
@@ -140,171 +168,252 @@ export function DocumentPanel({
           const sectionResolved = sectionDocs.filter(d =>
             isResolvedStatus(d.status)
           ).length;
+          const sectionOpen = Boolean(openSections[section.key]);
 
           return (
             <section
               key={section.key}
               className="rounded-2xl border border-lucathi-line bg-lucathi-mist/40 p-4"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-display text-lg text-lucathi-navy">
-                    {section.title}
-                  </p>
-                  <p className="text-xs text-lucathi-gray">
-                    {section.description}
-                  </p>
+              <button
+                type="button"
+                className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
+                onClick={() => toggleSection(section.key)}
+                aria-expanded={sectionOpen}
+              >
+                <div className="flex items-center gap-2">
+                  <ChevronDown
+                    className={`size-4 text-lucathi-gray transition-transform ${
+                      sectionOpen ? "" : "-rotate-90"
+                    }`}
+                  />
+                  <div>
+                    <p className="font-display text-lg text-lucathi-navy">
+                      {section.title}
+                    </p>
+                    <p className="text-xs text-lucathi-gray">
+                      {section.description}
+                    </p>
+                  </div>
                 </div>
                 <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-lucathi-navy">
                   {sectionResolved}/{sectionDocs.length} resolvidos
                 </span>
-              </div>
+              </button>
 
-              <div className="mt-3 space-y-4">
-                {section.groups.map(group => {
-                  const groupResolved = group.documents.filter(d =>
-                    isResolvedStatus(d.status)
-                  ).length;
-                  return (
-                    <div
-                      key={group.key}
-                      className="rounded-2xl border border-lucathi-line/80 bg-white/70 p-4"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-lucathi-navy">
-                            {group.title}
-                          </p>
-                          {group.subtitle ? (
-                            <p className="text-xs text-lucathi-gray">
-                              {group.subtitle}
-                            </p>
-                          ) : null}
-                        </div>
-                        <span className="rounded-full bg-lucathi-mist px-2.5 py-1 text-xs font-semibold text-lucathi-navy">
-                          {groupResolved}/{group.documents.length} resolvidos
-                        </span>
-                      </div>
-
-                      <div className="mt-3 space-y-3">
-                        {group.documents.map(document => {
-                          const person = people.data?.find(p => p.id === document.entityId);
-                          const isSingleSon = person?.vinculo === "FILHO" && person?.civilStatus === "SOLTEIRO";
-                          const isAddressDoc = document.category === "Comprovante de endereço";
-                          
-                          return (
-                            <div
-                              key={document.id}
-                              className="rounded-xl border border-lucathi-line bg-white p-4 transition-all"
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <div>
-                                  <p className="text-sm font-semibold text-lucathi-navy">
-                                    {document.category}
-                                  </p>
-                                  {isSingleSon && isAddressDoc && (
-                                    <div className="mt-1 flex items-center" onClick={e => e.stopPropagation()}>
-                                      <input
-                                        type="checkbox"
-                                        id={`sameAddress_${document.id}`}
-                                        checked={!!sameAddressState[document.id]}
-                                        onChange={e => {
-                                          setSameAddressState(prev => ({
-                                            ...prev,
-                                            [document.id]: e.target.checked
-                                          }));
-                                        }}
-                                        className="rounded border-lucathi-line"
-                                      />
-                                      <label htmlFor={`sameAddress_${document.id}`} className="text-xs text-lucathi-gray ml-2">
-                                        Mesmo endereço do titular
-                                      </label>
-                                    </div>
-                                  )}
-                                  <p className="text-xs text-lucathi-gray">
-                                    Versão atual:{" "}
-                                    {document.currentVersion
-                                      ? `v${document.currentVersion}`
-                                      : "não enviada"}
-                                  </p>
-                                </div>
-                                <StatusBadge status={document.status} />
-                              </div>
-
-                            {document.status === "DISPENSADO" &&
-                            document.dispensationReason ? (
-                              <div className="mt-2.5 rounded-lg border border-purple-200 bg-purple-50/80 p-2.5 text-xs text-purple-900">
-                                <span className="font-semibold">
-                                  Dispensa formalizada por Sócio:
-                                </span>{" "}
-                                “{document.dispensationReason}”
-                                {document.dispensedAt
-                                  ? ` em ${new Date(document.dispensedAt).toLocaleDateString("pt-BR")}`
-                                  : ""}
-                              </div>
-                            ) : null}
-
-                            {document.status === "REJEITADO" &&
-                            document.rejectionReason ? (
-                              <div className="mt-2.5 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800">
-                                <span className="font-semibold">
-                                  Motivo da Rejeição:
-                                </span>{" "}
-                                {document.rejectionReason}
-                              </div>
-                            ) : null}
-
-                            {document.status === "REJEITADO" && canEdit && (
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  setShowReviewModal(true);
-                                }}
-                                className="mt-2 text-sm text-blue-600 underline cursor-pointer hover:text-blue-800"
-                              >
-                                Solicitar novo documento
-                              </button>
-                            )}
-
-                            <div className="mt-3">
-                              <DocumentActions
-                                documentId={document.id}
-                                canReview={canReview}
-                                disabled={sameAddressState[document.id]}
-                                busy={
-                                  actions.uploading ||
-                                  actions.reviewing ||
-                                  actions.dispensing
-                                }
-                                status={document.status}
-                                onUpload={file =>
-                                  actions.upload(document.id, file)
-                                }
-                                onReview={(status, reason) =>
-                                  actions.review(document.id, status, reason)
-                                }
-                                onDispense={reason =>
-                                  actions.dispense(document.id, reason)
-                                }
-                              />
-                            </div>
-
-                            <DocumentVersionHistory
-                              documentId={document.id}
-                              currentVersion={document.currentVersion || undefined}
-                              documentStatus={document.status}
+              {sectionOpen ? (
+                <div className="mt-3 space-y-4">
+                  {section.groups.map(group => {
+                    const groupResolved = group.documents.filter(d =>
+                      isResolvedStatus(d.status)
+                    ).length;
+                    const groupOpen = Boolean(openGroups[group.key]);
+                    return (
+                      <div
+                        key={group.key}
+                        className="rounded-2xl border border-lucathi-line/80 bg-white/70 p-4"
+                      >
+                        <button
+                          type="button"
+                          className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
+                          onClick={() => toggleGroup(group.key)}
+                          aria-expanded={groupOpen}
+                        >
+                          <div className="flex items-center gap-2">
+                            <ChevronDown
+                              className={`size-4 text-lucathi-gray transition-transform ${
+                                groupOpen ? "" : "-rotate-90"
+                              }`}
                             />
+                            <div>
+                              <p className="text-sm font-semibold text-lucathi-navy">
+                                {group.title}
+                              </p>
+                              {group.subtitle ? (
+                                <p className="text-xs text-lucathi-gray">
+                                  {group.subtitle}
+                                </p>
+                              ) : null}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                          </div>
+                          <span className="rounded-full bg-lucathi-mist px-2.5 py-1 text-xs font-semibold text-lucathi-navy">
+                            {groupResolved}/{group.documents.length} resolvidos
+                          </span>
+                        </button>
 
-              {section.key === "SOCIEDADE" && sociedadesExtras ? (
-                <div className="mt-4">{sociedadesExtras}</div>
+                        {groupOpen ? (
+                          <div className="mt-3 space-y-3">
+                            {group.documents.map(document => {
+                              const person = people.data?.find(p => p.id === document.entityId);
+                              const isSingleSon = person?.vinculo === "FILHO" && person?.civilStatus === "SOLTEIRO";
+                              const isAddressDoc = document.category === "Comprovante de endereço";
+                              const certidao = certidaoByDocumentId.get(document.id);
+
+                              return (
+                                <div
+                                  key={document.id}
+                                  className="rounded-xl border border-lucathi-line bg-white p-4 transition-all"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-lucathi-navy">
+                                        {document.category}
+                                      </p>
+                                      {isSingleSon && isAddressDoc && (
+                                        <div className="mt-1 flex items-center" onClick={e => e.stopPropagation()}>
+                                          <input
+                                            type="checkbox"
+                                            id={`sameAddress_${document.id}`}
+                                            checked={!!sameAddressState[document.id]}
+                                            onChange={e => {
+                                              setSameAddressState(prev => ({
+                                                ...prev,
+                                                [document.id]: e.target.checked
+                                              }));
+                                            }}
+                                            className="rounded border-lucathi-line"
+                                          />
+                                          <label htmlFor={`sameAddress_${document.id}`} className="text-xs text-lucathi-gray ml-2">
+                                            Mesmo endereço do titular
+                                          </label>
+                                        </div>
+                                      )}
+                                      <p className="text-xs text-lucathi-gray">
+                                        Versão atual:{" "}
+                                        {document.currentVersion
+                                          ? `v${document.currentVersion}`
+                                          : "não enviada"}
+                                      </p>
+                                    </div>
+                                    <StatusBadge status={document.status} />
+                                  </div>
+
+                                {certidao ? (
+                                  <div
+                                    className="mt-2.5 flex flex-wrap items-center gap-2"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <span className="text-xs text-lucathi-gray">
+                                      Situação da certidão:
+                                    </span>
+                                    {canReview ? (
+                                      <>
+                                        <select
+                                          value={certidao.status}
+                                          onChange={e =>
+                                            updateCertidao.mutate({
+                                              certidaoId: certidao.id,
+                                              status: e.target.value as
+                                                | (typeof certidaoStatusValues)[number],
+                                            })
+                                          }
+                                          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                          aria-label="Situação da certidão"
+                                        >
+                                          {certidaoStatusValues.map(status => (
+                                            <option key={status} value={status}>
+                                              {certidaoStatusLabels[status]}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <input
+                                          type="date"
+                                          value={certidao.validUntil ?? ""}
+                                          onChange={e =>
+                                            updateCertidao.mutate({
+                                              certidaoId: certidao.id,
+                                              validUntil: e.target.value,
+                                            })
+                                          }
+                                          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                          aria-label="Validade da certidão"
+                                        />
+                                      </>
+                                    ) : (
+                                      <span className="text-xs font-semibold text-lucathi-navy">
+                                        {certidaoStatusLabels[
+                                          certidao.status as keyof typeof certidaoStatusLabels
+                                        ] ?? certidao.status}
+                                        {certidao.validUntil
+                                          ? ` · válida até ${new Date(certidao.validUntil).toLocaleDateString("pt-BR")}`
+                                          : ""}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : null}
+
+                                {document.status === "DISPENSADO" &&
+                                document.dispensationReason ? (
+                                  <div className="mt-2.5 rounded-lg border border-purple-200 bg-purple-50/80 p-2.5 text-xs text-purple-900">
+                                    <span className="font-semibold">
+                                      Dispensa formalizada por Sócio:
+                                    </span>{" "}
+                                    “{document.dispensationReason}”
+                                    {document.dispensedAt
+                                      ? ` em ${new Date(document.dispensedAt).toLocaleDateString("pt-BR")}`
+                                      : ""}
+                                  </div>
+                                ) : null}
+
+                                {document.status === "REJEITADO" &&
+                                document.rejectionReason ? (
+                                  <div className="mt-2.5 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800">
+                                    <span className="font-semibold">
+                                      Motivo da Rejeição:
+                                    </span>{" "}
+                                    {document.rejectionReason}
+                                  </div>
+                                ) : null}
+
+                                {document.status === "REJEITADO" && canEdit && (
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setShowReviewModal(true);
+                                    }}
+                                    className="mt-2 text-sm text-blue-600 underline cursor-pointer hover:text-blue-800"
+                                  >
+                                    Solicitar novo documento
+                                  </button>
+                                )}
+
+                                <div className="mt-3">
+                                  <DocumentActions
+                                    documentId={document.id}
+                                    canReview={canReview}
+                                    disabled={sameAddressState[document.id]}
+                                    busy={
+                                      actions.uploading ||
+                                      actions.reviewing ||
+                                      actions.dispensing
+                                    }
+                                    status={document.status}
+                                    onUpload={file =>
+                                      actions.upload(document.id, file)
+                                    }
+                                    onReview={(status, reason) =>
+                                      actions.review(document.id, status, reason)
+                                    }
+                                    onDispense={reason =>
+                                      actions.dispense(document.id, reason)
+                                    }
+                                  />
+                                </div>
+
+                                <DocumentVersionHistory
+                                  documentId={document.id}
+                                  currentVersion={document.currentVersion || undefined}
+                                  documentStatus={document.status}
+                                />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               ) : null}
             </section>
           );

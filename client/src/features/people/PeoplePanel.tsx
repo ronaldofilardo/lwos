@@ -48,6 +48,7 @@ type PersonRow = {
   parentPersonId: string | null;
   exSpouseNote: string | null;
   isPrimaryContact: boolean;
+  isDependent: boolean;
   addressSameAsPrimary: boolean;
   cep: string | null;
   street: string | null;
@@ -70,6 +71,7 @@ function toFormValues(person: PersonRow): Partial<PersonFormSubmit> {
     civilStatus: person.civilStatus as PersonFormSubmit["civilStatus"],
     maritalRegime: person.maritalRegime as PersonFormSubmit["maritalRegime"],
     spouseName: person.spouseName ?? "",
+    isDependent: person.isDependent,
     addressSameAsPrimary: person.addressSameAsPrimary,
     cep: person.cep ?? "",
     street: person.street ?? "",
@@ -154,6 +156,11 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium">{person.fullName}</p>
                     <VinculoBadge vinculo={person.vinculo} />
+                    {person.isDependent ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                        Dependente · IRPF do titular
+                      </span>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1">
                     {person.isPrimaryContact ? (

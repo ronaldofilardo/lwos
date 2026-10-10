@@ -9,6 +9,13 @@ describe("reviewDocumentSchema", () => {
     ).toBe("VALIDADO");
   });
 
+  it("aceita NAO_POSSUI como estado final de revisão", () => {
+    expect(
+      reviewDocumentSchema.parse({ documentId: "doc-1", status: "NAO_POSSUI" })
+        .status
+    ).toBe("NAO_POSSUI");
+  });
+
   it("recusa tentativa de envio de estado intermediário pela revisão", () => {
     expect(() =>
       reviewDocumentSchema.parse({

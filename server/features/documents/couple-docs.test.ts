@@ -32,7 +32,7 @@ const titularDoc = {
   familyId: "fam-1",
   entityType: "PESSOA",
   entityId: "titular-1",
-  category: "Certidão de casamento/UE",
+  category: "Certidão de casamento",
 };
 
 describe("releaseSpouseCoupleDocs", () => {
