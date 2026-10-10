@@ -19,6 +19,7 @@ const reviewMocks = vi.hoisted(() => ({
 const uploadMocks = vi.hoisted(() => ({ storeDocumentVersion: vi.fn() }));
 const requirementsMocks = vi.hoisted(() => ({
   reconcileFamilyDocumentRequirements: vi.fn(),
+  COMPANY_BALANCE_CATEGORIES: ["Balanço Fechado", "Balancete Atualizado"] as const,
 }));
 const accessMocks = vi.hoisted(() => ({ assertFamilyAccess: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
@@ -254,7 +255,7 @@ describe("document-router upload, revisão e dispensa", () => {
       caller().uploadBalance({
         familyId: "fam-1",
         companyId: "soc-1",
-        category: "Balanço fechado",
+        category: "Balanço Fechado",
         referenceDate: "2025-12-31",
         fileName: "balanco.pdf",
         base64Data: "aGVsbG8td29ybGQ=",
@@ -265,7 +266,7 @@ describe("document-router upload, revisão e dispensa", () => {
       familyId: "fam-1",
       entityType: "SOCIEDADE",
       entityId: "soc-1",
-      category: "Balanço fechado",
+      category: "Balanço Fechado",
       referenceDate: "2025-12-31",
     });
     expect(uploadMocks.storeDocumentVersion).toHaveBeenCalledWith(
@@ -280,7 +281,7 @@ describe("document-router upload, revisão e dispensa", () => {
         action: "BALANCO_ENVIADO",
         entityId: "soc-1",
         metadata: expect.objectContaining({
-          category: "Balanço fechado",
+          category: "Balanço Fechado",
           referenceDate: "2025-12-31",
         }),
       })
@@ -292,7 +293,7 @@ describe("document-router upload, revisão e dispensa", () => {
       caller().uploadBalance({
         familyId: "fam-1",
         companyId: "soc-1",
-        category: "Balanço fechado",
+        category: "Balanço Fechado",
         referenceDate: "31/12/2025",
         fileName: "b.pdf",
         base64Data: "aGVsbG8td29ybGQ=",

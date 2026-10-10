@@ -40,11 +40,16 @@ export function computePropertyCategories(property: {
     : ["Matrícula atualizada", "IPTU ou ITR"];
 }
 
+/** Categorias de balanço: fonte única para a matriz e para o upload do modal. */
+export const COMPANY_BALANCE_CATEGORIES = [
+  "Balanço Fechado",
+  "Balancete Atualizado",
+] as const;
+
 export const COMPANY_LTD_CATEGORIES = [
   "Comprovante de Inscrição no CNPJ",
   "Contrato Social Consolidado",
-  "Balanço Fechado",
-  "Balancete Atualizado",
+  ...COMPANY_BALANCE_CATEGORIES,
   "Acordo de Sócios",
   "Livro Razão do Imobilizado",
 ] as const;

@@ -22,7 +22,7 @@ import { leadRouter } from "./lead-router";
 const leadInput = {
   familyId: "family-123",
   fullName: "Interessado Teste",
-  taxId: "11122233344",
+  taxId: "52998224725",
   email: "interessado@exemplo.com",
   birthDate: "1990-01-01",
   fileName: "identificacao.pdf",

@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { BrandMark } from "@/components/lucathi/BrandMark";
+import { isCpfValido } from "@shared/validation";
 
 async function readAsBase64(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -21,7 +22,6 @@ export default function Interesse() {
   const [birthDate, setBirthDate] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
-
   const createLead = trpc.leads.create.useMutation({
     onSuccess: () => setShowSuccess(true),
     onError: error => toast.error(error.message),
@@ -31,6 +31,10 @@ export default function Interesse() {
     event.preventDefault();
     if (!file) {
       toast.error("Anexe uma imagem ou PDF de identificação.");
+      return;
+    }
+    if (!isCpfValido(taxId)) {
+      toast.error("CPF inválido. Confira os números digitados.");
       return;
     }
     await createLead.mutateAsync({

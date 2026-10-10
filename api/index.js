@@ -921,29 +921,29 @@ var init_database = __esm({
 var family_storage_path_exports = {};
 __export(family_storage_path_exports, {
   findFamilyIdByPrimaryContactCpf: () => findFamilyIdByPrimaryContactCpf,
-  onlyDigits: () => onlyDigits,
+  onlyDigits: () => onlyDigits2,
   resolveFamilyStorageFolder: () => resolveFamilyStorageFolder
 });
 import { and as and5, eq as eq8 } from "drizzle-orm";
-function onlyDigits(value) {
+function onlyDigits2(value) {
   return value.replace(/\D/g, "");
 }
 async function resolveFamilyStorageFolder(familyId) {
   const db = await requireDatabase();
   const [primary] = await db.select({ taxId: people.taxId }).from(people).where(and5(eq8(people.familyId, familyId), eq8(people.isPrimaryContact, true))).limit(1);
-  const digits = primary?.taxId ? onlyDigits(primary.taxId) : "";
+  const digits = primary?.taxId ? onlyDigits2(primary.taxId) : "";
   if (digits) return digits;
   return `familia-${familyId}`;
 }
 async function findFamilyIdByPrimaryContactCpf(cpf, excludeFamilyId) {
-  const digits = onlyDigits(cpf);
+  const digits = onlyDigits2(cpf);
   if (!digits) return null;
   const db = await requireDatabase();
   const rows = await db.select({ familyId: people.familyId, taxId: people.taxId }).from(people).where(eq8(people.isPrimaryContact, true));
   for (const row of rows) {
     if (!row.taxId) continue;
     if (excludeFamilyId && row.familyId === excludeFamilyId) continue;
-    if (onlyDigits(row.taxId) === digits) return row.familyId;
+    if (onlyDigits2(row.taxId) === digits) return row.familyId;
   }
   return null;
 }
@@ -1595,6 +1595,166 @@ async function updateCertidaoRecord(input) {
   return current;
 }
 
+// shared/validation/digitos.ts
+function onlyDigits(value) {
+  return value.replace(/\D/g, "");
+}
+
+// shared/validation/cpf.ts
+function normalizarCpf(value) {
+  return onlyDigits(value);
+}
+function isCpfValido(value) {
+  const cpf = onlyDigits(value);
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  let soma = 0;
+  for (let i = 0; i < 9; i += 1) soma += Number(cpf[i]) * (10 - i);
+  let resto = soma * 10 % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== Number(cpf[9])) return false;
+  soma = 0;
+  for (let i = 0; i < 10; i += 1) soma += Number(cpf[i]) * (11 - i);
+  resto = soma * 10 % 11;
+  if (resto === 10) resto = 0;
+  return resto === Number(cpf[10]);
+}
+
+// shared/validation/cnpj.ts
+var PESOS_DV1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+var PESOS_DV2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+function digitoVerificador(base, pesos) {
+  const soma = base.split("").reduce((acc, digito, i) => acc + Number(digito) * (pesos[i] ?? 0), 0);
+  const resto = soma % 11;
+  return resto < 2 ? 0 : 11 - resto;
+}
+function isCnpjValido(value) {
+  const cnpj = onlyDigits(value);
+  if (cnpj.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+  const base = cnpj.slice(0, 12);
+  const dv1 = digitoVerificador(base, PESOS_DV1);
+  if (dv1 !== Number(cnpj[12])) return false;
+  const dv2 = digitoVerificador(`${base}${dv1}`, PESOS_DV2);
+  return dv2 === Number(cnpj[13]);
+}
+
+// shared/validation/index.ts
+init_uf();
+
+// shared/validation/telefone.ts
+var DDDS_VALIDOS = [
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  21,
+  22,
+  24,
+  27,
+  28,
+  31,
+  32,
+  33,
+  34,
+  35,
+  37,
+  38,
+  41,
+  42,
+  43,
+  44,
+  45,
+  46,
+  47,
+  48,
+  49,
+  51,
+  53,
+  54,
+  55,
+  61,
+  62,
+  63,
+  64,
+  65,
+  66,
+  67,
+  68,
+  69,
+  71,
+  73,
+  74,
+  75,
+  77,
+  79,
+  81,
+  82,
+  83,
+  84,
+  85,
+  86,
+  87,
+  88,
+  89,
+  91,
+  92,
+  93,
+  94,
+  95,
+  96,
+  97,
+  98,
+  99
+];
+function normalizarTelefone(value) {
+  return onlyDigits(value);
+}
+function isTelefoneValido(value) {
+  let tel = onlyDigits(value);
+  if (tel.length === 12 && tel.startsWith("55")) tel = tel.slice(2);
+  if (tel.length === 13 && tel.startsWith("55")) tel = tel.slice(2);
+  if (tel.length !== 10 && tel.length !== 11) return false;
+  if (!DDDS_VALIDOS.includes(Number(tel.slice(0, 2)))) {
+    return false;
+  }
+  if (tel.length === 11 && tel[2] !== "9") return false;
+  return true;
+}
+
+// shared/validation/datas.ts
+var FUSO_PADRAO = "America/Sao_Paulo";
+var IDADE_MAXIMA_ANOS = 120;
+var RE_DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+function isDataIsoValida(value) {
+  if (!RE_DATA_ISO.test(value)) return false;
+  const [ano, mes, dia] = value.split("-").map(Number);
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  return data.getUTCFullYear() === ano && data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia;
+}
+function hoje() {
+  return (/* @__PURE__ */ new Date()).toLocaleDateString("en-CA", { timeZone: FUSO_PADRAO });
+}
+function idadeEmAnosCompletos(nascimento, ref = hoje()) {
+  if (!isDataIsoValida(nascimento) || !isDataIsoValida(ref)) return NaN;
+  const [anoNasc, mesNasc, diaNasc] = nascimento.split("-").map(Number);
+  const [anoRef, mesRef, diaRef] = ref.split("-").map(Number);
+  let anos = anoRef - anoNasc;
+  if (mesRef < mesNasc || mesRef === mesNasc && diaRef < diaNasc) anos -= 1;
+  return anos;
+}
+function isNascimentoValido(value, ref = hoje()) {
+  if (!isDataIsoValida(value)) return false;
+  if (value > ref) return false;
+  const anos = idadeEmAnosCompletos(value, ref);
+  return anos >= 0 && anos <= IDADE_MAXIMA_ANOS;
+}
+
 // server/features/leads/lead-types.ts
 import { z as z4 } from "zod";
 
@@ -1626,7 +1786,7 @@ var ALLOWED_LEAD_MIME_TYPES = /* @__PURE__ */ new Set([
 var leadCreateSchema = z4.object({
   familyId: z4.string().optional(),
   fullName: z4.string().min(3).max(160),
-  taxId: z4.string().min(11).max(20),
+  taxId: z4.string().transform((value) => normalizarCpf(value)).refine((value) => isCpfValido(value), "CPF inv\xE1lido."),
   email: z4.string().email(),
   birthDate: z4.string().min(1),
   // YYYY-MM-DD
@@ -1690,14 +1850,13 @@ async function createLeadRecord(input) {
   const db = await requireDatabase();
   await ensureLeadsTable(db);
   const id = createId();
-  const taxId = input.taxId.replace(/\D/g, "");
   const relativeKey = `leads/${id}/${input.fileName}`;
   const stored = await storagePut(relativeKey, bytes, input.mimeType);
   const storageKey = stored.key.split("\\").join("/");
   await db.insert(leads).values({
     id,
     fullName: input.fullName,
-    taxId,
+    taxId: input.taxId,
     email: input.email.toLowerCase().trim(),
     birthDate: input.birthDate,
     fileName: input.fileName,
@@ -1732,6 +1891,10 @@ async function acceptLeadRecord(input, reviewedBy) {
   if (!lead) throw new Error("Interessado n\xE3o encontrado.");
   if (lead.status !== "PENDENTE")
     throw new Error("Este interessado j\xE1 foi analisado.");
+  if (!isCpfValido(lead.taxId))
+    throw new Error(
+      "CPF do interessado \xE9 inv\xE1lido. Recuse este lead e solicite um novo envio."
+    );
   const db = await requireDatabase();
   const result = await db.transaction(async (tx) => {
     const familyId = createId();
@@ -1994,11 +2157,14 @@ function computePropertyCategories(property) {
   }
   return property.hasRegistration === false ? ["Escritura ou contrato de compra e venda", "IPTU ou ITR"] : ["Matr\xEDcula atualizada", "IPTU ou ITR"];
 }
+var COMPANY_BALANCE_CATEGORIES = [
+  "Balan\xE7o Fechado",
+  "Balancete Atualizado"
+];
 var COMPANY_LTD_CATEGORIES = [
   "Comprovante de Inscri\xE7\xE3o no CNPJ",
   "Contrato Social Consolidado",
-  "Balan\xE7o Fechado",
-  "Balancete Atualizado",
+  ...COMPANY_BALANCE_CATEGORIES,
   "Acordo de S\xF3cios",
   "Livro Raz\xE3o do Imobilizado"
 ];
@@ -2392,168 +2558,6 @@ async function assertIrpfUploadAllowed(document) {
 
 // server/features/people/person-types.ts
 import { z as z6 } from "zod";
-
-// shared/validation/digitos.ts
-function onlyDigits2(value) {
-  return value.replace(/\D/g, "");
-}
-
-// shared/validation/cpf.ts
-function normalizarCpf(value) {
-  return onlyDigits2(value);
-}
-function isCpfValido(value) {
-  const cpf = onlyDigits2(value);
-  if (cpf.length !== 11) return false;
-  if (/^(\d)\1{10}$/.test(cpf)) return false;
-  let soma = 0;
-  for (let i = 0; i < 9; i += 1) soma += Number(cpf[i]) * (10 - i);
-  let resto = soma * 10 % 11;
-  if (resto === 10) resto = 0;
-  if (resto !== Number(cpf[9])) return false;
-  soma = 0;
-  for (let i = 0; i < 10; i += 1) soma += Number(cpf[i]) * (11 - i);
-  resto = soma * 10 % 11;
-  if (resto === 10) resto = 0;
-  return resto === Number(cpf[10]);
-}
-
-// shared/validation/cnpj.ts
-var PESOS_DV1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-var PESOS_DV2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-function digitoVerificador(base, pesos) {
-  const soma = base.split("").reduce((acc, digito, i) => acc + Number(digito) * (pesos[i] ?? 0), 0);
-  const resto = soma % 11;
-  return resto < 2 ? 0 : 11 - resto;
-}
-function isCnpjValido(value) {
-  const cnpj = onlyDigits2(value);
-  if (cnpj.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(cnpj)) return false;
-  const base = cnpj.slice(0, 12);
-  const dv1 = digitoVerificador(base, PESOS_DV1);
-  if (dv1 !== Number(cnpj[12])) return false;
-  const dv2 = digitoVerificador(`${base}${dv1}`, PESOS_DV2);
-  return dv2 === Number(cnpj[13]);
-}
-
-// shared/validation/index.ts
-init_uf();
-
-// shared/validation/telefone.ts
-var DDDS_VALIDOS = [
-  11,
-  12,
-  13,
-  14,
-  15,
-  16,
-  17,
-  18,
-  19,
-  21,
-  22,
-  24,
-  27,
-  28,
-  31,
-  32,
-  33,
-  34,
-  35,
-  37,
-  38,
-  41,
-  42,
-  43,
-  44,
-  45,
-  46,
-  47,
-  48,
-  49,
-  51,
-  53,
-  54,
-  55,
-  61,
-  62,
-  63,
-  64,
-  65,
-  66,
-  67,
-  68,
-  69,
-  71,
-  73,
-  74,
-  75,
-  77,
-  79,
-  81,
-  82,
-  83,
-  84,
-  85,
-  86,
-  87,
-  88,
-  89,
-  91,
-  92,
-  93,
-  94,
-  95,
-  96,
-  97,
-  98,
-  99
-];
-function normalizarTelefone(value) {
-  return onlyDigits2(value);
-}
-function isTelefoneValido(value) {
-  let tel = onlyDigits2(value);
-  if (tel.length === 12 && tel.startsWith("55")) tel = tel.slice(2);
-  if (tel.length === 13 && tel.startsWith("55")) tel = tel.slice(2);
-  if (tel.length !== 10 && tel.length !== 11) return false;
-  if (!DDDS_VALIDOS.includes(Number(tel.slice(0, 2)))) {
-    return false;
-  }
-  if (tel.length === 11 && tel[2] !== "9") return false;
-  return true;
-}
-
-// shared/validation/datas.ts
-var FUSO_PADRAO = "America/Sao_Paulo";
-var IDADE_MAXIMA_ANOS = 120;
-var RE_DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
-function isDataIsoValida(value) {
-  if (!RE_DATA_ISO.test(value)) return false;
-  const [ano, mes, dia] = value.split("-").map(Number);
-  const data = new Date(Date.UTC(ano, mes - 1, dia));
-  return data.getUTCFullYear() === ano && data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia;
-}
-function hoje() {
-  return (/* @__PURE__ */ new Date()).toLocaleDateString("en-CA", { timeZone: FUSO_PADRAO });
-}
-function idadeEmAnosCompletos(nascimento, ref = hoje()) {
-  if (!isDataIsoValida(nascimento) || !isDataIsoValida(ref)) return NaN;
-  const [anoNasc, mesNasc, diaNasc] = nascimento.split("-").map(Number);
-  const [anoRef, mesRef, diaRef] = ref.split("-").map(Number);
-  let anos = anoRef - anoNasc;
-  if (mesRef < mesNasc || mesRef === mesNasc && diaRef < diaNasc) anos -= 1;
-  return anos;
-}
-function isNascimentoValido(value, ref = hoje()) {
-  if (!isDataIsoValida(value)) return false;
-  if (value > ref) return false;
-  const anos = idadeEmAnosCompletos(value, ref);
-  return anos >= 0 && anos <= IDADE_MAXIMA_ANOS;
-}
-
-// server/features/people/person-types.ts
 var vinculoSchema = z6.enum([
   "TITULAR",
   "CONJUGE",
@@ -3782,7 +3786,7 @@ var documentRouter = router({
     z12.object({
       familyId: z12.string().min(1),
       companyId: z12.string().min(1),
-      category: z12.enum(["Balan\xE7o fechado", "Balancete atualizado"]),
+      category: z12.enum(COMPANY_BALANCE_CATEGORIES),
       referenceDate: z12.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       fileName: z12.string().min(1).max(255),
       mimeType: z12.string().min(1).max(120).default("application/pdf"),

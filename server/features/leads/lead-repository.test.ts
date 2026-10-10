@@ -24,7 +24,7 @@ const pendingLead = {
   id: "lead-1",
   fullName: "Interessado Teste",
   email: "interessado@email.com",
-  taxId: "11122233344",
+  taxId: "52998224725",
   birthDate: "1990-01-01",
   status: "PENDENTE",
   familyId: null,
@@ -82,6 +82,20 @@ describe("lead-repository", () => {
     databaseMocks.requireDatabase.mockResolvedValue(db);
 
     await expect(acceptLeadRecord(acceptInput as never, 7)).rejects.toThrow("Este interessado já foi analisado.");
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("recusa aceite quando o CPF legado do lead é inválido", async () => {
+    const { db, insertValues } = mockDb({
+      lead: { ...pendingLead, taxId: "11122233344" },
+      guardedRows: [{ id: "lead-1" }],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(acceptLeadRecord(acceptInput as never, 7)).rejects.toThrow(
+      "CPF do interessado é inválido. Recuse este lead e solicite um novo envio."
+    );
+    expect(db.transaction).not.toHaveBeenCalled();
     expect(insertValues).not.toHaveBeenCalled();
   });
 

@@ -11,6 +11,7 @@ import { createId } from "../_shared/ids";
 import { storagePut, storageGetSignedUrl } from "../../storage";
 import { computePersonCategories } from "../documents/person-document-categories";
 import { ensureCertidoesForSubject } from "../certidoes/certidao-repository";
+import { isCpfValido } from "../../../shared/validation";
 import {
   ALLOWED_LEAD_MIME_TYPES,
   leadAcceptSchema,
@@ -66,7 +67,6 @@ export async function createLeadRecord(
   const db = await requireDatabase();
   await ensureLeadsTable(db);
   const id = createId();
-  const taxId = input.taxId.replace(/\D/g, "");
   const relativeKey = `leads/${id}/${input.fileName}`;
   const stored = await storagePut(relativeKey, bytes, input.mimeType);
   const storageKey = stored.key.split("\\").join("/");
@@ -74,7 +74,7 @@ export async function createLeadRecord(
   await db.insert(leads).values({
     id,
     fullName: input.fullName,
-    taxId,
+    taxId: input.taxId,
     email: input.email.toLowerCase().trim(),
     birthDate: input.birthDate,
     fileName: input.fileName,
@@ -135,6 +135,10 @@ export async function acceptLeadRecord(
   if (!lead) throw new Error("Interessado não encontrado.");
   if (lead.status !== "PENDENTE")
     throw new Error("Este interessado já foi analisado.");
+  if (!isCpfValido(lead.taxId))
+    throw new Error(
+      "CPF do interessado é inválido. Recuse este lead e solicite um novo envio."
+    );
 
   const db = await requireDatabase();
 

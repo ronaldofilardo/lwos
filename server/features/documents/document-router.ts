@@ -21,7 +21,10 @@ import {
   uploadVersionSchema,
 } from "./document-types";
 import { storeDocumentVersion } from "./document-upload";
-import { reconcileFamilyDocumentRequirements } from "./document-requirements";
+import {
+  COMPANY_BALANCE_CATEGORIES,
+  reconcileFamilyDocumentRequirements,
+} from "./document-requirements";
 
 export const documentRouter = router({
   list: protectedProcedure
@@ -135,7 +138,7 @@ export const documentRouter = router({
       z.object({
         familyId: z.string().min(1),
         companyId: z.string().min(1),
-        category: z.enum(["Balanço fechado", "Balancete atualizado"]),
+        category: z.enum(COMPANY_BALANCE_CATEGORIES),
         referenceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         fileName: z.string().min(1).max(255),
         mimeType: z.string().min(1).max(120).default("application/pdf"),

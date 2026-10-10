@@ -73,7 +73,7 @@ function BalanceUpload({
 }: {
   familyId: string;
   companyId: string;
-  category: "Balanço fechado" | "Balancete atualizado";
+  category: "Balanço Fechado" | "Balancete Atualizado";
   label: string;
 }) {
   const utils = trpc.useUtils();
@@ -498,13 +498,13 @@ export function CompanyDetailsModal({
                 <BalanceUpload
                   familyId={familyId}
                   companyId={companyId}
-                  category="Balanço fechado"
+                  category="Balanço Fechado"
                   label="Balanço fechado (PDF/imagem)"
                 />
                 <BalanceUpload
                   familyId={familyId}
                   companyId={companyId}
-                  category="Balancete atualizado"
+                  category="Balancete Atualizado"
                   label="Balancete atualizado (PDF/imagem)"
                 />
               </div>
