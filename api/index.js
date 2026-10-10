@@ -2209,6 +2209,12 @@ async function getFamilyRecord(familyId) {
     objectives: objectiveRows.map((row) => row.objective)
   };
 }
+async function setProjectStatusRecord(familyId, status) {
+  const db = await requireDatabase();
+  const updated = await db.update(projects).set({ status }).where(eq9(projects.familyId, familyId)).returning({ id: projects.id });
+  if (!updated.length) throw new Error("Projeto n\xE3o encontrado.");
+  return { familyId, status };
+}
 async function getClientFamilyIds(userId) {
   const db = await requireDatabase();
   const access = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(eq9(familyAccess.userId, userId));
@@ -3817,15 +3823,177 @@ var documentRouter = router({
 // server/features/families/family-router.ts
 init_schema();
 import { createHash as createHash3, randomBytes } from "node:crypto";
-import { and as and11, eq as eq19 } from "drizzle-orm";
+import { and as and11, eq as eq20 } from "drizzle-orm";
 import { z as z13 } from "zod";
 init_database();
 init_roles();
 
+// server/features/alerts/project-alerts-repository.ts
+init_schema();
+init_database();
+import { eq as eq18, inArray as inArray7 } from "drizzle-orm";
+
+// server/features/alerts/project-alerts.ts
+var RED_CERTIDAO_STATUSES = /* @__PURE__ */ new Set(["POSITIVA", "SOMENTE_FISICA"]);
+function todayIso(today) {
+  return today.toISOString().slice(0, 10);
+}
+function certidaoAlertLevel(status, validUntil, today = /* @__PURE__ */ new Date()) {
+  if (RED_CERTIDAO_STATUSES.has(status)) return "VERMELHO";
+  if (status === "PENDENTE") return "AMARELO";
+  if (validUntil) {
+    const expiry = String(validUntil).slice(0, 10);
+    if (expiry < todayIso(today)) return "AMARELO";
+  }
+  return "NENHUM";
+}
+function subjectAlertKey(scope, subjectId) {
+  return `${scope}:${subjectId}`;
+}
+function maxAlertLevel(left, right) {
+  if (left === "VERMELHO" || right === "VERMELHO") return "VERMELHO";
+  if (left === "AMARELO" || right === "AMARELO") return "AMARELO";
+  return "NENHUM";
+}
+function computeSubjectAlerts(rows, today = /* @__PURE__ */ new Date()) {
+  const bySubject = {};
+  for (const row of rows) {
+    const level = certidaoAlertLevel(row.status, row.validUntil, today);
+    if (level === "NENHUM") continue;
+    const key = subjectAlertKey(row.scope, row.subjectId);
+    bySubject[key] = maxAlertLevel(bySubject[key], level);
+  }
+  return bySubject;
+}
+function computeAlertCounts(rows, today = /* @__PURE__ */ new Date()) {
+  let vermelho = 0;
+  let amarelo = 0;
+  for (const level of Object.values(computeSubjectAlerts(rows, today))) {
+    if (level === "VERMELHO") vermelho += 1;
+    else if (level === "AMARELO") amarelo += 1;
+  }
+  return { vermelho, amarelo };
+}
+function certidaoLabel(row) {
+  const typeLabel = row.type ? CERTIDAO_TYPE_LABELS[row.type] ?? row.type : "Certid\xE3o";
+  return `${typeLabel} de ${row.subjectName ?? row.subjectId}`;
+}
+function computeConclusionBlockers(input) {
+  const today = input.today ?? /* @__PURE__ */ new Date();
+  const hardBlockers = input.properties.filter((property) => property.encumbranceType === "PENDENTE").map(
+    (property) => `Im\xF3vel \xAB${property.description}\xBB com gravame Pendente \u2014 resolva o gravame antes de concluir o projeto.`
+  );
+  const redCertidoes = input.certidoes.filter(
+    (row) => certidaoAlertLevel(row.status, row.validUntil, today) === "VERMELHO"
+  ).map(certidaoLabel);
+  const blockers = [...hardBlockers];
+  if (redCertidoes.length && !input.justification?.trim()) {
+    blockers.push(
+      `Certid\xE3o em vermelho sem justificativa registrada: ${redCertidoes.join(", ")}.`
+    );
+  }
+  return { blockers, hardBlockers, redCertidoes };
+}
+
+// server/features/alerts/project-alerts-repository.ts
+async function loadAlertRows(familyId) {
+  const db = await requireDatabase();
+  const [certidaoRows, propertyRows, peopleRows, companyRows] = await Promise.all([
+    db.select({
+      scope: certidoes.scope,
+      subjectId: certidoes.subjectId,
+      type: certidoes.type,
+      status: certidoes.status,
+      validUntil: certidoes.validUntil
+    }).from(certidoes).where(eq18(certidoes.familyId, familyId)),
+    db.select({
+      id: properties.id,
+      description: properties.description,
+      encumbranceType: properties.encumbranceType
+    }).from(properties).where(eq18(properties.familyId, familyId)),
+    db.select({ id: people.id, fullName: people.fullName }).from(people).where(eq18(people.familyId, familyId)),
+    db.select({ id: companies.id, legalName: companies.legalName }).from(companies).where(eq18(companies.familyId, familyId))
+  ]);
+  const nameByKey = /* @__PURE__ */ new Map();
+  for (const row of peopleRows) {
+    nameByKey.set(`PESSOA:${row.id}`, row.fullName);
+  }
+  for (const row of companyRows) {
+    nameByKey.set(`SOCIEDADE:${row.id}`, row.legalName);
+  }
+  return {
+    certidoes: certidaoRows.map((row) => ({
+      ...row,
+      subjectName: nameByKey.get(`${row.scope}:${row.subjectId}`) ?? null
+    })),
+    properties: propertyRows
+  };
+}
+async function getProjectAlertSummary(familyId) {
+  const rows = await loadAlertRows(familyId);
+  const bySubject = computeSubjectAlerts(rows.certidoes);
+  const { blockers, hardBlockers, redCertidoes } = computeConclusionBlockers({
+    certidoes: rows.certidoes,
+    properties: rows.properties
+  });
+  const pendenteGravames = rows.properties.filter((property) => property.encumbranceType === "PENDENTE").map((property) => ({
+    propertyId: property.id,
+    description: property.description
+  }));
+  return {
+    bySubject,
+    counts: computeAlertCounts(rows.certidoes),
+    pendenteGravames,
+    redCertidoes,
+    hardBlockers,
+    blockers,
+    canConclude: hardBlockers.length === 0
+  };
+}
+async function getConclusionBlockers(familyId, justification) {
+  const rows = await loadAlertRows(familyId);
+  return computeConclusionBlockers({
+    certidoes: rows.certidoes,
+    properties: rows.properties,
+    justification
+  }).blockers;
+}
+async function listProjectAlertLevels(familyIds) {
+  if (!familyIds.length) return {};
+  const db = await requireDatabase();
+  const rows = await db.select({
+    familyId: certidoes.familyId,
+    scope: certidoes.scope,
+    subjectId: certidoes.subjectId,
+    status: certidoes.status,
+    validUntil: certidoes.validUntil
+  }).from(certidoes).where(inArray7(certidoes.familyId, familyIds));
+  const byFamily = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const list = byFamily.get(row.familyId) ?? [];
+    list.push(row);
+    byFamily.set(row.familyId, list);
+  }
+  const levels = {};
+  for (const familyId of familyIds) {
+    const subjects = computeSubjectAlerts(byFamily.get(familyId) ?? []);
+    let level = "NENHUM";
+    for (const subjectLevel of Object.values(subjects)) {
+      if (subjectLevel === "VERMELHO") {
+        level = "VERMELHO";
+        break;
+      }
+      if (subjectLevel === "AMARELO") level = "AMARELO";
+    }
+    levels[familyId] = level;
+  }
+  return levels;
+}
+
 // server/features/families/family-timeline-repository.ts
 init_schema();
 init_database();
-import { and as and10, count as count2, desc as desc4, eq as eq18, gt, isNull } from "drizzle-orm";
+import { and as and10, count as count2, desc as desc4, eq as eq19, gt, isNull } from "drizzle-orm";
 
 // server/features/families/family-timeline.ts
 var iso = (value) => value ? new Date(value).toISOString() : null;
@@ -4006,38 +4174,38 @@ async function getFamilyTimelineRecord(familyId) {
   const [family] = await db.select({
     id: families.id,
     createdAt: families.createdAt
-  }).from(families).where(eq18(families.id, familyId)).limit(1);
+  }).from(families).where(eq19(families.id, familyId)).limit(1);
   if (!family) return null;
   const [lead] = await db.select({
     id: leads.id,
     status: leads.status,
     createdAt: leads.createdAt,
     updatedAt: leads.updatedAt
-  }).from(leads).where(eq18(leads.familyId, familyId)).orderBy(desc4(leads.createdAt)).limit(1);
-  const [{ total: peopleTotal }] = await db.select({ total: count2() }).from(people).where(eq18(people.familyId, familyId));
+  }).from(leads).where(eq19(leads.familyId, familyId)).orderBy(desc4(leads.createdAt)).limit(1);
+  const [{ total: peopleTotal }] = await db.select({ total: count2() }).from(people).where(eq19(people.familyId, familyId));
   const [{ total: titularCount }] = await db.select({ total: count2() }).from(people).where(
-    and10(eq18(people.familyId, familyId), eq18(people.isPrimaryContact, true))
+    and10(eq19(people.familyId, familyId), eq19(people.isPrimaryContact, true))
   );
-  const [{ total: propertiesTotal }] = await db.select({ total: count2() }).from(properties).where(eq18(properties.familyId, familyId));
-  const [{ total: companiesTotal }] = await db.select({ total: count2() }).from(companies).where(eq18(companies.familyId, familyId));
-  const [{ total: assetsTotal }] = await db.select({ total: count2() }).from(otherAssets).where(eq18(otherAssets.familyId, familyId));
-  const documentRows = await db.select({ status: documents.status }).from(documents).where(eq18(documents.familyId, familyId));
-  const [{ total: lwrVersions }] = await db.select({ total: count2() }).from(lwrReports).where(eq18(lwrReports.familyId, familyId));
+  const [{ total: propertiesTotal }] = await db.select({ total: count2() }).from(properties).where(eq19(properties.familyId, familyId));
+  const [{ total: companiesTotal }] = await db.select({ total: count2() }).from(companies).where(eq19(companies.familyId, familyId));
+  const [{ total: assetsTotal }] = await db.select({ total: count2() }).from(otherAssets).where(eq19(otherAssets.familyId, familyId));
+  const documentRows = await db.select({ status: documents.status }).from(documents).where(eq19(documents.familyId, familyId));
+  const [{ total: lwrVersions }] = await db.select({ total: count2() }).from(lwrReports).where(eq19(lwrReports.familyId, familyId));
   const [proposal] = await db.select({
     id: financialProposals.id,
     status: financialProposals.status,
     createdAt: financialProposals.createdAt,
     acceptedAt: financialProposals.acceptedAt
-  }).from(financialProposals).where(eq18(financialProposals.familyId, familyId)).orderBy(desc4(financialProposals.createdAt)).limit(1);
+  }).from(financialProposals).where(eq19(financialProposals.familyId, familyId)).orderBy(desc4(financialProposals.createdAt)).limit(1);
   const [{ total: clientAccessCount }] = await db.select({ total: count2() }).from(familyAccess).where(
     and10(
-      eq18(familyAccess.familyId, familyId),
-      eq18(familyAccess.accessRole, "CLIENTE")
+      eq19(familyAccess.familyId, familyId),
+      eq19(familyAccess.accessRole, "CLIENTE")
     )
   );
   const [{ total: activePortalLinks }] = await db.select({ total: count2() }).from(portalLinks).where(
     and10(
-      eq18(portalLinks.familyId, familyId),
+      eq19(portalLinks.familyId, familyId),
       isNull(portalLinks.revokedAt),
       gt(portalLinks.expiresAt, /* @__PURE__ */ new Date())
     )
@@ -4078,22 +4246,65 @@ async function getFamilyTimelineRecord(familyId) {
 function hashToken(token) {
   return createHash3("sha256").update(token).digest("hex");
 }
+async function withAlerts(records) {
+  const alerts = await listProjectAlertLevels(records.map((record) => record.id));
+  return records.map((record) => ({
+    ...record,
+    alerts: alerts[record.id] ?? "NENHUM"
+  }));
+}
 var familyRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user;
-    if (user.role !== "CLIENTE") return listFamilyRecords();
+    if (user.role !== "CLIENTE") return withAlerts(await listFamilyRecords());
     const db = await requireDatabase();
-    const access = await db.select().from(familyAccess).where(eq19(familyAccess.userId, user.id));
+    const access = await db.select().from(familyAccess).where(eq20(familyAccess.userId, user.id));
     const records = await Promise.all(
       access.map((item) => getFamilyRecord(item.familyId))
     );
-    return records.filter(
-      (record) => record !== null
+    return withAlerts(
+      records.filter(
+        (record) => record !== null
+      )
     );
   }),
   get: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getFamilyRecord(input.familyId);
+  }),
+  updateStatus: protectedProcedure.input(
+    z13.object({
+      familyId: z13.string().min(1),
+      status: z13.enum(projectStatusValues),
+      justification: z13.string().max(2e3).optional()
+    })
+  ).mutation(async ({ ctx, input }) => {
+    const user = requireRole(ctx, TEAM_ROLES);
+    await assertFamilyAccess(ctx, input.familyId);
+    if (input.status === "CONCLUIDO") {
+      const blockers = await getConclusionBlockers(
+        input.familyId,
+        input.justification
+      );
+      if (blockers.length) {
+        throw new Error(
+          `O projeto n\xE3o pode ser conclu\xEDdo: ${blockers.join(" ")}`
+        );
+      }
+    }
+    await setProjectStatusRecord(input.familyId, input.status);
+    await recordAudit({
+      action: "PROJETO_STATUS_ATUALIZADO",
+      entityType: "FAMILIA",
+      entityId: input.familyId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: {
+        status: input.status,
+        justification: input.justification ?? ""
+      }
+    });
+    return { success: true, status: input.status };
   }),
   timeline: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
@@ -4140,8 +4351,8 @@ var familyRouter = router({
     const db = await requireDatabase();
     const existingAccess = await db.select({ id: familyAccess.id }).from(familyAccess).where(
       and11(
-        eq19(familyAccess.familyId, input.familyId),
-        eq19(familyAccess.accessRole, "CLIENTE")
+        eq20(familyAccess.familyId, input.familyId),
+        eq20(familyAccess.accessRole, "CLIENTE")
       )
     ).limit(1);
     if (existingAccess[0])
@@ -4181,8 +4392,8 @@ var familyRouter = router({
     const db = await requireDatabase();
     const existingAccess = await db.select({ id: familyAccess.id }).from(familyAccess).where(
       and11(
-        eq19(familyAccess.familyId, input.familyId),
-        eq19(familyAccess.accessRole, "CLIENTE")
+        eq20(familyAccess.familyId, input.familyId),
+        eq20(familyAccess.accessRole, "CLIENTE")
       )
     ).limit(1);
     if (!existingAccess[0])
@@ -4233,7 +4444,7 @@ var familyRouter = router({
 
 // server/features/reports/lwr-router.ts
 init_schema();
-import { desc as desc5, eq as eq20 } from "drizzle-orm";
+import { desc as desc5, eq as eq21 } from "drizzle-orm";
 import { z as z15 } from "zod";
 init_roles();
 init_database();
@@ -4254,12 +4465,12 @@ var lwrRouter = router({
   list: protectedProcedure.input(z15.object({ familyId: z15.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
-    return db.select().from(lwrReports).where(eq20(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version));
+    return db.select().from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version));
   }),
   create: protectedProcedure.input(lwrInputSchema).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);
     const db = await requireDatabase();
-    const previous = await db.select({ version: lwrReports.version }).from(lwrReports).where(eq20(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version)).limit(1);
+    const previous = await db.select({ version: lwrReports.version }).from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version)).limit(1);
     const version = (previous[0]?.version ?? 0) + 1;
     const reportId = createId();
     await db.insert(lwrReports).values({
@@ -4410,7 +4621,7 @@ var personRouter = router({
 // server/features/portal/portal-router.ts
 init_schema();
 import { createHash as createHash4, randomBytes as randomBytes2 } from "node:crypto";
-import { and as and12, desc as desc6, eq as eq21, gt as gt3, isNull as isNull3 } from "drizzle-orm";
+import { and as and12, desc as desc6, eq as eq22, gt as gt3, isNull as isNull3 } from "drizzle-orm";
 import { z as z17 } from "zod";
 init_database();
 function hashToken2(token) {
@@ -4419,7 +4630,7 @@ function hashToken2(token) {
 async function getActivePortalLink(token) {
   const db = await requireDatabase();
   const result = await db.select().from(portalLinks).where(and12(
-    eq21(portalLinks.tokenHash, hashToken2(token)),
+    eq22(portalLinks.tokenHash, hashToken2(token)),
     isNull3(portalLinks.revokedAt),
     gt3(portalLinks.expiresAt, /* @__PURE__ */ new Date())
   )).limit(1);
@@ -4444,14 +4655,14 @@ var portalRouter = router({
   listLinks: protectedProcedure.input(z17.object({ familyId: z17.string() })).query(async ({ ctx, input }) => {
     requireRole(ctx, ["SOCIO"]);
     const db = await requireDatabase();
-    return db.select({ id: portalLinks.id, expiresAt: portalLinks.expiresAt, revokedAt: portalLinks.revokedAt, createdAt: portalLinks.createdAt }).from(portalLinks).where(eq21(portalLinks.familyId, input.familyId)).orderBy(desc6(portalLinks.createdAt));
+    return db.select({ id: portalLinks.id, expiresAt: portalLinks.expiresAt, revokedAt: portalLinks.revokedAt, createdAt: portalLinks.createdAt }).from(portalLinks).where(eq22(portalLinks.familyId, input.familyId)).orderBy(desc6(portalLinks.createdAt));
   }),
   revokeLink: protectedProcedure.input(z17.object({ linkId: z17.string() })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, ["SOCIO"]);
     const db = await requireDatabase();
-    const [link] = await db.select().from(portalLinks).where(eq21(portalLinks.id, input.linkId)).limit(1);
+    const [link] = await db.select().from(portalLinks).where(eq22(portalLinks.id, input.linkId)).limit(1);
     if (!link) throw new Error("Link n\xE3o encontrado.");
-    await db.update(portalLinks).set({ revokedAt: /* @__PURE__ */ new Date() }).where(eq21(portalLinks.id, input.linkId));
+    await db.update(portalLinks).set({ revokedAt: /* @__PURE__ */ new Date() }).where(eq22(portalLinks.id, input.linkId));
     await recordAudit({ action: "LINK_PORTAL_REVOGADO", entityType: "FAMILIA", entityId: link.familyId, actorUserId: user.id, familyId: link.familyId });
     return { success: true };
   }),
@@ -4459,10 +4670,10 @@ var portalRouter = router({
     const link = await getActivePortalLink(input.token);
     if (!link) throw new Error("Link inv\xE1lido, revogado ou expirado.");
     const db = await requireDatabase();
-    const [family] = await db.select().from(families).where(eq21(families.id, link.familyId)).limit(1);
-    const [project] = await db.select().from(projects).where(eq21(projects.familyId, link.familyId)).limit(1);
-    const documentList = await db.select().from(documents).where(eq21(documents.familyId, link.familyId));
-    const reports = await db.select().from(lwrReports).where(eq21(lwrReports.familyId, link.familyId));
+    const [family] = await db.select().from(families).where(eq22(families.id, link.familyId)).limit(1);
+    const [project] = await db.select().from(projects).where(eq22(projects.familyId, link.familyId)).limit(1);
+    const documentList = await db.select().from(documents).where(eq22(documents.familyId, link.familyId));
+    const reports = await db.select().from(lwrReports).where(eq22(lwrReports.familyId, link.familyId));
     return { family, project, documents: documentList, reports };
   }),
   uploadDocument: publicProcedure.input(z17.object({ token: z17.string().min(16), documentId: z17.string(), fileName: z17.string(), mimeType: z17.string(), base64Data: z17.string() })).mutation(async ({ input }) => {
@@ -4483,7 +4694,7 @@ init_roles();
 // server/features/properties/property-repository.ts
 init_schema();
 init_database();
-import { desc as desc7, eq as eq22, and as and13 } from "drizzle-orm";
+import { desc as desc7, eq as eq23, and as and13 } from "drizzle-orm";
 
 // server/features/properties/property-types.ts
 import { z as z18 } from "zod";
@@ -4656,9 +4867,9 @@ async function createPropertyRecord(input) {
   const id = createId();
   const existingProperty = await db.select().from(properties).where(
     and13(
-      eq22(properties.familyId, input.familyId),
-      eq22(properties.description, input.description),
-      eq22(properties.propertyCity, input.propertyCity)
+      eq23(properties.familyId, input.familyId),
+      eq23(properties.description, input.description),
+      eq23(properties.propertyCity, input.propertyCity)
     )
   ).limit(1);
   if (existingProperty.length > 0) {
@@ -4673,49 +4884,49 @@ async function createPropertyRecord(input) {
 }
 async function updatePropertyRecord(input) {
   const db = await requireDatabase();
-  const [current] = await db.select().from(properties).where(eq22(properties.id, input.propertyId)).limit(1);
+  const [current] = await db.select().from(properties).where(eq23(properties.id, input.propertyId)).limit(1);
   if (!current) throw new Error("Im\xF3vel n\xE3o encontrado.");
-  await db.update(properties).set({ ...propertyValues(input), updatedAt: /* @__PURE__ */ new Date() }).where(eq22(properties.id, input.propertyId));
+  await db.update(properties).set({ ...propertyValues(input), updatedAt: /* @__PURE__ */ new Date() }).where(eq23(properties.id, input.propertyId));
   return { propertyId: input.propertyId };
 }
 async function removePropertyRecord(familyId, propertyId) {
   const db = await requireDatabase();
-  const [property] = await db.select().from(properties).where(and13(eq22(properties.id, propertyId), eq22(properties.familyId, familyId))).limit(1);
+  const [property] = await db.select().from(properties).where(and13(eq23(properties.id, propertyId), eq23(properties.familyId, familyId))).limit(1);
   if (!property) throw new Error("Im\xF3vel n\xE3o encontrado nesta fam\xEDlia.");
-  const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq22(propertyOwners.propertyId, propertyId)).limit(1);
+  const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq23(propertyOwners.propertyId, propertyId)).limit(1);
   if (owner) {
     throw new Error(
       "N\xE3o \xE9 poss\xEDvel excluir: remova as titularidades do im\xF3vel antes."
     );
   }
   const documentsToArchive = await db.select({ id: documents.id }).from(documents).where(
-    and13(eq22(documents.familyId, familyId), eq22(documents.entityId, propertyId))
+    and13(eq23(documents.familyId, familyId), eq23(documents.entityId, propertyId))
   );
   if (documentsToArchive.length) {
     await db.update(documents).set({ status: "DISPENSADO" }).where(
       and13(
-        eq22(documents.familyId, familyId),
-        eq22(documents.entityId, propertyId)
+        eq23(documents.familyId, familyId),
+        eq23(documents.entityId, propertyId)
       )
     );
   }
-  await db.delete(properties).where(eq22(properties.id, propertyId));
+  await db.delete(properties).where(eq23(properties.id, propertyId));
   return { archivedDocuments: documentsToArchive.length };
 }
 async function listPropertyRecords(familyId) {
   const db = await requireDatabase();
-  return db.select().from(properties).where(eq22(properties.familyId, familyId)).orderBy(desc7(properties.updatedAt));
+  return db.select().from(properties).where(eq23(properties.familyId, familyId)).orderBy(desc7(properties.updatedAt));
 }
 async function getPropertyRecord(propertyId) {
   const db = await requireDatabase();
-  const result = await db.select().from(properties).where(eq22(properties.id, propertyId)).limit(1);
+  const result = await db.select().from(properties).where(eq23(properties.id, propertyId)).limit(1);
   return result[0] ?? null;
 }
 async function addPropertyOwnerRecord(input) {
   const db = await requireDatabase();
   const id = createId();
   await db.transaction(async (tx) => {
-    const existing = await tx.select().from(propertyOwners).where(eq22(propertyOwners.propertyId, input.propertyId));
+    const existing = await tx.select().from(propertyOwners).where(eq23(propertyOwners.propertyId, input.propertyId));
     const duplicate = input.personId && existing.some((row) => row.personId === input.personId) || input.companyId && existing.some((row) => row.companyId === input.companyId);
     if (duplicate) {
       throw new Error("Este membro j\xE1 est\xE1 vinculado a este im\xF3vel.");
@@ -4744,15 +4955,23 @@ async function assertCompanyOwnershipAllowed(propertyId) {
     );
   }
 }
+async function assertPropertyMovementAllowed(propertyId) {
+  const property = await getPropertyRecord(propertyId);
+  if (property && isEncumbranceRed(property.encumbranceType)) {
+    throw new Error(
+      "Im\xF3vel com gravame ativo: remova o gravame (ou marque como N\xE3o h\xE1) antes de alterar a titularidade."
+    );
+  }
+}
 async function updatePropertyOwnerRecord(input) {
   const db = await requireDatabase();
   await db.transaction(async (tx) => {
-    const current = await tx.select().from(propertyOwners).where(eq22(propertyOwners.id, input.ownerId)).limit(1);
+    const current = await tx.select().from(propertyOwners).where(eq23(propertyOwners.id, input.ownerId)).limit(1);
     const owner = current[0];
     if (!owner || owner.propertyId !== input.propertyId) {
       throw new Error("Titularidade n\xE3o encontrada.");
     }
-    const others = await tx.select().from(propertyOwners).where(eq22(propertyOwners.propertyId, input.propertyId));
+    const others = await tx.select().from(propertyOwners).where(eq23(propertyOwners.propertyId, input.propertyId));
     const remaining = others.filter((row) => row.id !== input.ownerId);
     const personId = input.personId ?? owner.personId;
     const companyId = input.companyId ?? owner.companyId;
@@ -4777,12 +4996,12 @@ async function updatePropertyOwnerRecord(input) {
       companyId: companyId ?? null,
       ownershipPercentage: percentage.toFixed(2),
       rightType: input.rightType ?? owner.rightType
-    }).where(eq22(propertyOwners.id, input.ownerId));
+    }).where(eq23(propertyOwners.id, input.ownerId));
   });
 }
 async function removePropertyOwnerRecord(input) {
   const db = await requireDatabase();
-  const removed = await db.delete(propertyOwners).where(eq22(propertyOwners.id, input.ownerId)).returning({ id: propertyOwners.id, propertyId: propertyOwners.propertyId });
+  const removed = await db.delete(propertyOwners).where(eq23(propertyOwners.id, input.ownerId)).returning({ id: propertyOwners.id, propertyId: propertyOwners.propertyId });
   const row = removed[0];
   if (!row || row.propertyId !== input.propertyId) {
     throw new Error("Titularidade n\xE3o encontrada.");
@@ -4791,7 +5010,7 @@ async function removePropertyOwnerRecord(input) {
 }
 async function listPropertyOwners(propertyId) {
   const db = await requireDatabase();
-  return db.select().from(propertyOwners).where(eq22(propertyOwners.propertyId, propertyId));
+  return db.select().from(propertyOwners).where(eq23(propertyOwners.propertyId, propertyId));
 }
 
 // server/features/properties/property-router.ts
@@ -4874,6 +5093,7 @@ var propertyRouter = router({
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
     if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
+    else await assertPropertyMovementAllowed(input.propertyId);
     const ownerId = await addPropertyOwnerRecord(input);
     await recordAudit({ action: "TITULARIDADE_REGISTRADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId, personId: input.personId ?? "", companyId: input.companyId ?? "", ownershipPercentage: input.ownershipPercentage } });
     return { ownerId };
@@ -4884,6 +5104,7 @@ var propertyRouter = router({
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
     if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
+    else await assertPropertyMovementAllowed(input.propertyId);
     await updatePropertyOwnerRecord(input);
     await recordAudit({ action: "TITULARIDADE_ATUALIZADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId: input.ownerId } });
     return { success: true };
@@ -4902,7 +5123,7 @@ var propertyRouter = router({
 // server/features/users/user-router.ts
 init_schema();
 init_roles();
-import { desc as desc8, eq as eq23 } from "drizzle-orm";
+import { desc as desc8, eq as eq24 } from "drizzle-orm";
 import { z as z20 } from "zod";
 init_database();
 var userRouter = router({
@@ -4915,7 +5136,7 @@ var userRouter = router({
     const actor = requireRole(ctx, ["SOCIO"]);
     if (input.userId === actor.id && input.role !== "SOCIO") throw new Error("O SOCIO respons\xE1vel n\xE3o pode remover o pr\xF3prio papel.");
     const db = await requireDatabase();
-    await db.update(users).set({ role: input.role }).where(eq23(users.id, input.userId));
+    await db.update(users).set({ role: input.role }).where(eq24(users.id, input.userId));
     await recordAudit({ action: "PAPEL_ALTERADO", entityType: "USUARIO", entityId: String(input.userId), actorUserId: actor.id, metadata: { role: input.role } });
     return { success: true };
   })
@@ -4923,7 +5144,7 @@ var userRouter = router({
 
 // server/features/audit/audit-router.ts
 init_schema();
-import { desc as desc9, eq as eq24 } from "drizzle-orm";
+import { desc as desc9, eq as eq25 } from "drizzle-orm";
 import { z as z21 } from "zod";
 init_database();
 var auditRouter = router({
@@ -4931,13 +5152,13 @@ var auditRouter = router({
     requireRole(ctx, ["SOCIO", "ADMIN"]);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
-    return db.select().from(auditLogs).where(eq24(auditLogs.familyId, input.familyId)).orderBy(desc9(auditLogs.createdAt));
+    return db.select().from(auditLogs).where(eq25(auditLogs.familyId, input.familyId)).orderBy(desc9(auditLogs.createdAt));
   })
 });
 
 // server/features/people/first-access-router.ts
 import { createHash as createHash5 } from "node:crypto";
-import { and as and14, eq as eq25, isNull as isNull4, gt as gt4 } from "drizzle-orm";
+import { and as and14, eq as eq26, isNull as isNull4, gt as gt4 } from "drizzle-orm";
 import { z as z22 } from "zod";
 import bcrypt2 from "bcryptjs";
 init_db();
@@ -4953,7 +5174,7 @@ var firstAccessRouter = router({
     const db = await requireDatabase();
     const [link] = await db.select().from(firstAccessLinks).where(
       and14(
-        eq25(firstAccessLinks.tokenHash, hashToken3(input.token)),
+        eq26(firstAccessLinks.tokenHash, hashToken3(input.token)),
         isNull4(firstAccessLinks.consumedAt),
         gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
       )
@@ -4972,7 +5193,7 @@ var firstAccessRouter = router({
     const db = await requireDatabase();
     const [link] = await db.select().from(firstAccessLinks).where(
       and14(
-        eq25(firstAccessLinks.tokenHash, hashToken3(input.token)),
+        eq26(firstAccessLinks.tokenHash, hashToken3(input.token)),
         isNull4(firstAccessLinks.consumedAt),
         gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
       )
@@ -4988,7 +5209,7 @@ var firstAccessRouter = router({
       userId = existing.id;
       const passwordHash = await bcrypt2.hash(input.password, BCRYPT_ROUNDS2);
       const { users: users2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      await db.update(users2).set({ passwordHash }).where(eq25(users2.id, userId));
+      await db.update(users2).set({ passwordHash }).where(eq26(users2.id, userId));
     } else {
       const passwordHash = await bcrypt2.hash(input.password, BCRYPT_ROUNDS2);
       try {
@@ -5014,7 +5235,7 @@ var firstAccessRouter = router({
       userId,
       accessRole: "CLIENTE"
     }).onConflictDoNothing();
-    await db.update(firstAccessLinks).set({ consumedAt: /* @__PURE__ */ new Date() }).where(eq25(firstAccessLinks.id, link.id));
+    await db.update(firstAccessLinks).set({ consumedAt: /* @__PURE__ */ new Date() }).where(eq26(firstAccessLinks.id, link.id));
     return { success: true };
   })
 });
@@ -5026,7 +5247,7 @@ import { z as z24 } from "zod";
 // server/features/assets/assets-repository.ts
 init_schema();
 init_database();
-import { and as and15, desc as desc10, eq as eq26 } from "drizzle-orm";
+import { and as and15, desc as desc10, eq as eq27 } from "drizzle-orm";
 async function createAssetRecord(input) {
   const db = await requireDatabase();
   const id = createId();
@@ -5040,11 +5261,11 @@ async function createAssetRecord(input) {
 }
 async function listAssetRecords(familyId) {
   const db = await requireDatabase();
-  return db.select().from(otherAssets).where(eq26(otherAssets.familyId, familyId)).orderBy(desc10(otherAssets.updatedAt));
+  return db.select().from(otherAssets).where(eq27(otherAssets.familyId, familyId)).orderBy(desc10(otherAssets.updatedAt));
 }
 async function getAssetRecord(assetId) {
   const db = await requireDatabase();
-  const [result] = await db.select().from(otherAssets).where(eq26(otherAssets.id, assetId)).limit(1);
+  const [result] = await db.select().from(otherAssets).where(eq27(otherAssets.id, assetId)).limit(1);
   return result ?? null;
 }
 async function updateAssetRecord(input) {
@@ -5058,20 +5279,20 @@ async function updateAssetRecord(input) {
     ownerPersonId: input.ownerPersonId,
     notes: input.notes || null,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq26(otherAssets.id, input.assetId));
+  }).where(eq27(otherAssets.id, input.assetId));
   return { assetId: input.assetId };
 }
 async function removeAssetRecord(familyId, assetId) {
   const db = await requireDatabase();
-  const [asset] = await db.select().from(otherAssets).where(and15(eq26(otherAssets.id, assetId), eq26(otherAssets.familyId, familyId))).limit(1);
+  const [asset] = await db.select().from(otherAssets).where(and15(eq27(otherAssets.id, assetId), eq27(otherAssets.familyId, familyId))).limit(1);
   if (!asset) throw new Error("Ativo n\xE3o encontrado nesta fam\xEDlia.");
   const docs = await db.select({ id: documents.id }).from(documents).where(
-    and15(eq26(documents.entityType, "ATIVO"), eq26(documents.entityId, assetId))
+    and15(eq27(documents.entityType, "ATIVO"), eq27(documents.entityId, assetId))
   );
   for (const doc of docs) {
-    await db.update(documents).set({ status: "DISPENSADO" }).where(eq26(documents.id, doc.id));
+    await db.update(documents).set({ status: "DISPENSADO" }).where(eq27(documents.id, doc.id));
   }
-  await db.delete(otherAssets).where(eq26(otherAssets.id, assetId));
+  await db.delete(otherAssets).where(eq27(otherAssets.id, assetId));
   return { archivedDocuments: docs.length };
 }
 
@@ -5164,7 +5385,7 @@ import { z as z26 } from "zod";
 // server/features/proposals/proposal-repository.ts
 init_schema();
 init_database();
-import { desc as desc11, eq as eq27 } from "drizzle-orm";
+import { desc as desc11, eq as eq28 } from "drizzle-orm";
 async function createProposalRecord(input) {
   const db = await requireDatabase();
   const id = createId();
@@ -5179,11 +5400,11 @@ async function createProposalRecord(input) {
 }
 async function listProposalRecords(familyId) {
   const db = await requireDatabase();
-  return db.select().from(financialProposals).where(eq27(financialProposals.familyId, familyId)).orderBy(desc11(financialProposals.createdAt));
+  return db.select().from(financialProposals).where(eq28(financialProposals.familyId, familyId)).orderBy(desc11(financialProposals.createdAt));
 }
 async function getProposalRecord(proposalId) {
   const db = await requireDatabase();
-  const [result] = await db.select().from(financialProposals).where(eq27(financialProposals.id, proposalId)).limit(1);
+  const [result] = await db.select().from(financialProposals).where(eq28(financialProposals.id, proposalId)).limit(1);
   return result ?? null;
 }
 async function acceptProposalRecord(proposalId, clientNotes) {
@@ -5192,7 +5413,7 @@ async function acceptProposalRecord(proposalId, clientNotes) {
     status: "ACEITA",
     clientNotes: clientNotes || null,
     acceptedAt: /* @__PURE__ */ new Date()
-  }).where(eq27(financialProposals.id, proposalId));
+  }).where(eq28(financialProposals.id, proposalId));
 }
 async function submitCounterProposalRecord(input) {
   const db = await requireDatabase();
@@ -5200,7 +5421,7 @@ async function submitCounterProposalRecord(input) {
     status: "CONTRAPROPOSTA_RECEBIDA",
     counterProposalValue: input.counterProposalValue.toFixed(2),
     counterProposalNotes: input.counterProposalNotes
-  }).where(eq27(financialProposals.id, input.proposalId));
+  }).where(eq28(financialProposals.id, input.proposalId));
 }
 async function reviewCounterProposalRecord(input) {
   const db = await requireDatabase();
@@ -5210,7 +5431,7 @@ async function reviewCounterProposalRecord(input) {
     approvedBySocioId: String(input.socioUserId),
     acceptedAt: input.decision === "ACEITAR" ? /* @__PURE__ */ new Date() : null,
     clientNotes: input.notes || null
-  }).where(eq27(financialProposals.id, input.proposalId));
+  }).where(eq28(financialProposals.id, input.proposalId));
 }
 
 // server/features/proposals/proposal-types.ts
@@ -5354,6 +5575,10 @@ var certidaoRouter = router({
   list: protectedProcedure.input(z27.object({ familyId: z27.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCertidaoRecords(input.familyId);
+  }),
+  summary: protectedProcedure.input(z27.object({ familyId: z27.string() })).query(async ({ ctx, input }) => {
+    await assertFamilyAccess(ctx, input.familyId);
+    return getProjectAlertSummary(input.familyId);
   }),
   generate: protectedProcedure.input(z27.object({ familyId: z27.string() })).mutation(async ({ ctx, input }) => {
     const user = requireRole(ctx, TEAM_ROLES);

@@ -12,6 +12,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { AlertIndicator } from "@/features/alerts/AlertIndicator";
+import { levelFor } from "@/features/alerts/alerts";
+import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
 
 const categoryValues = [
   "INVESTIMENTOS",
@@ -182,6 +185,7 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
 
   const people = trpc.people.list.useQuery({ familyId });
   const list = trpc.assets.list.useQuery({ familyId });
+  const { bySubject } = useProjectAlerts(familyId);
 
   const create = trpc.assets.create.useMutation({
     onSuccess: () => {
@@ -308,7 +312,12 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
               className="flex flex-col gap-2 rounded-xl bg-lucathi-mist px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div>
-                <p className="text-sm font-semibold text-lucathi-navy">{asset.description}</p>
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-lucathi-navy">
+                  {asset.description}
+                  <AlertIndicator
+                    level={levelFor(bySubject, "PESSOA", asset.ownerPersonId)}
+                  />
+                </p>
                 <p className="text-xs text-lucathi-gray">
                   {categoryLabels[asset.category as AssetCategory] || asset.category}
                   {owner ? ` · Titular: ${owner.fullName}` : ""}

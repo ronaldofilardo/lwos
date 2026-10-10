@@ -1,7 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, isNull, gt } from "drizzle-orm";
 import { z } from "zod";
-import { familyAccess, firstAccessLinks } from "../../../drizzle/schema";
+import {
+  familyAccess,
+  firstAccessLinks,
+  projectStatusValues,
+} from "../../../drizzle/schema";
 import { protectedProcedure, router } from "../../_core/trpc";
 import { recordAudit } from "../audit/audit-repository";
 import { createId } from "../_shared/ids";
@@ -10,6 +14,10 @@ import { assertFamilyAccess } from "../access/family-access";
 import { requireRole } from "../access/authorization";
 import { TEAM_ROLES } from "../../../shared/domain/roles";
 import {
+  getConclusionBlockers,
+  listProjectAlertLevels,
+} from "../alerts/project-alerts-repository";
+import {
   createFamilyRecord,
   getFamilyRecord,
   listFamilyRecords,
@@ -17,6 +25,7 @@ import {
   listStorageFiles,
   getClientDashboardData,
   listClientStorageFiles,
+  setProjectStatusRecord,
 } from "./family-repository";
 import { getFamilyTimelineRecord } from "./family-timeline-repository";
 import { familyInputSchema } from "./family-types";
@@ -26,10 +35,19 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/** Anexa o alerta da Fase 9 (vermelho/amarelo por certidão) à lista de projetos. */
+async function withAlerts<T extends { id: string }>(records: T[]) {
+  const alerts = await listProjectAlertLevels(records.map(record => record.id));
+  return records.map(record => ({
+    ...record,
+    alerts: alerts[record.id] ?? ("NENHUM" as const),
+  }));
+}
+
 export const familyRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user!;
-    if (user.role !== "CLIENTE") return listFamilyRecords();
+    if (user.role !== "CLIENTE") return withAlerts(await listFamilyRecords());
     const db = await requireDatabase();
     const access = await db
       .select()
@@ -38,8 +56,10 @@ export const familyRouter = router({
     const records = await Promise.all(
       access.map(item => getFamilyRecord(item.familyId))
     );
-    return records.filter(
-      (record): record is NonNullable<typeof record> => record !== null
+    return withAlerts(
+      records.filter(
+        (record): record is NonNullable<typeof record> => record !== null
+      )
     );
   }),
   get: protectedProcedure
@@ -47,6 +67,42 @@ export const familyRouter = router({
     .query(async ({ ctx, input }) => {
       await assertFamilyAccess(ctx, input.familyId);
       return getFamilyRecord(input.familyId);
+    }),
+  updateStatus: protectedProcedure
+    .input(
+      z.object({
+        familyId: z.string().min(1),
+        status: z.enum(projectStatusValues),
+        justification: z.string().max(2000).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = requireRole(ctx, TEAM_ROLES);
+      await assertFamilyAccess(ctx, input.familyId);
+      if (input.status === "CONCLUIDO") {
+        const blockers = await getConclusionBlockers(
+          input.familyId,
+          input.justification
+        );
+        if (blockers.length) {
+          throw new Error(
+            `O projeto não pode ser concluído: ${blockers.join(" ")}`
+          );
+        }
+      }
+      await setProjectStatusRecord(input.familyId, input.status);
+      await recordAudit({
+        action: "PROJETO_STATUS_ATUALIZADO",
+        entityType: "FAMILIA",
+        entityId: input.familyId,
+        actorUserId: user.id,
+        familyId: input.familyId,
+        metadata: {
+          status: input.status,
+          justification: input.justification ?? "",
+        },
+      });
+      return { success: true, status: input.status };
     }),
   timeline: protectedProcedure
     .input(z.object({ familyId: z.string().min(1) }))

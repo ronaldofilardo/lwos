@@ -1,12 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
+  CheckCircle2,
   FileStack,
   FolderKanban,
   Layers,
   Presentation,
   ShieldCheck,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Link, useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,8 +25,11 @@ import { PortalPanel } from "@/features/portal/PortalPanel";
 import { AuditPanel } from "@/features/audit/AuditPanel";
 import { ProcessTimeline } from "./common/ProcessTimeline";
 import { UnifiedRequirementsMap } from "./common/UnifiedRequirementsMap";
+import { AlertIndicator } from "@/features/alerts/AlertIndicator";
+import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
 import {
   projectObjectiveLabels,
+  projectStatusLabels,
   type ProjectObjective,
 } from "./types";
 
@@ -55,6 +60,23 @@ export function FamilyWorkspacePage() {
     { familyId },
     { enabled: Boolean(familyId) }
   );
+
+  // Fase 9 — alertas do projeto e fluxo de conclusão com gate no servidor.
+  const utils = trpc.useUtils();
+  const { counts, blockers, redCertidoes } = useProjectAlerts(familyId);
+  const [concludeOpen, setConcludeOpen] = useState(false);
+  const [justification, setJustification] = useState("");
+  const conclude = trpc.families.updateStatus.useMutation({
+    onSuccess: () => {
+      utils.families.list.invalidate();
+      utils.families.get.invalidate({ familyId });
+      utils.certidoes.summary.invalidate({ familyId });
+      setConcludeOpen(false);
+      setJustification("");
+      toast.success("Projeto concluído.");
+    },
+    onError: e => toast.error(e.message),
+  });
 
   if (!user || isClient) {
     return (
@@ -100,17 +122,115 @@ export function FamilyWorkspacePage() {
               {formatObjectives(family.data.objectives ?? [])}
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 backdrop-blur-sm">
-            <FolderKanban className="size-5 text-white/80" />
-            <div className="text-xs">
-              <p className="text-white/60 uppercase tracking-wider font-semibold">
-                Estrutura Ativa
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 backdrop-blur-sm">
+              <FolderKanban className="size-5 text-white/80" />
+              <div className="text-xs">
+                <p className="text-white/60 uppercase tracking-wider font-semibold">
+                  Estrutura Ativa
+                </p>
+                <p className="text-white font-medium">Due Diligence Integrada</p>
+              </div>
+            </div>
+            <div className="rounded-2xl bg-white/10 px-4 py-2.5 backdrop-blur-sm">
+              <p className="text-xs uppercase tracking-wider font-semibold text-white/60">
+                Status do Projeto
               </p>
-              <p className="text-white font-medium">Due Diligence Integrada</p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium">
+                {projectStatusLabels[
+                  (family.data.status ?? "ATIVO") as keyof typeof projectStatusLabels
+                ] ?? family.data.status}
+                <AlertIndicator
+                  level={
+                    (counts?.vermelho ?? 0) > 0
+                      ? "VERMELHO"
+                      : (counts?.amarelo ?? 0) > 0
+                        ? "AMARELO"
+                        : undefined
+                  }
+                />
+              </p>
+              {(family.data.status ?? "ATIVO") !== "CONCLUIDO" &&
+              (family.data.status ?? "ATIVO") !== "CANCELADO" ? (
+                <Button
+                  size="sm"
+                  className="mt-2 bg-white text-lucathi-navy hover:bg-white/90"
+                  onClick={() => setConcludeOpen(open => !open)}
+                >
+                  <CheckCircle2 className="mr-1 size-3.5" />
+                  {concludeOpen ? "Fechar" : "Concluir projeto"}
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
       </header>
+
+      {/* Fase 9 — painel de conclusão com bloqueios e justificativa */}
+      {concludeOpen ? (
+        <div className="rounded-2xl border border-lucathi-line bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
+            Concluir projeto
+          </p>
+          <p className="mt-1 text-sm text-lucathi-navy">
+            O projeto só vai para «Concluído» sem gravame pendente e com as
+            certidões em vermelho justificadas.
+          </p>
+          {blockers.length ? (
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-700">
+              {blockers.map(blocker => (
+                <li key={blocker}>{blocker}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-emerald-700">
+              Nenhum bloqueio encontrado.
+            </p>
+          )}
+          {redCertidoes.length ? (
+            <label className="mt-4 block">
+              <span className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
+                Justificativa para as certidões em vermelho (obrigatória)
+              </span>
+              <textarea
+                className="mt-1 w-full rounded-xl border border-lucathi-line px-3 py-2 text-sm"
+                rows={3}
+                value={justification}
+                onChange={e => setJustification(e.target.value)}
+                placeholder="Explique por que as certidões em vermelho podem ser aceitas neste projeto."
+              />
+            </label>
+          ) : null}
+          <div className="mt-4 flex items-center gap-2">
+            <Button
+              size="sm"
+              disabled={
+                conclude.isPending ||
+                (redCertidoes.length > 0 && !justification.trim())
+              }
+              onClick={() =>
+                conclude.mutate({
+                  familyId,
+                  status: "CONCLUIDO",
+                  justification: justification.trim() || undefined,
+                })
+              }
+            >
+              Confirmar conclusão
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setConcludeOpen(false);
+                setJustification("");
+              }}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Navegação por Abas Especializadas */}
       <Tabs defaultValue="due-diligence" className="space-y-6">

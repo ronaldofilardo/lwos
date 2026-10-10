@@ -24,6 +24,9 @@ import {
 } from "@/features/families/types";
 import { PersonForm, type PersonFormSubmit } from "./common/PersonForm";
 import { usePeople } from "./hooks/usePeople";
+import { AlertIndicator } from "@/features/alerts/AlertIndicator";
+import { levelFor } from "@/features/alerts/alerts";
+import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
 
 function VinculoBadge({ vinculo }: { vinculo: Vinculo | null }) {
   if (!vinculo) return null;
@@ -97,6 +100,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
     markPrimary,
     markingPrimary,
   } = usePeople(familyId);
+  const { bySubject } = useProjectAlerts(familyId);
   const canEdit = user?.role === "SOCIO" || user?.role === "ANALISTA";
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<PersonRow | null>(null);
@@ -155,6 +159,9 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium">{person.fullName}</p>
+                    <AlertIndicator
+                      level={levelFor(bySubject, "PESSOA", person.id)}
+                    />
                     <VinculoBadge vinculo={person.vinculo} />
                     {person.isDependent ? (
                       <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">

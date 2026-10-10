@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { CompanyDetailsModal } from "./CompanyDetailsModal";
+import { AlertIndicator } from "@/features/alerts/AlertIndicator";
+import { levelFor } from "@/features/alerts/alerts";
+import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
 
 type Person = { id: string; fullName: string };
 
@@ -218,6 +221,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
 
   const list = trpc.companies.list.useQuery({ familyId });
   const people = trpc.people.list.useQuery({ familyId });
+  const { bySubject } = useProjectAlerts(familyId);
 
   const create = trpc.companies.create.useMutation({
     onSuccess: () => {
@@ -301,7 +305,12 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium">{item.legalName}</p>
+                  <p className="flex items-center gap-1.5 text-sm font-medium">
+                    {item.legalName}
+                    <AlertIndicator
+                      level={levelFor(bySubject, "SOCIEDADE", item.id)}
+                    />
+                  </p>
                   <p className="text-xs text-lucathi-gray">
                     {item.isOffshore ? "Offshore" : "Nacional"}
                     {item.taxNumber ? ` · CNPJ ${item.taxNumber}` : ""}

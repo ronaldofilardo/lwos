@@ -166,6 +166,7 @@ export function CertidaoPanel({
 
   const refresh = () => {
     utils.certidoes.list.invalidate({ familyId });
+    utils.certidoes.summary.invalidate({ familyId });
     utils.documents.list.invalidate({ familyId });
   };
 

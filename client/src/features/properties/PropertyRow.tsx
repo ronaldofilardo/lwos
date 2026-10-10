@@ -14,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { PropertyOwnerForm } from "./PropertyOwnerForm";
+import { AlertIndicator } from "@/features/alerts/AlertIndicator";
+import { worstAlert } from "@/features/alerts/alerts";
+import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
 import {
   PropertyFormModal,
   toPropertyFormValues,
@@ -110,6 +113,17 @@ export function PropertyRow({
   const hasNuaPropriedade = owners.data?.some(
     o => o.rightType === "NUA_PROPRIEDADE"
   );
+  // Alerta do titular (pessoa ou sociedade) — Fase 9.
+  const { bySubject } = useProjectAlerts(familyId);
+  const ownerAlertLevel = worstAlert(
+    ...(owners.data ?? []).map(owner =>
+      owner.companyId
+        ? bySubject?.[`SOCIEDADE:${owner.companyId}`]
+        : owner.personId
+          ? bySubject?.[`PESSOA:${owner.personId}`]
+          : undefined
+    )
+  );
 
   const docTypeLabels: Record<string, string> = {
     ESCRITURA_PUBLICA: "Escritura Pública",
@@ -124,6 +138,7 @@ export function PropertyRow({
             <p className="text-sm font-semibold text-lucathi-navy">
               {property.description}
             </p>
+            <AlertIndicator level={ownerAlertLevel} />
             {hasUsufruto ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800">
                 <Sparkles className="size-3" /> Usufruto Declarado

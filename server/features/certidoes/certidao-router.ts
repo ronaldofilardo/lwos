@@ -4,6 +4,7 @@ import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { assertFamilyAccess } from "../access/family-access";
 import { requireRole } from "../access/authorization";
 import { recordAudit } from "../audit/audit-repository";
+import { getProjectAlertSummary } from "../alerts/project-alerts-repository";
 import {
   ensureFamilyCertidoes,
   getCertidaoRecord,
@@ -20,6 +21,14 @@ export const certidaoRouter = router({
       // gerar/atualizar continua restrito à equipe (TEAM_ROLES / SOCIO).
       await assertFamilyAccess(ctx, input.familyId);
       return listCertidaoRecords(input.familyId);
+    }),
+  summary: protectedProcedure
+    .input(z.object({ familyId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Resumo de alertas (Fase 9): mesmo cálculo usado na lista de projetos
+      // e nas telas de Pessoas/Imóveis/Sociedades/Ativos.
+      await assertFamilyAccess(ctx, input.familyId);
+      return getProjectAlertSummary(input.familyId);
     }),
   generate: protectedProcedure
     .input(z.object({ familyId: z.string() }))

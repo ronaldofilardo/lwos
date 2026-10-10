@@ -3,6 +3,7 @@ import {
   families as familiesTable,
   projects,
   projectObjectives,
+  projectStatusValues,
   people,
   documents,
   familyAccess,
@@ -111,6 +112,21 @@ export async function getFamilyRecord(familyId: string) {
     status: project?.status ?? "ATIVO",
     objectives: objectiveRows.map(row => row.objective),
   };
+}
+
+/** Atualiza o status do projeto (Fase 9) — o gate de conclusão fica no roteador. */
+export async function setProjectStatusRecord(
+  familyId: string,
+  status: (typeof projectStatusValues)[number]
+) {
+  const db = await requireDatabase();
+  const updated = await db
+    .update(projects)
+    .set({ status })
+    .where(eq(projects.familyId, familyId))
+    .returning({ id: projects.id });
+  if (!updated.length) throw new Error("Projeto não encontrado.");
+  return { familyId, status };
 }
 
 export interface DashboardData {

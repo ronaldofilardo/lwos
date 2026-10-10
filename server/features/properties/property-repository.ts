@@ -232,6 +232,16 @@ export async function assertCompanyOwnershipAllowed(propertyId: string) {
   }
 }
 
+/** Bloqueia alteração de titularidade (movimentação) com gravame vermelho. */
+export async function assertPropertyMovementAllowed(propertyId: string) {
+  const property = await getPropertyRecord(propertyId);
+  if (property && isEncumbranceRed(property.encumbranceType)) {
+    throw new Error(
+      "Imóvel com gravame ativo: remova o gravame (ou marque como Não há) antes de alterar a titularidade."
+    );
+  }
+}
+
 export async function updatePropertyOwnerRecord(
   input: z.infer<typeof propertyOwnerUpdateSchema>
 ) {

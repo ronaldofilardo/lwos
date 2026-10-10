@@ -14,12 +14,17 @@ const familyRepoMocks = vi.hoisted(() => ({
   listStorageFiles: vi.fn(),
   getClientDashboardData: vi.fn(),
   listClientStorageFiles: vi.fn(),
+  setProjectStatusRecord: vi.fn(),
 }));
 const timelineMocks = vi.hoisted(() => ({ getFamilyTimelineRecord: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
 const databaseMocks = vi.hoisted(() => ({ requireDatabase: vi.fn() }));
 const idsMocks = vi.hoisted(() => ({ createId: vi.fn() }));
 const peopleMocks = vi.hoisted(() => ({ getPrimaryContact: vi.fn() }));
+const alertMocks = vi.hoisted(() => ({
+  listProjectAlertLevels: vi.fn(),
+  getConclusionBlockers: vi.fn(),
+}));
 
 vi.mock("./family-repository", () => familyRepoMocks);
 vi.mock("./family-timeline-repository", () => timelineMocks);
@@ -27,6 +32,7 @@ vi.mock("../audit/audit-repository", () => auditMocks);
 vi.mock("../_shared/database", () => databaseMocks);
 vi.mock("../_shared/ids", () => idsMocks);
 vi.mock("../people/person-repository", () => peopleMocks);
+vi.mock("../alerts/project-alerts-repository", () => alertMocks);
 
 import { familyRouter } from "./family-router";
 
@@ -68,11 +74,15 @@ describe("family-router consultas", () => {
     familyRepoMocks.getClientDashboardData.mockResolvedValue({ families: 1 });
     familyRepoMocks.listClientStorageFiles.mockResolvedValue(["meu.pdf"]);
     timelineMocks.getFamilyTimelineRecord.mockResolvedValue({ events: [] });
+    alertMocks.listProjectAlertLevels.mockResolvedValue({});
+    alertMocks.getConclusionBlockers.mockResolvedValue([]);
     databaseMocks.requireDatabase.mockResolvedValue(fakeDb().db);
   });
 
   it("lista todas as famílias para a equipe", async () => {
-    await expect(caller("SOCIO").list()).resolves.toEqual([family]);
+    await expect(caller("SOCIO").list()).resolves.toEqual([
+      { ...family, alerts: "NENHUM" },
+    ]);
     expect(familyRepoMocks.listFamilyRecords).toHaveBeenCalled();
     expect(databaseMocks.requireDatabase).not.toHaveBeenCalled();
   });
@@ -82,9 +92,22 @@ describe("family-router consultas", () => {
     databaseMocks.requireDatabase.mockResolvedValue(db);
     familyRepoMocks.getFamilyRecord.mockResolvedValueOnce(family).mockResolvedValueOnce(null);
 
-    await expect(caller("CLIENTE").list()).resolves.toEqual([family]);
+    await expect(caller("CLIENTE").list()).resolves.toEqual([
+      { ...family, alerts: "NENHUM" },
+    ]);
     expect(familyRepoMocks.getFamilyRecord).toHaveBeenCalledWith("fam-1");
     expect(familyRepoMocks.getFamilyRecord).toHaveBeenCalledWith("fam-sumida");
+  });
+
+  it("anexa o alerta de cada projeto na listagem (Fase 9)", async () => {
+    alertMocks.listProjectAlertLevels.mockResolvedValue({
+      "fam-1": "VERMELHO",
+    });
+
+    await expect(caller("SOCIO").list()).resolves.toEqual([
+      { ...family, alerts: "VERMELHO" },
+    ]);
+    expect(alertMocks.listProjectAlertLevels).toHaveBeenCalledWith(["fam-1"]);
   });
 
   it("lê família e timeline com verificação de acesso", async () => {
@@ -313,5 +336,84 @@ describe("family-router links de acesso", () => {
       token: expect.any(String),
       fullName: "Ana Silva",
     });
+  });
+});
+
+describe("family-router status do projeto (Fase 9)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    idsMocks.createId.mockReturnValue("id-1");
+    auditMocks.recordAudit.mockResolvedValue(undefined);
+    alertMocks.listProjectAlertLevels.mockResolvedValue({});
+    alertMocks.getConclusionBlockers.mockResolvedValue([]);
+    familyRepoMocks.setProjectStatusRecord.mockResolvedValue({
+      familyId: "fam-1",
+      status: "CONCLUIDO",
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(fakeDb().db);
+  });
+
+  it("bloqueia a conclusão informando o motivo do gate", async () => {
+    alertMocks.getConclusionBlockers.mockResolvedValue([
+      "Imóvel «Casa de campo» com gravame Pendente — resolva o gravame antes de concluir o projeto.",
+    ]);
+
+    await expect(
+      caller().updateStatus({ familyId: "fam-1", status: "CONCLUIDO" })
+    ).rejects.toThrow("O projeto não pode ser concluído: Imóvel");
+    expect(familyRepoMocks.setProjectStatusRecord).not.toHaveBeenCalled();
+    expect(auditMocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it("conclui sem bloqueios e audita com a justificativa", async () => {
+    await expect(
+      caller().updateStatus({
+        familyId: "fam-1",
+        status: "CONCLUIDO",
+        justification: "certidão positiva avaliada",
+      })
+    ).resolves.toEqual({ success: true, status: "CONCLUIDO" });
+    expect(alertMocks.getConclusionBlockers).toHaveBeenCalledWith(
+      "fam-1",
+      "certidão positiva avaliada"
+    );
+    expect(familyRepoMocks.setProjectStatusRecord).toHaveBeenCalledWith(
+      "fam-1",
+      "CONCLUIDO"
+    );
+    expect(auditMocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "PROJETO_STATUS_ATUALIZADO",
+        metadata: {
+          status: "CONCLUIDO",
+          justification: "certidão positiva avaliada",
+        },
+      })
+    );
+  });
+
+  it("mudança sem conclusão não passa pelo gate", async () => {
+    await expect(
+      caller().updateStatus({ familyId: "fam-1", status: "SUSPENSO" })
+    ).resolves.toEqual({ success: true, status: "SUSPENSO" });
+    expect(alertMocks.getConclusionBlockers).not.toHaveBeenCalled();
+    expect(familyRepoMocks.setProjectStatusRecord).toHaveBeenCalledWith(
+      "fam-1",
+      "SUSPENSO"
+    );
+  });
+
+  it("CLIENTE não muda o status do projeto", async () => {
+    await expect(
+      caller("CLIENTE").updateStatus({ familyId: "fam-1", status: "CONCLUIDO" })
+    ).rejects.toThrow("Permissão insuficiente.");
+    expect(familyRepoMocks.setProjectStatusRecord).not.toHaveBeenCalled();
+  });
+
+  it("recusa status fora do enum do projeto", async () => {
+    await expect(
+      caller().updateStatus({ familyId: "fam-1", status: "EM_ANALISE" })
+    ).rejects.toThrow();
+    expect(familyRepoMocks.setProjectStatusRecord).not.toHaveBeenCalled();
   });
 });
