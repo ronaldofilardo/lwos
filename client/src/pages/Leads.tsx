@@ -2,9 +2,11 @@ import { useState } from "react";
 import { FileText, ThumbsDown, ThumbsUp, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { formatDateOnlyBR } from "@/lib/utils";
+import { isAdmin } from "@shared/domain/permissions";
 
 const civilStatusOptions = [
   { value: "SOLTEIRO", label: "Solteiro(a)" },
@@ -35,9 +37,10 @@ type Lead = {
 
 export default function Leads() {
   const { user } = useAuth();
-  const leads = trpc.leads.list.useQuery(undefined, { enabled: user?.role === "SOCIO" || user?.role === "ADMIN" });
+  const admin = isAdmin(user?.role);
+  const leads = trpc.leads.list.useQuery(undefined, { enabled: admin });
 
-  if (user && user.role !== "SOCIO" && user.role !== "ADMIN") {
+  if (user && !admin) {
     return <div className="p-8 text-center text-sm text-lucathi-gray">Área exclusiva do time Lucathi.</div>;
   }
 
@@ -93,11 +96,11 @@ function LeadCard({ lead }: { lead: Lead }) {
 
   const accept = trpc.leads.accept.useMutation({
     onSuccess: () => { toast.success("Interessado aceito — família criada."); utils.leads.list.invalidate(); },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
   const reject = trpc.leads.reject.useMutation({
     onSuccess: () => { toast.success("Interessado recusado."); utils.leads.list.invalidate(); },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   return (

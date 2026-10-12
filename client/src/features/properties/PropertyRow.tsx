@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/trpcError";
 import { PropertyOwnerForm } from "./PropertyOwnerForm";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
 import { worstAlert } from "@/features/alerts/alerts";
@@ -97,7 +98,7 @@ export function PropertyRow({
       setEditing(false);
       toast.success("Imóvel atualizado.");
     },
-    onError: e => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
   const remove = trpc.properties.remove.useMutation({
     onSuccess: () => {
@@ -105,7 +106,7 @@ export function PropertyRow({
       setConfirmDelete(false);
       toast.success("Imóvel excluído.");
     },
-    onError: e => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const severity = encumbranceSeverity(property.encumbranceType);

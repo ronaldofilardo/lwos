@@ -5,6 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { readAsBase64 } from "@/lib/file";
 import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 import {
   certidaoScopeLabels,
   certidaoStatusLabels,
@@ -15,6 +16,7 @@ import {
   type CertidaoStatus,
   type CertidaoScope,
 } from "./types";
+import { canEdit, canManage } from "@shared/domain/permissions";
 
 type CertidaoRow = {
   id: string;
@@ -159,8 +161,8 @@ export function CertidaoPanel({
 }) {
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  const canEdit = user?.role === "SOCIO";
-  const canManage = user?.role === "SOCIO" || user?.role === "ANALISTA";
+  const canEditFlag = canEdit(user?.role);
+  const canManageFlag = canManage(user?.role);
 
   const list = trpc.certidoes.list.useQuery({ familyId });
 
@@ -179,7 +181,7 @@ export function CertidaoPanel({
           : "Todas as certidões já estavam geradas."
       );
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   const updateStatus = trpc.certidoes.updateStatus.useMutation({
@@ -187,7 +189,7 @@ export function CertidaoPanel({
       refresh();
       toast.success("Certidão atualizada pelo sócio.");
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   const upload = trpc.documents.uploadVersion.useMutation({
@@ -195,7 +197,7 @@ export function CertidaoPanel({
       refresh();
       toast.success("Arquivo da certidão enviado.");
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   const rows = (list.data ?? []) as CertidaoRow[];
@@ -218,7 +220,7 @@ export function CertidaoPanel({
             </p>
           </div>
         </div>
-        {canManage ? (
+        {canManageFlag ? (
           <Button
             variant="outline"
             size="sm"
@@ -286,7 +288,7 @@ export function CertidaoPanel({
                       <CertidaoRowItem
                         key={row.id}
                         row={row}
-                        canEdit={canEdit}
+                        canEdit={canEditFlag}
                         canUpload={!readOnly}
                         busy={updateStatus.isPending || upload.isPending}
                         onStatusChange={(certidaoId, status, validUntil) =>

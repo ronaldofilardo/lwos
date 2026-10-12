@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
@@ -9,6 +9,9 @@ type CookieCall = {
 };
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
+
+const dbMocks = vi.hoisted(() => ({ revokeSession: vi.fn() }));
+vi.mock("./db", () => dbMocks);
 
 function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] } {
   const clearedCookies: CookieCall[] = [];
@@ -26,6 +29,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
 
   const ctx: TrpcContext = {
     user,
+    sessionJti: "jti-teste-123",
     req: {
       protocol: "https",
       headers: {},
@@ -41,7 +45,11 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
 }
 
 describe("auth.logout", () => {
-  it("clears the session cookie and reports success", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("clears the session cookie, revoga o jti e relata sucesso", async () => {
     const { ctx, clearedCookies } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
@@ -53,9 +61,27 @@ describe("auth.logout", () => {
     expect(clearedCookies[0]?.options).toMatchObject({
       maxAge: -1,
       secure: true,
-      sameSite: "none",
+      sameSite: "lax",
       httpOnly: true,
       path: "/",
     });
+    expect(dbMocks.revokeSession).toHaveBeenCalledWith("jti-teste-123", 1, "LOGOUT");
+  });
+
+  it("não tenta revogar quando não há sessão ativa", async () => {
+    const ctx: TrpcContext = {
+      user: null,
+      sessionJti: null,
+      req: { protocol: "https", headers: {} } as TrpcContext["req"],
+      res: {
+        clearCookie: vi.fn(),
+      } as TrpcContext["res"],
+    };
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.auth.logout();
+
+    expect(result).toEqual({ success: true });
+    expect(dbMocks.revokeSession).not.toHaveBeenCalled();
   });
 });

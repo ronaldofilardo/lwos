@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ufSchema } from "../../../shared/validation";
+import { ufSchema, isoDateSchema } from "../../../shared/validation";
 import {
   encumbranceTypeValues,
   propertyKindValues,
@@ -14,8 +14,8 @@ const moneySchema = z.number().nonnegative();
 
 export const propertyInputSchema = z
   .object({
-    familyId: z.string().min(1),
-    description: z.string().min(3).max(240),
+    familyId: z.string().min(1, "Projeto obrigatório."),
+    description: z.string().min(3, "Informe a descrição (mínimo 3 caracteres).").max(240),
     kind: propertyKindSchema.optional(),
     uf: ufSchema.optional(),
     hasRegistration: z.boolean().default(true),
@@ -27,20 +27,20 @@ export const propertyInputSchema = z
     registryOfficeNumber: z.number().int().min(1).max(55).optional(),
     registryUf: ufSchema.optional(),
     registryCity: z.string().max(120).optional(),
-    propertyCity: z.string().min(2).max(120),
+    propertyCity: z.string().min(2, "Informe a cidade do imóvel.").max(120),
     inscricaoImobiliaria: z.string().max(120).optional(),
     ccir: z.string().max(40).optional(),
     nirf: z.string().max(40).optional(),
     notes: z.string().max(4000).optional(),
-    acquisitionDate: z.string().optional(),
+    acquisitionDate: isoDateSchema("Data de aquisição inválida (use AAAA-MM-DD).").optional(),
     declaredValue: moneySchema.optional(),
     marketValue: moneySchema.optional(),
     venalValue: moneySchema.optional(),
     irGcapValue: moneySchema.optional(),
     emolumentsValue: moneySchema.optional(),
-    itbiRate: z.number().min(0).max(100).optional(),
+    itbiRate: z.number().min(0, "Alíquota de ITBI não pode ser negativa.").max(100, "Alíquota de ITBI deve estar entre 0 e 100.").optional(),
     hasLaudemio: z.boolean().default(false),
-    laudemioRate: z.number().min(0).max(100).optional(),
+    laudemioRate: z.number().min(0, "Alíquota de laudemio não pode ser negativa.").max(100, "Alíquota de laudemio deve estar entre 0 e 100.").optional(),
     utility: propertyUtilitySchema.default("PENDENTE"),
     rentValue: moneySchema.optional(),
     encumbranceType: encumbranceTypeSchema.default("PENDENTE"),
@@ -109,7 +109,7 @@ export const propertyOwnerInputSchema = z
     propertyId: z.string().min(1),
     personId: z.string().min(1).optional(),
     companyId: z.string().min(1).optional(),
-    ownershipPercentage: z.number().positive().max(100),
+    ownershipPercentage: z.number().positive("Percentual deve ser maior que zero.").max(100, "Percentual deve estar entre 0 e 100."),
     rightType: z.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]),
   })
   .refine(data => Boolean(data.personId) !== Boolean(data.companyId), {

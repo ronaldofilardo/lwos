@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../../_core/trpc";
-import { TEAM_ROLES } from "../../../shared/domain/roles";
-import { requireRole } from "../access/authorization";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import { assertFamilyAccess } from "../access/family-access";
 import { recordAudit } from "../audit/audit-repository";
 import { ensureCertidoesForSubject, listCertidaoRecords } from "../certidoes/certidao-repository";
@@ -52,7 +52,7 @@ export const companyRouter = router({
     return listStakeholderRecords(input.companyId);
   }),
   create: protectedProcedure.input(companyInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const companyId = await createCompanyRecord(input);
     // Certidões e requisitos nacionais não se aplicam a offshore.
@@ -85,7 +85,7 @@ export const companyRouter = router({
     return { companyId };
   }),
   addStakeholder: protectedProcedure.input(stakeholderInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_ADD_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     const stakeholderId = await createStakeholderRecord(input);
@@ -100,7 +100,7 @@ export const companyRouter = router({
     return { stakeholderId };
   }),
   updateStakeholder: protectedProcedure.input(stakeholderUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_UPDATE_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     await updateStakeholderRecord(input);
@@ -115,7 +115,7 @@ export const companyRouter = router({
     return { success: true };
   }),
   removeStakeholder: protectedProcedure.input(stakeholderDeleteSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_REMOVE_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     await removeStakeholderRecord(input);
@@ -160,7 +160,7 @@ export const companyRouter = router({
     };
   }),
   upsertDetails: protectedProcedure.input(companyDetailsUpsertSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_UPSERT_DETAILS);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     // Offshore: exige jurisdição e identificador estrangeiro; não usa regime

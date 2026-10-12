@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../../_core/trpc";
-import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { assertFamilyAccess } from "../access/family-access";
-import { requireRole } from "../access/authorization";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import { recordAudit } from "../audit/audit-repository";
 import {
   computePropertyCategories,
@@ -42,7 +42,8 @@ export const propertyRouter = router({
     return listPropertyOwners(input.propertyId);
   }),
   create: protectedProcedure.input(propertyInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_CREATE);
+    await assertFamilyAccess(ctx, input.familyId);
     const propertyId = await createPropertyRecord(input);
     const { created, removed } = await reconcileEntityDocuments({
       familyId: input.familyId,
@@ -61,7 +62,7 @@ export const propertyRouter = router({
     return { propertyId };
   }),
   update: protectedProcedure.input(propertyUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_UPDATE);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
@@ -90,7 +91,7 @@ export const propertyRouter = router({
     return result;
   }),
   remove: protectedProcedure.input(removePropertySchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_REMOVE);
     await assertFamilyAccess(ctx, input.familyId);
     const result = await removePropertyRecord(input.familyId, input.propertyId);
     await recordAudit({
@@ -104,7 +105,7 @@ export const propertyRouter = router({
     return result;
   }),
   addOwner: protectedProcedure.input(propertyOwnerInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_ADD_OWNER);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
@@ -115,7 +116,7 @@ export const propertyRouter = router({
     return { ownerId };
   }),
   updateOwner: protectedProcedure.input(propertyOwnerUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_UPDATE_OWNER);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
@@ -126,7 +127,7 @@ export const propertyRouter = router({
     return { success: true };
   }),
   removeOwner: protectedProcedure.input(propertyOwnerDeleteSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_REMOVE_OWNER);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);

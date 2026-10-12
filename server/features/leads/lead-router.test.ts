@@ -11,7 +11,7 @@ const leadMocks = vi.hoisted(() => ({
   acceptLeadRecord: vi.fn(),
   rejectLeadRecord: vi.fn(),
 }));
-const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
+const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn(), recordAuditSafe: vi.fn() }));
 
 vi.mock("./lead-repository", () => leadMocks);
 vi.mock("../audit/audit-repository", () => auditMocks);

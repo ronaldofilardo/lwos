@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { readAsBase64 } from "@/lib/file";
+import { errorMessage } from "@/lib/trpcError";
 
 export function useDocumentActions(familyId: string) {
   const utils = trpc.useUtils();
@@ -10,21 +11,21 @@ export function useDocumentActions(familyId: string) {
       refresh();
       toast.success("Nova versão enviada para análise.");
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
   const reviewMutation = trpc.documents.review.useMutation({
     onSuccess: () => {
       refresh();
       toast.success("Status documental atualizado.");
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
   const dispenseMutation = trpc.documents.dispense.useMutation({
     onSuccess: () => {
       refresh();
       toast.success("Dispensa documental formalizada.");
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
   const upload = async (documentId: string, file: File) =>
     uploadMutation.mutateAsync({

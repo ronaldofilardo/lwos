@@ -754,7 +754,27 @@ export const fileBlobs = pgTable(
     content: text("content").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => [uniqueIndex("fileBlobs_key_key").on(table.key)]
+  table => [
+    uniqueIndex("fileBlobs_key_key").on(table.key),
+    check("fileBlobs_size_bytes_check", sql`${table.sizeBytes} > 0 AND ${table.sizeBytes} <= 5242880`),
+  ]
+);
+
+/**
+ * Sessões revogadas (logout em outros dispositivos, suspeita de uso indevido).
+ * O `jti` do JWT é consultado aqui em `verifySession`; se existir, a sessão
+ * é rejeitada mesmo que o token não tenha expirado.
+ */
+export const sessionRevocations = pgTable(
+  "sessionRevocations",
+  {
+    ...ids,
+    userId: varchar("userId", { length: 36 }).notNull(),
+    jti: varchar("jti", { length: 64 }).notNull(),
+    revokedAt: timestamp("revokedAt").defaultNow().notNull(),
+    reason: varchar("reason", { length: 120 }),
+  },
+  table => [uniqueIndex("session_revocations_jti_key").on(table.jti)]
 );
 
 export type User = typeof users.$inferSelect;

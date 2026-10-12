@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle, Send } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 import { BrandMark } from "@/components/lucathi/BrandMark";
 import { isCpfValido } from "@shared/validation";
 
@@ -24,7 +25,7 @@ export default function Interesse() {
   const [showSuccess, setShowSuccess] = useState(false);
   const createLead = trpc.leads.create.useMutation({
     onSuccess: () => setShowSuccess(true),
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   const handleSubmit = async (event: FormEvent) => {

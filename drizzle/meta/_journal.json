@@ -92,6 +92,20 @@
       "when": 1791556705576,
       "tag": "20261009143825_fase2_schema_adjustments",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791772859715,
+      "tag": "0013_condemned_lady_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791775714993,
+      "tag": "0014_plain_green_goblin",
+      "breakpoints": true
     }
   ]
 }

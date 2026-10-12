@@ -12,6 +12,7 @@ import { storagePut, storageGetSignedUrl } from "../../storage";
 import { computePersonCategories } from "../documents/person-document-categories";
 import { ensureCertidoesForSubject } from "../certidoes/certidao-repository";
 import { isCpfValido } from "../../../shared/validation";
+import { assertStorageSize } from "../../../shared/validation/storage-limits";
 import {
   ALLOWED_LEAD_MIME_TYPES,
   leadAcceptSchema,
@@ -61,8 +62,7 @@ export async function createLeadRecord(
       "Tipo de arquivo não permitido. Envie uma imagem (JPEG/PNG/WEBP) ou PDF."
     );
   const bytes = Buffer.from(input.base64Data, "base64");
-  if (!bytes.length || bytes.length > 5 * 1024 * 1024)
-    throw new Error("Arquivo inválido ou maior que 5 MB.");
+  assertStorageSize(bytes);
 
   const db = await requireDatabase();
   await ensureLeadsTable(db);

@@ -5,7 +5,8 @@ import { documents, families, lwrReports, portalLinks, projects } from "../../..
 import { publicProcedure, protectedProcedure, router } from "../../_core/trpc";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
-import { requireRole } from "../access/authorization";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import { recordAudit } from "../audit/audit-repository";
 import { getDocumentRecord } from "../documents/document-repository";
 import { storeDocumentVersion } from "../documents/document-upload";
@@ -26,7 +27,7 @@ async function getActivePortalLink(token: string) {
 
 export const portalRouter = router({
   createLink: protectedProcedure.input(z.object({ familyId: z.string(), origin: z.string().url() })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+    const user = requirePermission(ctx, Permission.PORTAL_CREATE_LINK);
     const token = randomBytes(24).toString("base64url");
     const db = await requireDatabase();
     const linkId = createId();
@@ -38,12 +39,12 @@ export const portalRouter = router({
     return { id: linkId, url: `${input.origin}/portal/${token}`, expiresInDays: 7 };
   }),
   listLinks: protectedProcedure.input(z.object({ familyId: z.string() })).query(async ({ ctx, input }) => {
-    requireRole(ctx, ["SOCIO"]);
+    requirePermission(ctx, Permission.PORTAL_LIST_LINKS);
     const db = await requireDatabase();
     return db.select({ id: portalLinks.id, expiresAt: portalLinks.expiresAt, revokedAt: portalLinks.revokedAt, createdAt: portalLinks.createdAt }).from(portalLinks).where(eq(portalLinks.familyId, input.familyId)).orderBy(desc(portalLinks.createdAt));
   }),
   revokeLink: protectedProcedure.input(z.object({ linkId: z.string() })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]); const db = await requireDatabase();
+    const user = requirePermission(ctx, Permission.PORTAL_REVOKE_LINK); const db = await requireDatabase();
     const [link] = await db.select().from(portalLinks).where(eq(portalLinks.id, input.linkId)).limit(1);
     if (!link) throw new Error("Link não encontrado.");
     await db.update(portalLinks).set({ revokedAt: new Date() }).where(eq(portalLinks.id, input.linkId));

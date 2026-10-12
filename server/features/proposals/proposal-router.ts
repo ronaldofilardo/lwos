@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { protectedProcedure, router } from "../../_core/trpc";
 import { assertFamilyAccess } from "../access/family-access";
-import { requireRole } from "../access/authorization";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import { recordAudit } from "../audit/audit-repository";
 import {
   acceptProposalRecord,
@@ -25,7 +25,7 @@ export const proposalRouter = router({
     return listProposalRecords(input.familyId);
   }),
   create: protectedProcedure.input(createProposalSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPOSAL_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const proposalId = await createProposalRecord(input);
     await recordAudit({
@@ -71,20 +71,20 @@ export const proposalRouter = router({
     return { success: true };
   }),
   reviewCounterProposal: protectedProcedure.input(reviewCounterProposalSchema).mutation(async ({ ctx, input }) => {
-    const socio = requireRole(ctx, ["SOCIO"]);
+    const user = requirePermission(ctx, Permission.PROPOSAL_REVIEW_COUNTER);
     const proposal = await getProposalRecord(input.proposalId);
     if (!proposal) throw new Error("Proposta financeira não encontrada.");
     await reviewCounterProposalRecord({
       proposalId: input.proposalId,
       decision: input.decision,
-      socioUserId: socio.id,
+      socioUserId: user.id,
       notes: input.notes,
     });
     await recordAudit({
       action: input.decision === "ACEITAR" ? "CONTRAPROPOSTA_ACEITA_PELO_SOCIO" : "CONTRAPROPOSTA_RECUSADA_PELO_SOCIO",
       entityType: "PROPOSTA_FINANCEIRA",
       entityId: input.proposalId,
-      actorUserId: socio.id,
+      actorUserId: user.id,
       familyId: proposal.familyId,
       metadata: { decision: input.decision, notes: input.notes || "" },
     });

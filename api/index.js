@@ -27,12 +27,11 @@ var init_logger = __esm({
 });
 
 // shared/domain/roles.ts
-var APP_ROLES, TEAM_ROLES;
+var APP_ROLES;
 var init_roles = __esm({
   "shared/domain/roles.ts"() {
     "use strict";
     APP_ROLES = ["SOCIO", "ANALISTA", "ADMIN", "CLIENTE"];
-    TEAM_ROLES = ["SOCIO", "ANALISTA"];
   }
 });
 
@@ -76,73 +75,6 @@ var init_uf = __esm({
 });
 
 // drizzle/schema.ts
-var schema_exports = {};
-__export(schema_exports, {
-  accessRoleEnum: () => accessRoleEnum,
-  assetCategoryEnum: () => assetCategoryEnum,
-  assetCategoryValues: () => assetCategoryValues,
-  auditLogs: () => auditLogs,
-  certidaoScopeEnum: () => certidaoScopeEnum,
-  certidaoScopeValues: () => certidaoScopeValues,
-  certidaoStatusEnum: () => certidaoStatusEnum,
-  certidaoStatusValues: () => certidaoStatusValues,
-  certidaoTypeEnum: () => certidaoTypeEnum,
-  certidaoTypeValues: () => certidaoTypeValues,
-  certidoes: () => certidoes,
-  civilStatusEnum: () => civilStatusEnum,
-  civilStatusValues: () => civilStatusValues,
-  companies: () => companies,
-  companyDetails: () => companyDetails,
-  companyJurisdictionEnum: () => companyJurisdictionEnum,
-  companyJurisdictionValues: () => companyJurisdictionValues,
-  companyStakeholders: () => companyStakeholders,
-  documentStatusEnum: () => documentStatusEnum,
-  documentStatusValues: () => documentStatusValues,
-  documentVersions: () => documentVersions,
-  documents: () => documents,
-  encumbranceTypeEnum: () => encumbranceTypeEnum,
-  encumbranceTypeValues: () => encumbranceTypeValues,
-  entityTypeEnum: () => entityTypeEnum,
-  entityTypeValues: () => entityTypeValues,
-  families: () => families,
-  familyAccess: () => familyAccess,
-  fileBlobs: () => fileBlobs,
-  financialProposals: () => financialProposals,
-  firstAccessLinks: () => firstAccessLinks,
-  leadStatusEnum: () => leadStatusEnum,
-  leadStatusValues: () => leadStatusValues,
-  leads: () => leads,
-  lwrReports: () => lwrReports,
-  maritalRegimeEnum: () => maritalRegimeEnum,
-  maritalRegimeValues: () => maritalRegimeValues,
-  otherAssets: () => otherAssets,
-  people: () => people,
-  portalLinks: () => portalLinks,
-  projectObjectiveEnum: () => projectObjectiveEnum,
-  projectObjectiveValues: () => projectObjectiveValues,
-  projectObjectives: () => projectObjectives,
-  projectStatusEnum: () => projectStatusEnum,
-  projectStatusValues: () => projectStatusValues,
-  projects: () => projects,
-  properties: () => properties,
-  propertyKindEnum: () => propertyKindEnum,
-  propertyKindValues: () => propertyKindValues,
-  propertyOwners: () => propertyOwners,
-  propertyUtilityEnum: () => propertyUtilityEnum,
-  propertyUtilityValues: () => propertyUtilityValues,
-  proposalStatusEnum: () => proposalStatusEnum,
-  proposalStatusValues: () => proposalStatusValues,
-  rightTypeEnum: () => rightTypeEnum,
-  roleEnum: () => roleEnum,
-  societaryTypeEnum: () => societaryTypeEnum,
-  societaryTypeValues: () => societaryTypeValues,
-  taxRegimeEnum: () => taxRegimeEnum,
-  taxRegimeValues: () => taxRegimeValues,
-  ufEnum: () => ufEnum,
-  users: () => users,
-  vinculoEnum: () => vinculoEnum,
-  vinculoValues: () => vinculoValues
-});
 import {
   boolean,
   check,
@@ -160,7 +92,7 @@ import {
   varchar
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-var ids, auditTime, updatedAtCol, civilStatusValues, maritalRegimeValues, documentStatusValues, assetCategoryValues, proposalStatusValues, leadStatusValues, vinculoValues, entityTypeValues, projectStatusValues, projectObjectiveValues, propertyKindValues, propertyUtilityValues, societaryTypeValues, taxRegimeValues, encumbranceTypeValues, certidaoScopeValues, certidaoTypeValues, certidaoStatusValues, companyJurisdictionValues, roleEnum, civilStatusEnum, maritalRegimeEnum, documentStatusEnum, assetCategoryEnum, leadStatusEnum, vinculoEnum, proposalStatusEnum, projectStatusEnum, projectObjectiveEnum, accessRoleEnum, entityTypeEnum, rightTypeEnum, propertyKindEnum, propertyUtilityEnum, encumbranceTypeEnum, societaryTypeEnum, taxRegimeEnum, ufEnum, certidaoScopeEnum, certidaoTypeEnum, certidaoStatusEnum, companyJurisdictionEnum, users, families, projects, projectObjectives, familyAccess, leads, people, documents, documentVersions, properties, propertyOwners, companies, companyStakeholders, otherAssets, certidoes, companyDetails, financialProposals, portalLinks, firstAccessLinks, lwrReports, auditLogs, fileBlobs;
+var ids, auditTime, updatedAtCol, civilStatusValues, maritalRegimeValues, documentStatusValues, assetCategoryValues, proposalStatusValues, leadStatusValues, vinculoValues, entityTypeValues, projectStatusValues, projectObjectiveValues, propertyKindValues, propertyUtilityValues, societaryTypeValues, taxRegimeValues, encumbranceTypeValues, certidaoScopeValues, certidaoTypeValues, certidaoStatusValues, companyJurisdictionValues, roleEnum, civilStatusEnum, maritalRegimeEnum, documentStatusEnum, assetCategoryEnum, leadStatusEnum, vinculoEnum, proposalStatusEnum, projectStatusEnum, projectObjectiveEnum, accessRoleEnum, entityTypeEnum, rightTypeEnum, propertyKindEnum, propertyUtilityEnum, encumbranceTypeEnum, societaryTypeEnum, taxRegimeEnum, ufEnum, certidaoScopeEnum, certidaoTypeEnum, certidaoStatusEnum, companyJurisdictionEnum, users, families, projects, projectObjectives, familyAccess, leads, people, documents, documentVersions, properties, propertyOwners, companies, companyStakeholders, otherAssets, certidoes, companyDetails, financialProposals, portalLinks, firstAccessLinks, lwrReports, auditLogs, fileBlobs, sessionRevocations;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -818,12 +750,38 @@ var init_schema = __esm({
         content: text("content").notNull(),
         createdAt: timestamp("createdAt").defaultNow().notNull()
       },
-      (table) => [uniqueIndex("fileBlobs_key_key").on(table.key)]
+      (table) => [
+        uniqueIndex("fileBlobs_key_key").on(table.key),
+        check("fileBlobs_size_bytes_check", sql`${table.sizeBytes} > 0 AND ${table.sizeBytes} <= 5242880`)
+      ]
+    );
+    sessionRevocations = pgTable(
+      "sessionRevocations",
+      {
+        ...ids,
+        userId: varchar("userId", { length: 36 }).notNull(),
+        jti: varchar("jti", { length: 64 }).notNull(),
+        revokedAt: timestamp("revokedAt").defaultNow().notNull(),
+        reason: varchar("reason", { length: 120 })
+      },
+      (table) => [uniqueIndex("session_revocations_jti_key").on(table.jti)]
     );
   }
 });
 
 // server/db.ts
+var db_exports = {};
+__export(db_exports, {
+  createUser: () => createUser,
+  getDb: () => getDb,
+  getUserByEmail: () => getUserByEmail,
+  getUserById: () => getUserById,
+  revokeSession: () => revokeSession,
+  revokeSessionByJti: () => revokeSessionByJti,
+  revokeUserSessions: () => revokeUserSessions,
+  touchLastSignedIn: () => touchLastSignedIn,
+  updateUserPassword: () => updateUserPassword
+});
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -894,6 +852,39 @@ async function updateUserPassword(id, passwordHash) {
     logInfo("database.update_user_password_failed");
   }
 }
+async function revokeSession(jti, userId, reason = "LOGOUT") {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(sessionRevocations).values({
+      id: crypto.randomUUID(),
+      userId: String(userId),
+      jti,
+      reason
+    }).onConflictDoNothing();
+  } catch {
+    logInfo("database.session_revoke_failed");
+  }
+}
+async function revokeSessionByJti(jti) {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    const [row] = await db.select({ id: sessionRevocations.id }).from(sessionRevocations).where(eq(sessionRevocations.jti, jti)).limit(1);
+    return Boolean(row);
+  } catch {
+    return false;
+  }
+}
+async function revokeUserSessions(userId, _keepJti) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.delete(sessionRevocations).where(eq(sessionRevocations.userId, String(userId)));
+  } catch {
+    logInfo("database.revoke_user_sessions_failed");
+  }
+}
 var database;
 var init_db = __esm({
   "server/db.ts"() {
@@ -924,13 +915,13 @@ __export(family_storage_path_exports, {
   onlyDigits: () => onlyDigits2,
   resolveFamilyStorageFolder: () => resolveFamilyStorageFolder
 });
-import { and as and5, eq as eq8 } from "drizzle-orm";
+import { and as and6, eq as eq8 } from "drizzle-orm";
 function onlyDigits2(value) {
   return value.replace(/\D/g, "");
 }
 async function resolveFamilyStorageFolder(familyId) {
   const db = await requireDatabase();
-  const [primary] = await db.select({ taxId: people.taxId }).from(people).where(and5(eq8(people.familyId, familyId), eq8(people.isPrimaryContact, true))).limit(1);
+  const [primary] = await db.select({ taxId: people.taxId }).from(people).where(and6(eq8(people.familyId, familyId), eq8(people.isPrimaryContact, true))).limit(1);
   const digits = primary?.taxId ? onlyDigits2(primary.taxId) : "";
   if (digits) return digits;
   return `familia-${familyId}`;
@@ -973,6 +964,7 @@ var ForbiddenError = (msg) => new HttpError(403, msg);
 // shared/const.ts
 var COOKIE_NAME = "app_session_id";
 var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
+var SESSION_TTL_MS = 1e3 * 60 * 60 * 8;
 var UNAUTHED_ERR_MSG = "Please login (10001)";
 var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
 
@@ -983,7 +975,6 @@ import { parse as parseCookieHeader } from "cookie";
 import { SignJWT, jwtVerify } from "jose";
 
 // server/_core/cookies.ts
-var LOCAL_HOSTS = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "::1"]);
 function isSecureRequest(req) {
   if (req.protocol === "https") return true;
   const forwardedProto = req.headers["x-forwarded-proto"];
@@ -992,11 +983,10 @@ function isSecureRequest(req) {
   return protoList.some((proto) => proto.trim().toLowerCase() === "https");
 }
 function getSessionCookieOptions(req) {
-  const isLocal = LOCAL_HOSTS.has(req.hostname ?? "");
   return {
     httpOnly: true,
     path: "/",
-    sameSite: isLocal ? "lax" : "none",
+    sameSite: "lax",
     secure: isSecureRequest(req)
   };
 }
@@ -1060,17 +1050,21 @@ function getSessionSecret() {
   }
   return new TextEncoder().encode(ENV.cookieSecret);
 }
-async function signSession(userId, expiresInMs = ONE_YEAR_MS) {
+async function signSession(userId, expiresInMs = SESSION_TTL_MS) {
   const expirationSeconds = Math.floor((Date.now() + expiresInMs) / 1e3);
-  return new SignJWT({ userId }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setExpirationTime(expirationSeconds).sign(getSessionSecret());
+  const jti = crypto.randomUUID();
+  const token = await new SignJWT({ userId, jti }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setJti(jti).setExpirationTime(expirationSeconds).sign(getSessionSecret());
+  return { token, jti };
 }
 async function verifySession(cookieValue) {
   if (!cookieValue) return null;
   try {
     const { payload } = await jwtVerify(cookieValue, getSessionSecret(), { algorithms: ["HS256"] });
-    const { userId } = payload;
-    if (typeof userId !== "number") return null;
-    return { userId };
+    const { userId, jti } = payload;
+    if (typeof userId !== "number" || typeof jti !== "string") return null;
+    const revoked = await revokeSessionByJti(jti);
+    if (revoked) return null;
+    return { userId, jti };
   } catch {
     return null;
   }
@@ -1109,31 +1103,9 @@ async function registerUser(input) {
   return created;
 }
 async function loginWithPassword(email, password) {
-  const normalizedEmail = normalizeEmail(email);
-  let user = await getUserByEmail(normalizedEmail);
-  if (!user && (normalizedEmail === "socio@adv.com" || normalizedEmail === "admin@adv.com")) {
-    if (password === "123456") {
-      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      try {
-        user = await createUser({
-          name: normalizedEmail === "socio@adv.com" ? "S\xF3cio Respons\xE1vel" : "Administrador",
-          email: normalizedEmail,
-          passwordHash,
-          role: normalizedEmail === "socio@adv.com" ? "SOCIO" : "ADMIN",
-          lastSignedIn: /* @__PURE__ */ new Date()
-        });
-      } catch {
-        user = await getUserByEmail(normalizedEmail);
-      }
-    }
-  }
+  const user = await getUserByEmail(normalizeEmail(email));
   if (!user) throw new Error("E-mail ou senha inv\xE1lidos.");
-  let passwordMatches = await bcrypt.compare(password, user.passwordHash);
-  if (!passwordMatches && (normalizedEmail === "socio@adv.com" || normalizedEmail === "admin@adv.com") && password === "123456") {
-    const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    await updateUserPassword(user.id, newHash);
-    passwordMatches = true;
-  }
+  const passwordMatches = await bcrypt.compare(password, user.passwordHash);
   if (!passwordMatches) throw new Error("E-mail ou senha inv\xE1lidos.");
   await touchLastSignedIn(user.id);
   return user;
@@ -1152,9 +1124,10 @@ function registerAuthRoutes(app2) {
       checkRateLimit(credKey, 10);
       checkRateLimit(ipKey, 30);
       const user = await loginWithPassword(email, password);
-      const sessionToken = await signSession(user.id);
+      const { token, jti } = await signSession(user.id);
+      await revokeOtherSessions(user.id, jti);
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_TTL_MS });
       resetRateLimit(credKey);
       resetRateLimit(ipKey);
       res.json({ success: true });
@@ -1177,9 +1150,10 @@ function registerAuthRoutes(app2) {
     try {
       checkRateLimit(`register:ip:${req.ip ?? "unknown"}`, 10);
       const user = await registerUser({ name, email, password });
-      const sessionToken = await signSession(user.id);
+      const { token, jti } = await signSession(user.id);
+      await revokeOtherSessions(user.id, jti);
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_TTL_MS });
       res.json({ success: true });
     } catch (error) {
       if (error instanceof RateLimitError) {
@@ -1199,7 +1173,11 @@ async function authenticateRequest(req) {
   if (!session) throw ForbiddenError("Sess\xE3o inv\xE1lida ou ausente");
   const user = await getUserById(session.userId);
   if (!user) throw ForbiddenError("Usu\xE1rio n\xE3o encontrado");
-  return user;
+  return { user, jti: session.jti };
+}
+async function revokeOtherSessions(userId, currentJti) {
+  const { revokeUserSessions: revokeUserSessions2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+  await revokeUserSessions2(userId, currentJti);
 }
 
 // server/_core/storageProxy.ts
@@ -1215,6 +1193,16 @@ import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs";
+
+// shared/validation/storage-limits.ts
+var MAX_STORAGE_BYTES = 5 * 1024 * 1024;
+function assertStorageSize(bytes) {
+  if (!bytes.length || bytes.length > MAX_STORAGE_BYTES) {
+    throw new Error("Arquivo inv\xE1lido ou maior que 5 MB.");
+  }
+}
+
+// server/storage.ts
 function getStoragePath(relKey) {
   const root = ENV.storageRoot || path.resolve(process.cwd(), "storage");
   return path.resolve(root, relKey);
@@ -1274,9 +1262,7 @@ function appendHashSuffix(relKey) {
 async function storagePut(relKey, data, _contentType = "application/octet-stream") {
   const key = appendHashSuffix(assertSafeRelativeKey(relKey));
   const buffer = typeof data === "string" ? Buffer.from(data, "utf-8") : Buffer.from(data);
-  if (process.env.NODE_ENV === "production" && buffer.length > 5120) {
-    throw new Error("Arquivo excede 5KB. Tamanho m\xE1ximo permitido em produ\xE7\xE3o.");
-  }
+  assertStorageSize(buffer);
   const sha256 = createHash("sha256").update(buffer).digest("hex");
   if (process.env.NODE_ENV !== "production") {
     const fullPath = getStoragePath(key);
@@ -1371,7 +1357,7 @@ async function moveFolder(oldRelKey, newRelKey) {
 // server/features/documents/document-repository.ts
 init_schema();
 init_database();
-import { and, desc, eq as eq3 } from "drizzle-orm";
+import { and as and2, desc, eq as eq3 } from "drizzle-orm";
 
 // server/features/_shared/ids.ts
 import { nanoid } from "nanoid";
@@ -1383,7 +1369,7 @@ function createId() {
 async function findOrCreateDocumentRecord(input) {
   const db = await requireDatabase();
   const existing = await db.select({ id: documents.id }).from(documents).where(
-    and(
+    and2(
       eq3(documents.familyId, input.familyId),
       eq3(documents.entityType, input.entityType),
       eq3(documents.entityId, input.entityId),
@@ -1428,7 +1414,7 @@ async function getDocumentVersionByStorageKey(storageKey) {
 // server/features/leads/lead-repository.ts
 init_schema();
 init_database();
-import { and as and2, desc as desc2, eq as eq5, sql as sql3 } from "drizzle-orm";
+import { and as and3, desc as desc2, eq as eq5, sql as sql3 } from "drizzle-orm";
 
 // server/features/documents/person-document-categories.ts
 var UNION_DOC_BY_STATUS = {
@@ -1471,129 +1457,7 @@ import { asc, eq as eq4, inArray } from "drizzle-orm";
 
 // server/features/certidoes/certidao-types.ts
 init_schema();
-import { z as z2 } from "zod";
-var certidaoTypeSchema = z2.enum(certidaoTypeValues);
-var certidaoStatusSchema = z2.enum(certidaoStatusValues);
-var certidaoScopeSchema = z2.enum(certidaoScopeValues);
-var certidaoUpdateSchema = z2.object({
-  certidaoId: z2.string().min(1),
-  status: certidaoStatusSchema.optional(),
-  validUntil: z2.string().optional()
-});
-var CERTIDAO_TYPE_LABELS = {
-  CND_FEDERAL: "CND Federal",
-  CND_ESTADUAL: "CND Estadual",
-  CND_MUNICIPAL: "CND Municipal",
-  CERTIDAO_TJ: "Certid\xE3o TJ",
-  CERTIDAO_TRF: "Certid\xE3o TRF",
-  CNAT: "CNAT",
-  CNDT: "CNDT",
-  CERTIDAO_PROTESTOS: "Certid\xE3o de Protestos"
-};
-
-// server/features/certidoes/certidao-repository.ts
-async function ensureCertidoesForSubject(input) {
-  const db = await requireDatabase();
-  const existing = await db.select({ type: certidoes.type }).from(certidoes).where(eq4(certidoes.subjectId, input.subjectId));
-  const known = new Set(existing.map((row) => row.type));
-  const missing = certidaoTypeValues.filter((type) => !known.has(type));
-  if (!missing.length) return 0;
-  await db.transaction(async (tx) => {
-    for (const type of missing) {
-      const certidaoId = createId();
-      const inserted = await tx.insert(certidoes).values({
-        id: certidaoId,
-        familyId: input.familyId,
-        scope: input.scope,
-        subjectId: input.subjectId,
-        type,
-        status: "PENDENTE",
-        createdAt: /* @__PURE__ */ new Date(),
-        updatedAt: /* @__PURE__ */ new Date()
-      }).onConflictDoNothing().returning({ id: certidoes.id });
-      if (!inserted[0]) continue;
-      const documentId = createId();
-      await tx.insert(documents).values({
-        id: documentId,
-        familyId: input.familyId,
-        entityType: "CERTIDAO",
-        entityId: certidaoId,
-        category: CERTIDAO_TYPE_LABELS[type],
-        status: "PENDENTE",
-        currentVersion: 0,
-        createdAt: /* @__PURE__ */ new Date(),
-        updatedAt: /* @__PURE__ */ new Date()
-      });
-      await tx.update(certidoes).set({ documentId }).where(eq4(certidoes.id, certidaoId));
-    }
-  });
-  return missing.length;
-}
-async function ensureFamilyCertidoes(familyId) {
-  const db = await requireDatabase();
-  const [peopleRows, companyRows] = await Promise.all([
-    db.select({ id: people.id }).from(people).where(eq4(people.familyId, familyId)),
-    db.select({ id: companies.id, isOffshore: companies.isOffshore }).from(companies).where(eq4(companies.familyId, familyId))
-  ]);
-  let created = 0;
-  for (const person of peopleRows) {
-    created += await ensureCertidoesForSubject({
-      familyId,
-      scope: "PESSOA",
-      subjectId: person.id
-    });
-  }
-  for (const company of companyRows) {
-    if (company.isOffshore) continue;
-    created += await ensureCertidoesForSubject({
-      familyId,
-      scope: "SOCIEDADE",
-      subjectId: company.id
-    });
-  }
-  return created;
-}
-async function getCertidaoRecord(certidaoId) {
-  const db = await requireDatabase();
-  const result = await db.select().from(certidoes).where(eq4(certidoes.id, certidaoId)).limit(1);
-  return result[0] ?? null;
-}
-async function listCertidaoRecords(familyId) {
-  const db = await requireDatabase();
-  const rows = await db.select().from(certidoes).where(eq4(certidoes.familyId, familyId)).orderBy(asc(certidoes.scope), asc(certidoes.type));
-  if (!rows.length) return [];
-  const [peopleRows, companyRows] = await Promise.all([
-    db.select({ id: people.id, name: people.fullName }).from(people).where(eq4(people.familyId, familyId)),
-    db.select({ id: companies.id, name: companies.legalName }).from(companies).where(eq4(companies.familyId, familyId))
-  ]);
-  const names = new Map(
-    [...peopleRows, ...companyRows].map((row) => [row.id, row.name])
-  );
-  const documentIds = rows.map((row) => row.documentId).filter((id) => Boolean(id));
-  const documentRows = documentIds.length ? await db.select({
-    id: documents.id,
-    currentVersion: documents.currentVersion,
-    updatedAt: documents.updatedAt
-  }).from(documents).where(inArray(documents.id, documentIds)) : [];
-  const documentsById = new Map(documentRows.map((row) => [row.id, row]));
-  return rows.map((row) => ({
-    ...row,
-    subjectName: names.get(row.subjectId) ?? null,
-    documentCurrentVersion: row.documentId ? documentsById.get(row.documentId)?.currentVersion ?? 0 : 0,
-    documentUpdatedAt: row.documentId ? documentsById.get(row.documentId)?.updatedAt ?? null : null
-  }));
-}
-async function updateCertidaoRecord(input) {
-  const db = await requireDatabase();
-  const current = await getCertidaoRecord(input.certidaoId);
-  if (!current) throw new Error("Certid\xE3o n\xE3o encontrada.");
-  await db.update(certidoes).set({
-    status: input.status ?? current.status,
-    validUntil: input.validUntil !== void 0 ? input.validUntil || null : current.validUntil,
-    updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(certidoes.id, input.certidaoId));
-  return current;
-}
+import { z as z3 } from "zod";
 
 // shared/validation/digitos.ts
 function onlyDigits(value) {
@@ -1755,25 +1619,155 @@ function isNascimentoValido(value, ref = hoje()) {
   return anos >= 0 && anos <= IDADE_MAXIMA_ANOS;
 }
 
+// shared/validation/datas-schema.ts
+import { z as z2 } from "zod";
+function isoDateSchema(message = "Data inv\xE1lida (use AAAA-MM-DD).") {
+  return z2.string().refine((value) => isDataIsoValida(value), { message });
+}
+
+// server/features/certidoes/certidao-types.ts
+var certidaoTypeSchema = z3.enum(certidaoTypeValues);
+var certidaoStatusSchema = z3.enum(certidaoStatusValues);
+var certidaoScopeSchema = z3.enum(certidaoScopeValues);
+var certidaoUpdateSchema = z3.object({
+  certidaoId: z3.string().min(1),
+  status: certidaoStatusSchema.optional(),
+  validUntil: isoDateSchema("Data de validade inv\xE1lida (use AAAA-MM-DD).").optional()
+});
+var CERTIDAO_TYPE_LABELS = {
+  CND_FEDERAL: "CND Federal",
+  CND_ESTADUAL: "CND Estadual",
+  CND_MUNICIPAL: "CND Municipal",
+  CERTIDAO_TJ: "Certid\xE3o TJ",
+  CERTIDAO_TRF: "Certid\xE3o TRF",
+  CNAT: "CNAT",
+  CNDT: "CNDT",
+  CERTIDAO_PROTESTOS: "Certid\xE3o de Protestos"
+};
+
+// server/features/certidoes/certidao-repository.ts
+async function ensureCertidoesForSubject(input) {
+  const db = await requireDatabase();
+  const existing = await db.select({ type: certidoes.type }).from(certidoes).where(eq4(certidoes.subjectId, input.subjectId));
+  const known = new Set(existing.map((row) => row.type));
+  const missing = certidaoTypeValues.filter((type) => !known.has(type));
+  if (!missing.length) return 0;
+  await db.transaction(async (tx) => {
+    for (const type of missing) {
+      const certidaoId = createId();
+      const inserted = await tx.insert(certidoes).values({
+        id: certidaoId,
+        familyId: input.familyId,
+        scope: input.scope,
+        subjectId: input.subjectId,
+        type,
+        status: "PENDENTE",
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      }).onConflictDoNothing().returning({ id: certidoes.id });
+      if (!inserted[0]) continue;
+      const documentId = createId();
+      await tx.insert(documents).values({
+        id: documentId,
+        familyId: input.familyId,
+        entityType: "CERTIDAO",
+        entityId: certidaoId,
+        category: CERTIDAO_TYPE_LABELS[type],
+        status: "PENDENTE",
+        currentVersion: 0,
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      });
+      await tx.update(certidoes).set({ documentId }).where(eq4(certidoes.id, certidaoId));
+    }
+  });
+  return missing.length;
+}
+async function ensureFamilyCertidoes(familyId) {
+  const db = await requireDatabase();
+  const [peopleRows, companyRows] = await Promise.all([
+    db.select({ id: people.id }).from(people).where(eq4(people.familyId, familyId)),
+    db.select({ id: companies.id, isOffshore: companies.isOffshore }).from(companies).where(eq4(companies.familyId, familyId))
+  ]);
+  let created = 0;
+  for (const person of peopleRows) {
+    created += await ensureCertidoesForSubject({
+      familyId,
+      scope: "PESSOA",
+      subjectId: person.id
+    });
+  }
+  for (const company of companyRows) {
+    if (company.isOffshore) continue;
+    created += await ensureCertidoesForSubject({
+      familyId,
+      scope: "SOCIEDADE",
+      subjectId: company.id
+    });
+  }
+  return created;
+}
+async function getCertidaoRecord(certidaoId) {
+  const db = await requireDatabase();
+  const result = await db.select().from(certidoes).where(eq4(certidoes.id, certidaoId)).limit(1);
+  return result[0] ?? null;
+}
+async function listCertidaoRecords(familyId) {
+  const db = await requireDatabase();
+  const rows = await db.select().from(certidoes).where(eq4(certidoes.familyId, familyId)).orderBy(asc(certidoes.scope), asc(certidoes.type));
+  if (!rows.length) return [];
+  const [peopleRows, companyRows] = await Promise.all([
+    db.select({ id: people.id, name: people.fullName }).from(people).where(eq4(people.familyId, familyId)),
+    db.select({ id: companies.id, name: companies.legalName }).from(companies).where(eq4(companies.familyId, familyId))
+  ]);
+  const names = new Map(
+    [...peopleRows, ...companyRows].map((row) => [row.id, row.name])
+  );
+  const documentIds = rows.map((row) => row.documentId).filter((id) => Boolean(id));
+  const documentRows = documentIds.length ? await db.select({
+    id: documents.id,
+    currentVersion: documents.currentVersion,
+    updatedAt: documents.updatedAt
+  }).from(documents).where(inArray(documents.id, documentIds)) : [];
+  const documentsById = new Map(documentRows.map((row) => [row.id, row]));
+  return rows.map((row) => ({
+    ...row,
+    subjectName: names.get(row.subjectId) ?? null,
+    documentCurrentVersion: row.documentId ? documentsById.get(row.documentId)?.currentVersion ?? 0 : 0,
+    documentUpdatedAt: row.documentId ? documentsById.get(row.documentId)?.updatedAt ?? null : null
+  }));
+}
+async function updateCertidaoRecord(input) {
+  const db = await requireDatabase();
+  const current = await getCertidaoRecord(input.certidaoId);
+  if (!current) throw new Error("Certid\xE3o n\xE3o encontrada.");
+  await db.update(certidoes).set({
+    status: input.status ?? current.status,
+    validUntil: input.validUntil !== void 0 ? input.validUntil || null : current.validUntil,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(eq4(certidoes.id, input.certidaoId));
+  return current;
+}
+
 // server/features/leads/lead-types.ts
-import { z as z4 } from "zod";
+import { z as z5 } from "zod";
 
 // server/features/families/family-types.ts
 init_schema();
-import { z as z3 } from "zod";
-var civilStatusSchema = z3.enum([
+import { z as z4 } from "zod";
+var civilStatusSchema = z4.enum([
   "SOLTEIRO",
   "DIVORCIADO",
   "VIUVO",
   "CASADO",
   "UNIAO_ESTAVEL"
 ]);
-var maritalRegimeSchema = z3.enum(["CPB", "CUB", "STB", "STOB", "NA"]);
-var projectObjectiveSchema = z3.enum(projectObjectiveValues);
-var familyInputSchema = z3.object({
-  name: z3.string().trim().min(3, "O nome do projeto precisa de ao menos 3 caracteres.").max(160),
-  notes: z3.string().max(2e3).optional(),
-  objectives: z3.array(projectObjectiveSchema).min(1, "Selecione ao menos um objetivo para o projeto.")
+var maritalRegimeSchema = z4.enum(["CPB", "CUB", "STB", "STOB", "NA"]);
+var projectObjectiveSchema = z4.enum(projectObjectiveValues);
+var familyInputSchema = z4.object({
+  name: z4.string().trim().min(3, "O nome do projeto precisa de ao menos 3 caracteres.").max(160),
+  notes: z4.string().max(2e3).optional(),
+  objectives: z4.array(projectObjectiveSchema).min(1, "Selecione ao menos um objetivo para o projeto.")
 });
 
 // server/features/leads/lead-types.ts
@@ -1783,26 +1777,25 @@ var ALLOWED_LEAD_MIME_TYPES = /* @__PURE__ */ new Set([
   "image/png",
   "image/webp"
 ]);
-var leadCreateSchema = z4.object({
-  familyId: z4.string().optional(),
-  fullName: z4.string().min(3).max(160),
-  taxId: z4.string().transform((value) => normalizarCpf(value)).refine((value) => isCpfValido(value), "CPF inv\xE1lido."),
-  email: z4.string().email(),
-  birthDate: z4.string().min(1),
-  // YYYY-MM-DD
-  fileName: z4.string().min(1).max(255),
-  mimeType: z4.string().min(1),
-  base64Data: z4.string().min(1)
+var leadCreateSchema = z5.object({
+  familyId: z5.string().optional(),
+  fullName: z5.string().min(3, "Informe o nome completo (m\xEDnimo 3 caracteres).").max(160),
+  taxId: z5.string().transform((value) => normalizarCpf(value)).refine((value) => isCpfValido(value), "CPF inv\xE1lido."),
+  email: z5.string().email("E-mail inv\xE1lido."),
+  birthDate: isoDateSchema("Data de nascimento inv\xE1lida (use AAAA-MM-DD)."),
+  fileName: z5.string().min(1, "Informe o nome do arquivo.").max(255),
+  mimeType: z5.string().min(1, "Informe o tipo do arquivo."),
+  base64Data: z5.string().min(1, "Conte\xFAdo do arquivo ausente.")
 });
-var leadAcceptSchema = z4.object({
-  leadId: z4.string().min(1),
-  familyName: z4.string().min(3).max(160),
+var leadAcceptSchema = z5.object({
+  leadId: z5.string().min(1),
+  familyName: z5.string().min(3).max(160),
   civilStatus: civilStatusSchema,
   maritalRegime: maritalRegimeSchema
 });
-var leadRejectSchema = z4.object({
-  leadId: z4.string().min(1),
-  reviewNote: z4.string().max(1e3).optional()
+var leadRejectSchema = z5.object({
+  leadId: z5.string().min(1),
+  reviewNote: z5.string().max(1e3).optional()
 });
 
 // server/features/leads/lead-repository.ts
@@ -1845,8 +1838,7 @@ async function createLeadRecord(input) {
       "Tipo de arquivo n\xE3o permitido. Envie uma imagem (JPEG/PNG/WEBP) ou PDF."
     );
   const bytes = Buffer.from(input.base64Data, "base64");
-  if (!bytes.length || bytes.length > 5 * 1024 * 1024)
-    throw new Error("Arquivo inv\xE1lido ou maior que 5 MB.");
+  assertStorageSize(bytes);
   const db = await requireDatabase();
   await ensureLeadsTable(db);
   const id = createId();
@@ -1937,7 +1929,7 @@ async function acceptLeadRecord(input, reviewedBy) {
         updatedAt: /* @__PURE__ */ new Date()
       }))
     );
-    const accepted = await tx.update(leads).set({ status: "ACEITO", familyId, reviewedBy }).where(and2(eq5(leads.id, input.leadId), eq5(leads.status, "PENDENTE"))).returning({ id: leads.id });
+    const accepted = await tx.update(leads).set({ status: "ACEITO", familyId, reviewedBy }).where(and3(eq5(leads.id, input.leadId), eq5(leads.status, "PENDENTE"))).returning({ id: leads.id });
     if (accepted.length === 0)
       throw new Error("Este interessado j\xE1 foi analisado.");
     return { familyId, personId };
@@ -1955,7 +1947,7 @@ async function rejectLeadRecord(leadId, reviewedBy, reviewNote) {
   if (lead.status !== "PENDENTE")
     throw new Error("Este interessado j\xE1 foi analisado.");
   const db = await requireDatabase();
-  const rejected = await db.update(leads).set({ status: "RECUSADO", reviewedBy, reviewNote: reviewNote || null }).where(and2(eq5(leads.id, leadId), eq5(leads.status, "PENDENTE"))).returning({ id: leads.id });
+  const rejected = await db.update(leads).set({ status: "RECUSADO", reviewedBy, reviewNote: reviewNote || null }).where(and3(eq5(leads.id, leadId), eq5(leads.status, "PENDENTE"))).returning({ id: leads.id });
   if (rejected.length === 0)
     throw new Error("Este interessado j\xE1 foi analisado.");
   return { success: true, leadId, fullName: lead.fullName };
@@ -1964,20 +1956,174 @@ async function rejectLeadRecord(leadId, reviewedBy, reviewNote) {
 // server/features/access/family-access.ts
 init_schema();
 init_database();
-import { and as and3, eq as eq6 } from "drizzle-orm";
+import { and as and4, eq as eq6 } from "drizzle-orm";
 import { TRPCError as TRPCError2 } from "@trpc/server";
 
 // server/features/access/authorization.ts
 import { TRPCError } from "@trpc/server";
+
+// shared/domain/permissions.ts
+var Permission = {
+  // Pessoas
+  PEOPLE_CREATE: "people.create",
+  PEOPLE_UPDATE: "people.update",
+  PEOPLE_REMOVE: "people.remove",
+  PEOPLE_ATTACH_DOCUMENTS: "people.attachDocuments",
+  PEOPLE_SET_PRIMARY_CONTACT: "people.setPrimaryContact",
+  // Propriedades
+  PROPERTY_CREATE: "property.create",
+  PROPERTY_UPDATE: "property.update",
+  PROPERTY_REMOVE: "property.remove",
+  PROPERTY_ADD_OWNER: "property.addOwner",
+  PROPERTY_UPDATE_OWNER: "property.updateOwner",
+  PROPERTY_REMOVE_OWNER: "property.removeOwner",
+  // Documentos
+  DOCUMENT_CREATE: "document.create",
+  DOCUMENT_GENERATE_REQUIREMENTS: "document.generateRequirements",
+  DOCUMENT_UPLOAD_VERSION: "document.uploadVersion",
+  DOCUMENT_UPLOAD_BALANCE: "document.uploadBalance",
+  DOCUMENT_REVIEW: "document.review",
+  DOCUMENT_DISPENSE: "document.dispense",
+  // Sociedades
+  COMPANY_CREATE: "company.create",
+  COMPANY_ADD_STAKEHOLDER: "company.addStakeholder",
+  COMPANY_UPDATE_STAKEHOLDER: "company.updateStakeholder",
+  COMPANY_REMOVE_STAKEHOLDER: "company.removeStakeholder",
+  COMPANY_UPSERT_DETAILS: "company.upsertDetails",
+  // Ativos
+  ASSET_CREATE: "asset.create",
+  ASSET_UPDATE: "asset.update",
+  ASSET_REMOVE: "asset.remove",
+  // Certidões
+  CERTIDAO_GENERATE: "certidao.generate",
+  CERTIDAO_UPDATE_STATUS: "certidao.updateStatus",
+  // Propostas
+  PROPOSAL_CREATE: "proposal.create",
+  PROPOSAL_REVIEW_COUNTER: "proposal.reviewCounter",
+  // Portal
+  PORTAL_CREATE_LINK: "portal.createLink",
+  PORTAL_LIST_LINKS: "portal.listLinks",
+  PORTAL_REVOKE_LINK: "portal.revokeLink",
+  // Famílias
+  FAMILY_CREATE: "family.create",
+  FAMILY_UPDATE_STATUS: "family.updateStatus",
+  FAMILY_GRANT_CLIENT_ACCESS: "family.grantClientAccess",
+  FAMILY_GENERATE_FIRST_ACCESS_LINK: "family.generateFirstAccessLink",
+  FAMILY_GENERATE_PASSWORD_RESET_LINK: "family.generatePasswordResetLink",
+  FAMILY_GET_DASHBOARD: "family.getDashboard",
+  FAMILY_LIST_STORAGE: "family.listStorage",
+  // Auditoria
+  AUDIT_LIST_BY_FAMILY: "audit.listByFamily",
+  // Interessados
+  LEAD_LIST: "lead.list",
+  LEAD_ACCEPT: "lead.accept",
+  LEAD_REJECT: "lead.reject",
+  // Usuários
+  USER_LIST: "user.list",
+  USER_CHANGE_ROLE: "user.changeRole",
+  // LWR
+  LWR_CREATE: "lwr.create"
+};
+var PERMISSION_MATRIX = {
+  SOCIO: [
+    // Todas as permissões
+    ...Object.values(Permission)
+  ],
+  ANALISTA: [
+    // Pessoas
+    Permission.PEOPLE_CREATE,
+    Permission.PEOPLE_UPDATE,
+    Permission.PEOPLE_REMOVE,
+    Permission.PEOPLE_ATTACH_DOCUMENTS,
+    Permission.PEOPLE_SET_PRIMARY_CONTACT,
+    // Propriedades
+    Permission.PROPERTY_CREATE,
+    Permission.PROPERTY_UPDATE,
+    Permission.PROPERTY_REMOVE,
+    Permission.PROPERTY_ADD_OWNER,
+    Permission.PROPERTY_UPDATE_OWNER,
+    Permission.PROPERTY_REMOVE_OWNER,
+    // Documentos
+    Permission.DOCUMENT_CREATE,
+    Permission.DOCUMENT_GENERATE_REQUIREMENTS,
+    Permission.DOCUMENT_UPLOAD_VERSION,
+    Permission.DOCUMENT_UPLOAD_BALANCE,
+    // Sociedades
+    Permission.COMPANY_CREATE,
+    Permission.COMPANY_ADD_STAKEHOLDER,
+    Permission.COMPANY_UPDATE_STAKEHOLDER,
+    Permission.COMPANY_REMOVE_STAKEHOLDER,
+    Permission.COMPANY_UPSERT_DETAILS,
+    // Ativos
+    Permission.ASSET_CREATE,
+    Permission.ASSET_UPDATE,
+    Permission.ASSET_REMOVE,
+    // Certidões
+    Permission.CERTIDAO_GENERATE,
+    // Propostas
+    Permission.PROPOSAL_CREATE,
+    // LWR
+    Permission.LWR_CREATE
+  ],
+  ADMIN: [
+    // Famílias
+    Permission.FAMILY_GET_DASHBOARD,
+    Permission.FAMILY_LIST_STORAGE,
+    // Auditoria
+    Permission.AUDIT_LIST_BY_FAMILY,
+    // Interessados
+    Permission.LEAD_LIST,
+    // Pessoas
+    Permission.PEOPLE_CREATE,
+    Permission.PEOPLE_UPDATE,
+    Permission.PEOPLE_REMOVE,
+    Permission.PEOPLE_ATTACH_DOCUMENTS,
+    Permission.PEOPLE_SET_PRIMARY_CONTACT,
+    // Propriedades
+    Permission.PROPERTY_CREATE,
+    Permission.PROPERTY_UPDATE,
+    Permission.PROPERTY_REMOVE,
+    Permission.PROPERTY_ADD_OWNER,
+    Permission.PROPERTY_UPDATE_OWNER,
+    Permission.PROPERTY_REMOVE_OWNER,
+    // Documentos
+    Permission.DOCUMENT_CREATE,
+    Permission.DOCUMENT_GENERATE_REQUIREMENTS,
+    Permission.DOCUMENT_UPLOAD_VERSION,
+    Permission.DOCUMENT_UPLOAD_BALANCE,
+    // Sociedades
+    Permission.COMPANY_CREATE,
+    Permission.COMPANY_ADD_STAKEHOLDER,
+    Permission.COMPANY_UPDATE_STAKEHOLDER,
+    Permission.COMPANY_REMOVE_STAKEHOLDER,
+    Permission.COMPANY_UPSERT_DETAILS,
+    // Ativos
+    Permission.ASSET_CREATE,
+    Permission.ASSET_UPDATE,
+    Permission.ASSET_REMOVE,
+    // Certidões
+    Permission.CERTIDAO_GENERATE,
+    // Propostas
+    Permission.PROPOSAL_CREATE,
+    // LWR
+    Permission.LWR_CREATE
+  ],
+  CLIENTE: []
+};
+function hasPermission(role, permission) {
+  return PERMISSION_MATRIX[role].includes(permission);
+}
+
+// server/features/access/authorization.ts
 function requireUser(ctx) {
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Autentica\xE7\xE3o necess\xE1ria." });
   }
   return ctx.user;
 }
-function requireRole(ctx, allowed) {
+function requirePermission(ctx, permission) {
   const user = requireUser(ctx);
-  if (!allowed.includes(user.role)) {
+  if (!hasPermission(user.role, permission)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Permiss\xE3o insuficiente." });
   }
   return user;
@@ -1987,7 +2133,7 @@ function requireRole(ctx, allowed) {
 async function userHasFamilyAccess(user, familyId) {
   if (user.role !== "CLIENTE") return true;
   const db = await requireDatabase();
-  const records = await db.select({ id: familyAccess.id }).from(familyAccess).where(and3(eq6(familyAccess.familyId, familyId), eq6(familyAccess.userId, user.id))).limit(1);
+  const records = await db.select({ id: familyAccess.id }).from(familyAccess).where(and4(eq6(familyAccess.familyId, familyId), eq6(familyAccess.userId, user.id))).limit(1);
   return Boolean(records[0]);
 }
 async function assertFamilyAccess(ctx, familyId) {
@@ -2008,9 +2154,10 @@ var MIME_BY_EXT = {
 };
 function registerStorageProxy(app2) {
   app2.get(["/api/local-storage/*", "/local-storage/*"], async (req, res) => {
-    let user;
+    let user = null;
     try {
-      user = await authenticateRequest(req);
+      const session = await authenticateRequest(req);
+      user = session.user;
     } catch {
       res.status(401).send("N\xE3o autenticado.");
       return;
@@ -2057,7 +2204,7 @@ function registerStorageProxy(app2) {
 }
 
 // server/_core/systemRouter.ts
-import { z as z5 } from "zod";
+import { z as z6 } from "zod";
 
 // server/_core/notification.ts
 async function notifyOwner({ title, content }) {
@@ -2066,10 +2213,37 @@ async function notifyOwner({ title, content }) {
 }
 
 // server/_core/trpc.ts
+init_logger();
 import { initTRPC, TRPCError as TRPCError3 } from "@trpc/server";
 import superjson from "superjson";
+import { ZodError } from "zod";
+function formatTrpcError(opts) {
+  const { shape, error } = opts;
+  if (error.cause instanceof ZodError) {
+    const issues = error.cause.issues;
+    return {
+      ...shape,
+      message: issues[0]?.message ?? "Dados inv\xE1lidos.",
+      data: {
+        ...shape.data,
+        fields: Object.fromEntries(
+          issues.map((issue) => [issue.path.join("."), issue.message])
+        )
+      }
+    };
+  }
+  if (error.code === "INTERNAL_SERVER_ERROR") {
+    logError("trpc.internal_error", {
+      path: shape.data?.path,
+      message: error.message
+    });
+    return { ...shape, message: "Erro interno. Tente novamente em instantes." };
+  }
+  return shape;
+}
 var t = initTRPC.context().create({
-  transformer: superjson
+  transformer: superjson,
+  errorFormatter: formatTrpcError
 });
 var router = t.router;
 var publicProcedure = t.procedure;
@@ -2104,16 +2278,16 @@ var adminProcedure = t.procedure.use(
 // server/_core/systemRouter.ts
 var systemRouter = router({
   health: publicProcedure.input(
-    z5.object({
-      timestamp: z5.number().min(0, "timestamp cannot be negative")
+    z6.object({
+      timestamp: z6.number().min(0, "timestamp cannot be negative")
     })
   ).query(() => ({
     ok: true
   })),
   notifyOwner: adminProcedure.input(
-    z5.object({
-      title: z5.string().min(1, "title is required"),
-      content: z5.string().min(1, "content is required")
+    z6.object({
+      title: z6.string().min(1, "title is required"),
+      content: z6.string().min(1, "content is required")
     })
   ).mutation(async ({ input }) => {
     const delivered = await notifyOwner(input);
@@ -2123,13 +2297,16 @@ var systemRouter = router({
   })
 });
 
+// server/routers.ts
+init_db();
+
 // server/features/companies/company-router.ts
-import { z as z10 } from "zod";
-init_roles();
+import { z as z11 } from "zod";
 
 // server/features/audit/audit-repository.ts
 init_schema();
 init_database();
+init_logger();
 async function recordAudit(input) {
   const db = await requireDatabase();
   await db.insert(auditLogs).values({
@@ -2142,11 +2319,23 @@ async function recordAudit(input) {
     metadata: input.metadata ? JSON.stringify(input.metadata) : null
   });
 }
+async function recordAuditSafe(input) {
+  try {
+    await recordAudit(input);
+  } catch (error) {
+    logError("audit.record_failed", {
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
 
 // server/features/documents/document-requirements.ts
 init_schema();
 init_database();
-import { and as and4, eq as eq7, inArray as inArray2 } from "drizzle-orm";
+import { and as and5, eq as eq7, inArray as inArray2 } from "drizzle-orm";
 function computePropertyCategories(property) {
   const registrationDoc = property.hasRegistration === false ? "Escritura ou contrato de compra e venda" : "Matr\xEDcula atualizada";
   if (property.kind === "RURAL") {
@@ -2203,7 +2392,7 @@ async function reconcileEntityDocuments(input) {
     status: documents.status,
     currentVersion: documents.currentVersion
   }).from(documents).where(
-    and4(
+    and5(
       eq7(documents.familyId, input.familyId),
       eq7(documents.entityType, input.entityType),
       eq7(documents.entityId, input.entityId)
@@ -2310,11 +2499,11 @@ async function reconcileFamilyDocumentRequirements(familyId) {
 
 // server/features/people/person-repository.ts
 init_schema();
-import { and as and8, eq as eq12, ne as ne2 } from "drizzle-orm";
+import { and as and9, eq as eq12, ne as ne2 } from "drizzle-orm";
 
 // server/features/families/family-repository.ts
 init_schema();
-import { desc as desc3, eq as eq9, count, inArray as inArray3, and as and6 } from "drizzle-orm";
+import { desc as desc3, eq as eq9, count, inArray as inArray3, and as and7 } from "drizzle-orm";
 init_database();
 async function createFamilyRecord(input, createdBy) {
   const db = await requireDatabase();
@@ -2339,7 +2528,7 @@ async function listFamilyRecords() {
   const records = await db.select().from(families).orderBy(desc3(families.updatedAt));
   if (!records.length) return [];
   const familyIds = records.map((r) => r.id);
-  const accessRows = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(and6(inArray3(familyAccess.familyId, familyIds), eq9(familyAccess.accessRole, "CLIENTE")));
+  const accessRows = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(and7(inArray3(familyAccess.familyId, familyIds), eq9(familyAccess.accessRole, "CLIENTE")));
   const familyIdsWithAccess = new Set(accessRows.map((r) => r.familyId));
   const projectRows = await db.select({ familyId: projects.familyId, status: projects.status }).from(projects).where(inArray3(projects.familyId, familyIds));
   const statusByFamily = new Map(projectRows.map((r) => [r.familyId, r.status]));
@@ -2348,7 +2537,7 @@ async function listFamilyRecords() {
     fullName: people.fullName,
     email: people.email,
     phone: people.phone
-  }).from(people).where(and6(inArray3(people.familyId, familyIds), eq9(people.isPrimaryContact, true)));
+  }).from(people).where(and7(inArray3(people.familyId, familyIds), eq9(people.isPrimaryContact, true)));
   const titularByFamily = new Map(titularRows.map((r) => [r.familyId, r]));
   return records.map((record) => {
     const titular = titularByFamily.get(record.id);
@@ -2501,18 +2690,18 @@ init_database();
 // server/features/documents/dependent-irpf.ts
 init_schema();
 init_database();
-import { and as and7, eq as eq11, inArray as inArray5, ne } from "drizzle-orm";
+import { and as and8, eq as eq11, inArray as inArray5, ne } from "drizzle-orm";
 async function findPrimaryContactId(familyId) {
   const db = await requireDatabase();
   const [titular] = await db.select({ id: people.id }).from(people).where(
-    and7(eq11(people.familyId, familyId), eq11(people.isPrimaryContact, true))
+    and8(eq11(people.familyId, familyId), eq11(people.isPrimaryContact, true))
   ).limit(1);
   return titular?.id ?? null;
 }
 async function getIrpfStatus(familyId, personId) {
   const db = await requireDatabase();
   const [irpf] = await db.select({ status: documents.status }).from(documents).where(
-    and7(
+    and8(
       eq11(documents.familyId, familyId),
       eq11(documents.entityType, "PESSOA"),
       eq11(documents.entityId, personId),
@@ -2528,7 +2717,7 @@ async function syncDependentIrpfStatus(familyId) {
   if (!titularStatus) return 0;
   const db = await requireDatabase();
   const dependents = await db.select({ id: people.id }).from(people).where(
-    and7(
+    and8(
       eq11(people.familyId, familyId),
       eq11(people.isDependent, true),
       ne(people.id, titularId)
@@ -2536,7 +2725,7 @@ async function syncDependentIrpfStatus(familyId) {
   );
   if (!dependents.length) return 0;
   const updated = await db.update(documents).set({ status: titularStatus }).where(
-    and7(
+    and8(
       eq11(documents.familyId, familyId),
       eq11(documents.entityType, "PESSOA"),
       inArray5(documents.entityId, dependents.map((row) => row.id)),
@@ -2557,8 +2746,8 @@ async function assertIrpfUploadAllowed(document) {
 }
 
 // server/features/people/person-types.ts
-import { z as z6 } from "zod";
-var vinculoSchema = z6.enum([
+import { z as z7 } from "zod";
+var vinculoSchema = z7.enum([
   "TITULAR",
   "CONJUGE",
   "FILHO",
@@ -2657,28 +2846,28 @@ function collectPersonIssues(data) {
   }
   return issues;
 }
-var personBaseSchema = z6.object({
-  familyId: z6.string().min(1),
-  fullName: z6.string().trim().min(3).max(160),
-  email: z6.string().email("E-mail inv\xE1lido.").optional().or(z6.literal("")),
-  taxId: z6.string().transform((value) => normalizarCpf(value)).refine((value) => isCpfValido(value), "CPF inv\xE1lido."),
-  birthDate: z6.string().min(1, "Informe a data de nascimento."),
-  phone: z6.string().optional().or(z6.literal("")).transform((value) => value ? normalizarTelefone(value) : ""),
+var personBaseSchema = z7.object({
+  familyId: z7.string().min(1),
+  fullName: z7.string().trim().min(3).max(160),
+  email: z7.string().email("E-mail inv\xE1lido.").optional().or(z7.literal("")),
+  taxId: z7.string().transform((value) => normalizarCpf(value)).refine((value) => isCpfValido(value), "CPF inv\xE1lido."),
+  birthDate: z7.string().min(1, "Informe a data de nascimento."),
+  phone: z7.string().optional().or(z7.literal("")).transform((value) => value ? normalizarTelefone(value) : ""),
   vinculo: vinculoSchema,
-  parentPersonId: z6.string().min(1).optional(),
-  spouseName: z6.string().max(160).optional(),
+  parentPersonId: z7.string().min(1).optional(),
+  spouseName: z7.string().max(160).optional(),
   civilStatus: civilStatusSchema.optional(),
   maritalRegime: maritalRegimeSchema.optional(),
-  exSpouseNote: z6.string().max(1e3).optional(),
-  isPrimaryContact: z6.boolean().optional(),
-  isDependent: z6.boolean().optional(),
-  addressSameAsPrimary: z6.boolean().optional(),
-  cep: z6.string().max(8).optional().or(z6.literal("")),
-  street: z6.string().max(160).optional().or(z6.literal("")),
-  number: z6.string().max(20).optional().or(z6.literal("")),
-  complement: z6.string().max(80).optional().or(z6.literal("")),
-  district: z6.string().max(80).optional().or(z6.literal("")),
-  city: z6.string().max(120).optional().or(z6.literal("")),
+  exSpouseNote: z7.string().max(1e3).optional(),
+  isPrimaryContact: z7.boolean().optional(),
+  isDependent: z7.boolean().optional(),
+  addressSameAsPrimary: z7.boolean().optional(),
+  cep: z7.string().max(8).optional().or(z7.literal("")),
+  street: z7.string().max(160).optional().or(z7.literal("")),
+  number: z7.string().max(20).optional().or(z7.literal("")),
+  complement: z7.string().max(80).optional().or(z7.literal("")),
+  district: z7.string().max(80).optional().or(z7.literal("")),
+  city: z7.string().max(120).optional().or(z7.literal("")),
   uf: ufSchema.optional()
 });
 var personInputSchema = personBaseSchema.superRefine((data, ctx) => {
@@ -2690,25 +2879,25 @@ var personInputSchema = personBaseSchema.superRefine((data, ctx) => {
     });
   }
 });
-var personUpdateSchema = personBaseSchema.omit({ vinculo: true, parentPersonId: true, isPrimaryContact: true }).extend({ personId: z6.string().min(1) });
-var setPrimaryContactSchema = z6.object({
-  familyId: z6.string().min(1),
-  personId: z6.string().min(1)
+var personUpdateSchema = personBaseSchema.omit({ vinculo: true, parentPersonId: true, isPrimaryContact: true }).extend({ personId: z7.string().min(1) });
+var setPrimaryContactSchema = z7.object({
+  familyId: z7.string().min(1),
+  personId: z7.string().min(1)
 });
-var removePersonSchema = z6.object({
-  familyId: z6.string().min(1),
-  personId: z6.string().min(1)
+var removePersonSchema = z7.object({
+  familyId: z7.string().min(1),
+  personId: z7.string().min(1)
 });
-var personAttachmentSchema = z6.object({
-  category: z6.string().min(2).max(80),
-  fileName: z6.string().min(1).max(255),
-  mimeType: z6.string().min(1).max(120),
-  base64Data: z6.string().min(8).max(8e6)
+var personAttachmentSchema = z7.object({
+  category: z7.string().min(2).max(80),
+  fileName: z7.string().min(1).max(255),
+  mimeType: z7.string().min(1).max(120),
+  base64Data: z7.string().min(8).max(8e6)
 });
-var attachDocumentsSchema = z6.object({
-  familyId: z6.string().min(1),
-  personId: z6.string().min(1),
-  attachments: z6.array(personAttachmentSchema).min(1).max(8)
+var attachDocumentsSchema = z7.object({
+  familyId: z7.string().min(1),
+  personId: z7.string().min(1),
+  attachments: z7.array(personAttachmentSchema).min(1).max(8)
 });
 function isMarriedStatus(status) {
   return Boolean(status && marriedStatuses.has(status));
@@ -2733,7 +2922,7 @@ async function assertParentMatches(familyId, parentPersonId, expectedVinculo) {
     id: people.id,
     vinculo: people.vinculo,
     fullName: people.fullName
-  }).from(people).where(and8(eq12(people.id, parentPersonId), eq12(people.familyId, familyId))).limit(1);
+  }).from(people).where(and9(eq12(people.id, parentPersonId), eq12(people.familyId, familyId))).limit(1);
   if (!parent) throw new Error("Pai/m\xE3e n\xE3o encontrado nesta fam\xEDlia.");
   if (parent.vinculo !== expectedVinculo) {
     throw new Error(
@@ -2766,11 +2955,11 @@ function resolveCivilFields(input) {
 }
 async function assertCpfNotDuplicatedInFamily(familyId, taxId, excludePersonId) {
   const db = await requireDatabase();
-  const query = excludePersonId ? and8(
+  const query = excludePersonId ? and9(
     eq12(people.familyId, familyId),
     eq12(people.taxId, taxId),
     ne2(people.id, excludePersonId)
-  ) : and8(eq12(people.familyId, familyId), eq12(people.taxId, taxId));
+  ) : and9(eq12(people.familyId, familyId), eq12(people.taxId, taxId));
   const [duplicate] = await db.select({ id: people.id, fullName: people.fullName }).from(people).where(query).limit(1);
   if (duplicate) {
     throw new Error(
@@ -2780,7 +2969,7 @@ async function assertCpfNotDuplicatedInFamily(familyId, taxId, excludePersonId) 
 }
 async function assertConjugeNotDuplicated(familyId) {
   const db = await requireDatabase();
-  const [existing] = await db.select({ id: people.id }).from(people).where(and8(eq12(people.familyId, familyId), eq12(people.vinculo, "CONJUGE"))).limit(1);
+  const [existing] = await db.select({ id: people.id }).from(people).where(and9(eq12(people.familyId, familyId), eq12(people.vinculo, "CONJUGE"))).limit(1);
   if (existing) {
     throw new Error(
       "Este projeto j\xE1 possui um c\xF4njuge. Edite o registro existente."
@@ -2790,13 +2979,13 @@ async function assertConjugeNotDuplicated(familyId) {
 async function assertTitularIrpfReceived(familyId) {
   const db = await requireDatabase();
   const [titular] = await db.select({ id: people.id }).from(people).where(
-    and8(eq12(people.familyId, familyId), eq12(people.isPrimaryContact, true))
+    and9(eq12(people.familyId, familyId), eq12(people.isPrimaryContact, true))
   ).limit(1);
   if (!titular) {
     throw new Error("Defina o titular antes de marcar um dependente.");
   }
   const [irpf] = await db.select({ status: documents.status }).from(documents).where(
-    and8(
+    and9(
       eq12(documents.familyId, familyId),
       eq12(documents.entityType, "PESSOA"),
       eq12(documents.entityId, titular.id),
@@ -2812,7 +3001,7 @@ async function assertTitularIrpfReceived(familyId) {
 async function assertBirthAfterParent(familyId, parentPersonId, birthDate) {
   const db = await requireDatabase();
   const [parent] = await db.select({ birthDate: people.birthDate, fullName: people.fullName }).from(people).where(
-    and8(eq12(people.id, parentPersonId), eq12(people.familyId, familyId))
+    and9(eq12(people.id, parentPersonId), eq12(people.familyId, familyId))
   ).limit(1);
   if (parent?.birthDate && birthDate < parent.birthDate) {
     throw new Error(
@@ -2901,7 +3090,7 @@ async function addPersonRecord(input) {
 async function updatePersonRecord(input) {
   const db = await requireDatabase();
   const [person] = await db.select().from(people).where(
-    and8(eq12(people.id, input.personId), eq12(people.familyId, input.familyId))
+    and9(eq12(people.id, input.personId), eq12(people.familyId, input.familyId))
   ).limit(1);
   if (!person) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
   const issues = collectPersonIssues({ ...input, vinculo: person.vinculo ?? "" });
@@ -2975,7 +3164,7 @@ async function updatePersonRecord(input) {
 }
 async function removePersonRecord(familyId, personId) {
   const db = await requireDatabase();
-  const [person] = await db.select().from(people).where(and8(eq12(people.id, personId), eq12(people.familyId, familyId))).limit(1);
+  const [person] = await db.select().from(people).where(and9(eq12(people.id, personId), eq12(people.familyId, familyId))).limit(1);
   if (!person) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
   if (person.isPrimaryContact) {
     throw new Error(
@@ -3007,11 +3196,11 @@ async function removePersonRecord(familyId, personId) {
     );
   }
   const documentsToArchive = await db.select({ id: documents.id }).from(documents).where(
-    and8(eq12(documents.familyId, familyId), eq12(documents.entityId, personId))
+    and9(eq12(documents.familyId, familyId), eq12(documents.entityId, personId))
   );
   if (documentsToArchive.length) {
     await db.update(documents).set({ status: "DISPENSADO" }).where(
-      and8(eq12(documents.familyId, familyId), eq12(documents.entityId, personId))
+      and9(eq12(documents.familyId, familyId), eq12(documents.entityId, personId))
     );
   }
   await db.delete(people).where(eq12(people.id, personId));
@@ -3029,7 +3218,7 @@ async function listPeopleByFamily(familyId) {
 async function getPrimaryContact(familyId) {
   const db = await requireDatabase();
   const result = await db.select().from(people).where(
-    and8(eq12(people.familyId, familyId), eq12(people.isPrimaryContact, true))
+    and9(eq12(people.familyId, familyId), eq12(people.isPrimaryContact, true))
   ).limit(1);
   return result[0] ?? null;
 }
@@ -3038,7 +3227,7 @@ async function setPrimaryContact(input) {
   let oldFolder = "";
   await db.transaction(async (tx) => {
     const [candidate] = await tx.select({ id: people.id, taxId: people.taxId, familyId: people.familyId }).from(people).where(
-      and8(eq12(people.id, input.personId), eq12(people.familyId, input.familyId))
+      and9(eq12(people.id, input.personId), eq12(people.familyId, input.familyId))
     ).limit(1);
     if (!candidate) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
     if (candidate.taxId) {
@@ -3047,7 +3236,7 @@ async function setPrimaryContact(input) {
     oldFolder = await resolveFamilyStorageFolder(input.familyId);
     await tx.update(people).set({ isPrimaryContact: false }).where(eq12(people.familyId, input.familyId));
     await tx.update(people).set({ isPrimaryContact: true }).where(
-      and8(eq12(people.familyId, input.familyId), eq12(people.id, input.personId))
+      and9(eq12(people.familyId, input.familyId), eq12(people.id, input.personId))
     );
   });
   const newFolder = await resolveFamilyStorageFolder(input.familyId);
@@ -3058,6 +3247,47 @@ async function setPrimaryContact(input) {
 init_schema();
 init_database();
 import { eq as eq13 } from "drizzle-orm";
+
+// server/_shared/advisory-lock.ts
+import { sql as sql4 } from "drizzle-orm";
+var AdvisoryLockKey = {
+  FIRST_ACCESS: 1e3,
+  // first-access-router: setPassword
+  DOCUMENT_UPLOAD: 2e3,
+  // document-upload: storeDocumentVersion
+  LWR_CREATE: 3e3,
+  // lwr-router: create
+  STAKEHOLDER_PERCENT: 4e3
+  // company-repository: stakeholder soma â‰¤100%
+};
+async function withAdvisoryLock(dbOrPromise, lockName, discriminator, fn) {
+  const db = dbOrPromise instanceof Promise ? await dbOrPromise : dbOrPromise;
+  const key = AdvisoryLockKey[lockName];
+  const disc = typeof discriminator === "string" ? hashString(discriminator) : discriminator;
+  if (typeof db.transaction !== "function") {
+    return fn(db);
+  }
+  return db.transaction(async (tx) => {
+    const lockResult = await tx.execute(sql4`
+      SELECT pg_try_advisory_xact_lock(${key}, ${disc}) as acquired
+    `);
+    const acquired = lockResult?.[0]?.acquired ?? false;
+    if (!acquired) {
+      throw new Error("Opera\xE7\xE3o concorrente em andamento. Tente novamente.");
+    }
+    return fn(tx);
+  });
+}
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+// server/features/companies/company-repository.ts
 var PCT_EPSILON = 1e-3;
 function totalPercentage(rows) {
   return rows.reduce((sum, row) => sum + Number(row.percentage ?? 0), 0);
@@ -3096,63 +3326,71 @@ async function listStakeholderRecords(companyId) {
   return db.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, companyId));
 }
 async function createStakeholderRecord(input) {
-  const db = await requireDatabase();
-  const id = createId();
-  const externalName = input.externalName?.trim() || null;
-  await db.transaction(async (tx) => {
-    const existing = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, input.companyId));
-    if (input.personId && existing.some((row) => row.personId === input.personId)) {
-      throw new Error("Este membro j\xE1 participa da sociedade.");
+  return withAdvisoryLock(
+    requireDatabase(),
+    "STAKEHOLDER_PERCENT",
+    input.companyId,
+    async (tx) => {
+      const id = createId();
+      const externalName = input.externalName?.trim() || null;
+      const existing = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, input.companyId));
+      if (input.personId && existing.some((row) => row.personId === input.personId)) {
+        throw new Error("Este membro j\xE1 participa da sociedade.");
+      }
+      if (externalName && existing.some((row) => normalizeName(row.externalName) === normalizeName(externalName))) {
+        throw new Error("Este n\xE3o-membro j\xE1 participa da sociedade.");
+      }
+      const total = totalPercentage(existing) + input.percentage;
+      if (total > 100 + PCT_EPSILON) {
+        throw new Error(
+          `A soma das participa\xE7\xF5es n\xE3o pode passar de 100% (atual ${totalPercentage(existing)}%).`
+        );
+      }
+      await tx.insert(companyStakeholders).values({
+        id,
+        companyId: input.companyId,
+        personId: input.personId ?? null,
+        externalName,
+        percentage: input.percentage.toFixed(2)
+      });
+      return id;
     }
-    if (externalName && existing.some((row) => normalizeName(row.externalName) === normalizeName(externalName))) {
-      throw new Error("Este n\xE3o-membro j\xE1 participa da sociedade.");
-    }
-    const total = totalPercentage(existing) + input.percentage;
-    if (total > 100 + PCT_EPSILON) {
-      throw new Error(
-        `A soma das participa\xE7\xF5es n\xE3o pode passar de 100% (atual ${totalPercentage(existing)}%).`
-      );
-    }
-    await tx.insert(companyStakeholders).values({
-      id,
-      companyId: input.companyId,
-      personId: input.personId ?? null,
-      externalName,
-      percentage: input.percentage.toFixed(2)
-    });
-  });
-  return id;
+  );
 }
 async function updateStakeholderRecord(input) {
-  const db = await requireDatabase();
-  await db.transaction(async (tx) => {
-    const current = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.id, input.stakeholderId)).limit(1);
-    const stakeholder = current[0];
-    if (!stakeholder || stakeholder.companyId !== input.companyId) {
-      throw new Error("Participa\xE7\xE3o n\xE3o encontrada.");
+  return withAdvisoryLock(
+    requireDatabase(),
+    "STAKEHOLDER_PERCENT",
+    input.companyId,
+    async (tx) => {
+      const current = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.id, input.stakeholderId)).limit(1);
+      const stakeholder = current[0];
+      if (!stakeholder || stakeholder.companyId !== input.companyId) {
+        throw new Error("Participa\xE7\xE3o n\xE3o encontrada.");
+      }
+      const others = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, input.companyId));
+      const remaining = others.filter((row) => row.id !== input.stakeholderId);
+      const personId = input.personId !== void 0 ? input.personId : stakeholder.personId;
+      const externalName = input.externalName !== void 0 ? input.externalName.trim() || null : stakeholder.externalName;
+      if (!personId && !externalName) {
+        throw new Error("Informe um membro da fam\xEDlia ou o nome do n\xE3o-membro.");
+      }
+      if (personId && remaining.some((row) => row.personId === personId)) {
+        throw new Error("Este membro j\xE1 participa da sociedade.");
+      }
+      if (externalName && remaining.some((row) => normalizeName(row.externalName) === normalizeName(externalName))) {
+        throw new Error("Este n\xE3o-membro j\xE1 participa da sociedade.");
+      }
+      const percentage = input.percentage ?? Number(stakeholder.percentage);
+      const total = totalPercentage(remaining) + percentage;
+      if (total > 100 + PCT_EPSILON) {
+        throw new Error(
+          `A soma das participa\xE7\xF5es n\xE3o pode passar de 100% (atual ${totalPercentage(remaining)}%).`
+        );
+      }
+      await tx.update(companyStakeholders).set({ personId, externalName, percentage: percentage.toFixed(2) }).where(eq13(companyStakeholders.id, input.stakeholderId));
     }
-    const others = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, input.companyId));
-    const remaining = others.filter((row) => row.id !== input.stakeholderId);
-    const personId = input.personId !== void 0 ? input.personId : stakeholder.personId;
-    const externalName = input.externalName !== void 0 ? input.externalName.trim() || null : stakeholder.externalName;
-    if (!personId && !externalName) {
-      throw new Error("Informe um membro da fam\xEDlia ou o nome do n\xE3o-membro.");
-    }
-    if (personId && remaining.some((row) => row.personId === personId)) {
-      throw new Error("Este membro j\xE1 participa da sociedade.");
-    }
-    if (externalName && remaining.some((row) => normalizeName(row.externalName) === normalizeName(externalName))) {
-      throw new Error("Este n\xE3o-membro j\xE1 participa da sociedade.");
-    }
-    const percentage = input.percentage ?? Number(stakeholder.percentage);
-    const total = totalPercentage(remaining) + percentage;
-    if (total > 100 + PCT_EPSILON) {
-      throw new Error(
-        `A soma das participa\xE7\xF5es n\xE3o pode passar de 100% (atual ${totalPercentage(remaining)}%).`
-      );
-    }
-    await tx.update(companyStakeholders).set({ personId, externalName, percentage: percentage.toFixed(2) }).where(eq13(companyStakeholders.id, input.stakeholderId));
-  });
+  );
 }
 async function removeStakeholderRecord(input) {
   const db = await requireDatabase();
@@ -3168,18 +3406,18 @@ async function removeStakeholderRecord(input) {
 }
 
 // server/features/companies/company-types.ts
-import { z as z7 } from "zod";
-var companyInputSchema = z7.object({
-  familyId: z7.string().min(1),
-  legalName: z7.string().min(3).max(180),
-  taxNumber: z7.string().max(20).optional(),
-  isOffshore: z7.boolean().default(false)
+import { z as z8 } from "zod";
+var companyInputSchema = z8.object({
+  familyId: z8.string().min(1),
+  legalName: z8.string().min(3).max(180),
+  taxNumber: z8.string().max(20).optional(),
+  isOffshore: z8.boolean().default(false)
 }).superRefine((data, ctx) => {
   const taxNumber = data.taxNumber?.trim() || null;
   if (data.isOffshore) {
     if (taxNumber) {
       ctx.addIssue({
-        code: z7.ZodIssueCode.custom,
+        code: z8.ZodIssueCode.custom,
         path: ["taxNumber"],
         message: "Sociedade offshore n\xE3o possui CNPJ."
       });
@@ -3188,7 +3426,7 @@ var companyInputSchema = z7.object({
   }
   if (!taxNumber) {
     ctx.addIssue({
-      code: z7.ZodIssueCode.custom,
+      code: z8.ZodIssueCode.custom,
       path: ["taxNumber"],
       message: "Informe o CNPJ da sociedade nacional."
     });
@@ -3196,7 +3434,7 @@ var companyInputSchema = z7.object({
   }
   if (!isCnpjValido(taxNumber)) {
     ctx.addIssue({
-      code: z7.ZodIssueCode.custom,
+      code: z8.ZodIssueCode.custom,
       path: ["taxNumber"],
       message: "CNPJ inv\xE1lido."
     });
@@ -3206,15 +3444,15 @@ var companyInputSchema = z7.object({
 // server/features/companies/company-details.ts
 init_schema();
 init_uf();
-import { z as z8 } from "zod";
-var text2 = (max) => z8.string().max(max, `M\xE1ximo de ${max} caracteres.`).transform((value) => value.trim() || null).nullish();
-var money = z8.number().finite().nullish();
-var companyDetailsFieldsSchema = z8.object({
+import { z as z9 } from "zod";
+var text2 = (max) => z9.string().max(max, `M\xE1ximo de ${max} caracteres.`).transform((value) => value.trim() || null).nullish();
+var money = z9.number().finite().nullish();
+var companyDetailsFieldsSchema = z9.object({
   nire: text2(20),
-  uf: z8.enum(UFS).nullish(),
+  uf: z9.enum(UFS).nullish(),
   sede: text2(160),
-  societaryType: z8.enum(societaryTypeValues).nullish(),
-  taxRegime: z8.enum(taxRegimeValues).nullish(),
+  societaryType: z9.enum(societaryTypeValues).nullish(),
+  taxRegime: z9.enum(taxRegimeValues).nullish(),
   corporatePurpose: text2(4e3),
   capitalSocial: money,
   shareQuantity: money,
@@ -3232,20 +3470,20 @@ var companyDetailsFieldsSchema = z8.object({
   financing: money,
   estimatedMarketValue: money,
   companyNumber: text2(60),
-  jurisdiction: z8.enum(companyJurisdictionValues).nullish(),
+  jurisdiction: z9.enum(companyJurisdictionValues).nullish(),
   residentAgent: text2(120),
   notes: text2(8e3)
 }).superRefine((data, ctx) => {
   if (data.societaryType === "SA" && data.taxRegime === "SIMPLES_NACIONAL") {
     ctx.addIssue({
-      code: z8.ZodIssueCode.custom,
+      code: z9.ZodIssueCode.custom,
       path: ["taxRegime"],
       message: "S.A. n\xE3o pode optar pelo Simples Nacional (LC 123/2006, art. 3\xBA, \xA74\xBA)."
     });
   }
 });
-var companyDetailsIdSchema = z8.object({
-  companyId: z8.string().min(1, "Informe a sociedade.")
+var companyDetailsIdSchema = z9.object({
+  companyId: z9.string().min(1, "Informe a sociedade.")
 });
 var companyDetailsUpsertSchema = companyDetailsIdSchema.extend({
   fields: companyDetailsFieldsSchema
@@ -3320,30 +3558,30 @@ function computePerShare(input) {
 }
 
 // server/features/companies/company-stakeholder.ts
-import { z as z9 } from "zod";
-var stakeholderInputSchema = z9.object({
-  companyId: z9.string().min(1),
+import { z as z10 } from "zod";
+var stakeholderInputSchema = z10.object({
+  companyId: z10.string().min(1),
   // SÃ³cio membro da famÃ­lia (people) OU nÃ£o-membro informado em externalName.
-  personId: z9.string().min(1).optional(),
-  externalName: z9.string().min(2).max(160).optional(),
-  percentage: z9.number().positive().max(100)
+  personId: z10.string().min(1).optional(),
+  externalName: z10.string().min(2).max(160).optional(),
+  percentage: z10.number().positive().max(100)
 }).refine((data) => Boolean(data.personId || data.externalName?.trim()), {
   message: "Informe um membro da fam\xEDlia ou o nome do n\xE3o-membro.",
   path: ["personId"]
 });
-var stakeholderUpdateSchema = z9.object({
-  companyId: z9.string().min(1),
-  stakeholderId: z9.string().min(1),
-  personId: z9.string().min(1).optional(),
-  externalName: z9.string().min(2).max(160).optional(),
-  percentage: z9.number().positive().max(100).optional()
+var stakeholderUpdateSchema = z10.object({
+  companyId: z10.string().min(1),
+  stakeholderId: z10.string().min(1),
+  personId: z10.string().min(1).optional(),
+  externalName: z10.string().min(2).max(160).optional(),
+  percentage: z10.number().positive().max(100).optional()
 }).refine(
   (data) => data.percentage !== void 0 || data.personId !== void 0 || data.externalName !== void 0,
   { message: "Nada para atualizar.", path: ["percentage"] }
 );
-var stakeholderDeleteSchema = z9.object({
-  companyId: z9.string().min(1),
-  stakeholderId: z9.string().min(1)
+var stakeholderDeleteSchema = z10.object({
+  companyId: z10.string().min(1),
+  stakeholderId: z10.string().min(1)
 });
 
 // server/features/companies/company-router.ts
@@ -3353,17 +3591,17 @@ async function requireCompanyFamily(companyId) {
   return company;
 }
 var companyRouter = router({
-  list: protectedProcedure.input(z10.object({ familyId: z10.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z11.object({ familyId: z11.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCompanyRecords(input.familyId);
   }),
-  stakeholders: protectedProcedure.input(z10.object({ companyId: z10.string() })).query(async ({ ctx, input }) => {
+  stakeholders: protectedProcedure.input(z11.object({ companyId: z11.string() })).query(async ({ ctx, input }) => {
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     return listStakeholderRecords(input.companyId);
   }),
   create: protectedProcedure.input(companyInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const companyId = await createCompanyRecord(input);
     let requirementsCount = 0;
@@ -3395,7 +3633,7 @@ var companyRouter = router({
     return { companyId };
   }),
   addStakeholder: protectedProcedure.input(stakeholderInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_ADD_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     const stakeholderId = await createStakeholderRecord(input);
@@ -3410,7 +3648,7 @@ var companyRouter = router({
     return { stakeholderId };
   }),
   updateStakeholder: protectedProcedure.input(stakeholderUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_UPDATE_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     await updateStakeholderRecord(input);
@@ -3425,7 +3663,7 @@ var companyRouter = router({
     return { success: true };
   }),
   removeStakeholder: protectedProcedure.input(stakeholderDeleteSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_REMOVE_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     await removeStakeholderRecord(input);
@@ -3468,7 +3706,7 @@ var companyRouter = router({
     };
   }),
   upsertDetails: protectedProcedure.input(companyDetailsUpsertSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.COMPANY_UPSERT_DETAILS);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     if (company.isOffshore) {
@@ -3510,8 +3748,7 @@ var companyRouter = router({
 });
 
 // server/features/documents/document-router.ts
-import { z as z12 } from "zod";
-init_roles();
+import { z as z13 } from "zod";
 
 // server/features/documents/document-review.ts
 init_schema();
@@ -3521,13 +3758,13 @@ import { eq as eq16 } from "drizzle-orm";
 // server/features/documents/couple-docs.ts
 init_schema();
 init_database();
-import { and as and9, eq as eq15, inArray as inArray6, ne as ne3 } from "drizzle-orm";
+import { and as and10, eq as eq15, inArray as inArray6, ne as ne3 } from "drizzle-orm";
 async function releaseSpouseCoupleDocs(sourceDocument) {
   if (sourceDocument.entityType !== "PESSOA") return 0;
   if (!isCoupleSharedCategory(sourceDocument.category)) return 0;
   const db = await requireDatabase();
   const [spouse] = await db.select({ id: people.id }).from(people).where(
-    and9(
+    and10(
       eq15(people.familyId, sourceDocument.familyId),
       eq15(people.vinculo, "CONJUGE"),
       ne3(people.id, sourceDocument.entityId)
@@ -3542,7 +3779,7 @@ async function releaseSpouseCoupleDocs(sourceDocument) {
     dispensedAt: /* @__PURE__ */ new Date(),
     rejectionReason: null
   }).where(
-    and9(
+    and10(
       eq15(documents.familyId, sourceDocument.familyId),
       eq15(documents.entityType, "PESSOA"),
       eq15(documents.entityId, spouse.id),
@@ -3593,9 +3830,9 @@ async function dispenseDocumentRecord(input) {
 
 // server/features/documents/document-types.ts
 init_schema();
-import { z as z11 } from "zod";
-var documentEntitySchema = z11.enum(entityTypeValues);
-var documentStatusSchema = z11.enum([
+import { z as z12 } from "zod";
+var documentEntitySchema = z12.enum(entityTypeValues);
+var documentStatusSchema = z12.enum([
   "PENDENTE",
   "RECEBIDO_EM_ANALISE",
   "VALIDADO",
@@ -3605,30 +3842,30 @@ var documentStatusSchema = z11.enum([
   "NAO_POSSUI",
   "NA"
 ]);
-var createDocumentSchema = z11.object({
-  familyId: z11.string().min(1),
+var createDocumentSchema = z12.object({
+  familyId: z12.string().min(1),
   entityType: documentEntitySchema,
-  entityId: z11.string().min(1),
-  category: z11.string().min(2).max(80),
-  validUntil: z11.string().optional(),
+  entityId: z12.string().min(1),
+  category: z12.string().min(2).max(80),
+  validUntil: isoDateSchema("Data de validade inv\xE1lida (use AAAA-MM-DD).").optional(),
   /** Data-base do documento (ex.: balanÃ§o fechado / balancete). */
-  referenceDate: z11.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data-base inv\xE1lida (use AAAA-MM-DD).").optional()
+  referenceDate: isoDateSchema("Data-base inv\xE1lida (use AAAA-MM-DD).").optional()
 });
-var uploadVersionSchema = z11.object({
-  documentId: z11.string().min(1),
-  fileName: z11.string().min(1).max(255),
-  mimeType: z11.string().min(1).max(120),
-  base64Data: z11.string().min(8).max(8e6)
+var uploadVersionSchema = z12.object({
+  documentId: z12.string().min(1),
+  fileName: z12.string().min(1).max(255),
+  mimeType: z12.string().min(1).max(120),
+  base64Data: z12.string().min(8).max(8e6)
 });
-var reviewDocumentSchema = z11.object({
-  documentId: z11.string().min(1),
-  status: z11.enum(["VALIDADO", "REJEITADO", "NAO_POSSUI"]),
-  rejectionReason: z11.string().min(3).max(1e3).optional()
+var reviewDocumentSchema = z12.object({
+  documentId: z12.string().min(1),
+  status: z12.enum(["VALIDADO", "REJEITADO", "NAO_POSSUI"]),
+  rejectionReason: z12.string().min(3).max(1e3).optional()
 });
-var dispenseDocumentSchema = z11.object({
-  documentId: z11.string().min(1),
-  reason: z11.string().min(3).max(1e3),
-  requestedBy: z11.string().optional()
+var dispenseDocumentSchema = z12.object({
+  documentId: z12.string().min(1),
+  reason: z12.string().min(3).max(1e3),
+  requestedBy: z12.string().optional()
 });
 
 // server/features/documents/document-upload.ts
@@ -3651,57 +3888,63 @@ async function storeDocumentVersion(input) {
   if (!document) throw new Error("Documento n\xE3o encontrado.");
   await assertIrpfUploadAllowed(document);
   const bytes = Buffer.from(input.base64Data, "base64");
-  if (!bytes.length || bytes.length > 5 * 1024 * 1024)
-    throw new Error("Arquivo inv\xE1lido ou maior que 5 MB.");
+  assertStorageSize(bytes);
   const sha256 = createHash2("sha256").update(bytes).digest("hex");
   const nextVersion = document.currentVersion + 1;
   const familyFolder = await resolveFamilyStorageFolder(document.familyId);
   const relativeKey = `${familyFolder}/${document.id}/v${nextVersion}/${input.fileName}`;
   const stored = await storagePut(relativeKey, bytes, input.mimeType);
-  const db = await requireDatabase();
-  await db.transaction(async (tx) => {
-    await tx.insert(documentVersions).values({
-      id: createId(),
-      documentId: document.id,
-      versionNumber: nextVersion,
-      originalName: input.fileName,
-      mimeType: input.mimeType,
-      storageKey: stored.key,
-      sha256,
-      uploadedBy: String(input.userId)
-    });
-    await tx.update(documents).set({
-      currentVersion: nextVersion,
-      status: "RECEBIDO_EM_ANALISE",
-      rejectionReason: null
-    }).where(eq17(documents.id, document.id));
-  });
-  await releaseSpouseCoupleDocs({
-    familyId: document.familyId,
-    entityType: document.entityType,
-    entityId: document.entityId,
-    category: document.category
-  });
-  if (document.entityType === "PESSOA" && document.category === "IRPF") {
-    await syncDependentIrpfStatus(document.familyId);
-  }
-  return { versionNumber: nextVersion, sha256, storageKey: stored.key };
+  return withAdvisoryLock(
+    requireDatabase(),
+    "DOCUMENT_UPLOAD",
+    document.id,
+    async (tx) => {
+      const [currentDoc] = await tx.select({ currentVersion: documents.currentVersion }).from(documents).where(eq17(documents.id, document.id)).limit(1);
+      if (!currentDoc) throw new Error("Documento n\xE3o encontrado.");
+      const versionNumber = currentDoc.currentVersion + 1;
+      await tx.insert(documentVersions).values({
+        id: createId(),
+        documentId: document.id,
+        versionNumber,
+        originalName: input.fileName,
+        mimeType: input.mimeType,
+        storageKey: stored.key,
+        sha256,
+        uploadedBy: String(input.userId)
+      });
+      await tx.update(documents).set({
+        currentVersion: versionNumber,
+        status: "RECEBIDO_EM_ANALISE",
+        rejectionReason: null
+      }).where(eq17(documents.id, document.id));
+      await releaseSpouseCoupleDocs({
+        familyId: document.familyId,
+        entityType: document.entityType,
+        entityId: document.entityId,
+        category: document.category
+      });
+      if (document.entityType === "PESSOA" && document.category === "IRPF") {
+        await syncDependentIrpfStatus(document.familyId);
+      }
+      return { versionNumber, sha256, storageKey: stored.key };
+    }
+  );
 }
 
 // server/features/documents/document-router.ts
 var documentRouter = router({
-  list: protectedProcedure.input(z12.object({ familyId: z12.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z13.object({ familyId: z13.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listDocumentRecords(input.familyId);
   }),
-  versions: protectedProcedure.input(z12.object({ documentId: z12.string() })).query(async ({ ctx, input }) => {
+  versions: protectedProcedure.input(z13.object({ documentId: z13.string() })).query(async ({ ctx, input }) => {
     const document = await getDocumentRecord(input.documentId);
     if (!document) return [];
     await assertFamilyAccess(ctx, document.familyId);
     return listVersions(input.documentId);
   }),
   create: protectedProcedure.input(createDocumentSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.DOCUMENT_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const documentId = await findOrCreateDocumentRecord(input);
     await recordAudit({
@@ -3713,8 +3956,8 @@ var documentRouter = router({
     });
     return { documentId };
   }),
-  generateRequirements: protectedProcedure.input(z12.object({ familyId: z12.string() })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+  generateRequirements: protectedProcedure.input(z13.object({ familyId: z13.string() })).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.DOCUMENT_GENERATE_REQUIREMENTS);
     await assertFamilyAccess(ctx, input.familyId);
     const { created, removed } = await reconcileFamilyDocumentRequirements(
       input.familyId
@@ -3732,7 +3975,8 @@ var documentRouter = router({
   uploadVersion: protectedProcedure.input(uploadVersionSchema).mutation(async ({ ctx, input }) => {
     const document = await getDocumentRecord(input.documentId);
     if (!document) throw new Error("Documento n\xE3o encontrado.");
-    const user = await assertFamilyAccess(ctx, document.familyId);
+    const user = requirePermission(ctx, Permission.DOCUMENT_UPLOAD_VERSION);
+    await assertFamilyAccess(ctx, document.familyId);
     const result = await storeDocumentVersion({ ...input, userId: user.id });
     await recordAudit({
       action: "VERSAO_DOCUMENTO_ENVIADA",
@@ -3745,7 +3989,7 @@ var documentRouter = router({
     return result;
   }),
   review: protectedProcedure.input(reviewDocumentSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+    const user = requirePermission(ctx, Permission.DOCUMENT_REVIEW);
     const document = await getDocumentRecord(input.documentId);
     if (!document) throw new Error("Documento n\xE3o encontrado.");
     await reviewDocumentRecord(input);
@@ -3759,7 +4003,7 @@ var documentRouter = router({
     return { success: true };
   }),
   dispense: protectedProcedure.input(dispenseDocumentSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+    const user = requirePermission(ctx, Permission.DOCUMENT_DISPENSE);
     const document = await getDocumentRecord(input.documentId);
     if (!document) throw new Error("Documento n\xE3o encontrado.");
     await dispenseDocumentRecord({
@@ -3783,17 +4027,17 @@ var documentRouter = router({
   }),
   /** Upload de balanÃ§o fechado / balancete de uma sociedade, com data-base. */
   uploadBalance: protectedProcedure.input(
-    z12.object({
-      familyId: z12.string().min(1),
-      companyId: z12.string().min(1),
-      category: z12.enum(COMPANY_BALANCE_CATEGORIES),
-      referenceDate: z12.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      fileName: z12.string().min(1).max(255),
-      mimeType: z12.string().min(1).max(120).default("application/pdf"),
-      base64Data: z12.string().min(8).max(8e6)
+    z13.object({
+      familyId: z13.string().min(1),
+      companyId: z13.string().min(1),
+      category: z13.enum(COMPANY_BALANCE_CATEGORIES),
+      referenceDate: z13.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      fileName: z13.string().min(1).max(255),
+      mimeType: z13.string().min(1).max(120).default("application/pdf"),
+      base64Data: z13.string().min(8).max(8e6)
     })
   ).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.DOCUMENT_UPLOAD_BALANCE);
     await assertFamilyAccess(ctx, input.familyId);
     const documentId = await findOrCreateDocumentRecord({
       familyId: input.familyId,
@@ -3828,10 +4072,9 @@ var documentRouter = router({
 // server/features/families/family-router.ts
 init_schema();
 import { createHash as createHash3, randomBytes } from "node:crypto";
-import { and as and11, eq as eq20 } from "drizzle-orm";
-import { z as z13 } from "zod";
+import { and as and12, eq as eq20 } from "drizzle-orm";
+import { z as z14 } from "zod";
 init_database();
-init_roles();
 
 // server/features/alerts/project-alerts-repository.ts
 init_schema();
@@ -3998,7 +4241,7 @@ async function listProjectAlertLevels(familyIds) {
 // server/features/families/family-timeline-repository.ts
 init_schema();
 init_database();
-import { and as and10, count as count2, desc as desc4, eq as eq19, gt, isNull } from "drizzle-orm";
+import { and as and11, count as count2, desc as desc4, eq as eq19, gt, isNull } from "drizzle-orm";
 
 // server/features/families/family-timeline.ts
 var iso = (value) => value ? new Date(value).toISOString() : null;
@@ -4189,7 +4432,7 @@ async function getFamilyTimelineRecord(familyId) {
   }).from(leads).where(eq19(leads.familyId, familyId)).orderBy(desc4(leads.createdAt)).limit(1);
   const [{ total: peopleTotal }] = await db.select({ total: count2() }).from(people).where(eq19(people.familyId, familyId));
   const [{ total: titularCount }] = await db.select({ total: count2() }).from(people).where(
-    and10(eq19(people.familyId, familyId), eq19(people.isPrimaryContact, true))
+    and11(eq19(people.familyId, familyId), eq19(people.isPrimaryContact, true))
   );
   const [{ total: propertiesTotal }] = await db.select({ total: count2() }).from(properties).where(eq19(properties.familyId, familyId));
   const [{ total: companiesTotal }] = await db.select({ total: count2() }).from(companies).where(eq19(companies.familyId, familyId));
@@ -4203,13 +4446,13 @@ async function getFamilyTimelineRecord(familyId) {
     acceptedAt: financialProposals.acceptedAt
   }).from(financialProposals).where(eq19(financialProposals.familyId, familyId)).orderBy(desc4(financialProposals.createdAt)).limit(1);
   const [{ total: clientAccessCount }] = await db.select({ total: count2() }).from(familyAccess).where(
-    and10(
+    and11(
       eq19(familyAccess.familyId, familyId),
       eq19(familyAccess.accessRole, "CLIENTE")
     )
   );
   const [{ total: activePortalLinks }] = await db.select({ total: count2() }).from(portalLinks).where(
-    and10(
+    and11(
       eq19(portalLinks.familyId, familyId),
       isNull(portalLinks.revokedAt),
       gt(portalLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -4273,18 +4516,18 @@ var familyRouter = router({
       )
     );
   }),
-  get: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).query(async ({ ctx, input }) => {
+  get: protectedProcedure.input(z14.object({ familyId: z14.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getFamilyRecord(input.familyId);
   }),
   updateStatus: protectedProcedure.input(
-    z13.object({
-      familyId: z13.string().min(1),
-      status: z13.enum(projectStatusValues),
-      justification: z13.string().max(2e3).optional()
+    z14.object({
+      familyId: z14.string().min(1),
+      status: z14.enum(projectStatusValues),
+      justification: z14.string().max(2e3).optional()
     })
   ).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.FAMILY_UPDATE_STATUS);
     await assertFamilyAccess(ctx, input.familyId);
     if (input.status === "CONCLUIDO") {
       const blockers = await getConclusionBlockers(
@@ -4311,27 +4554,25 @@ var familyRouter = router({
     });
     return { success: true, status: input.status };
   }),
-  timeline: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).query(async ({ ctx, input }) => {
+  timeline: protectedProcedure.input(z14.object({ familyId: z14.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getFamilyTimelineRecord(input.familyId);
   }),
   create: protectedProcedure.input(familyInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.FAMILY_CREATE);
     const result = await createFamilyRecord(input, user.id);
-    try {
-      await recordAudit({
-        action: "FAMILIA_CRIADA",
-        entityType: "FAMILIA",
-        entityId: result.familyId,
-        actorUserId: user.id,
-        familyId: result.familyId
-      });
-    } catch {
-    }
+    await recordAuditSafe({
+      action: "FAMILIA_CRIADA",
+      entityType: "FAMILIA",
+      entityId: result.familyId,
+      actorUserId: user.id,
+      familyId: result.familyId
+    });
     return result;
   }),
-  grantClientAccess: protectedProcedure.input(z13.object({ familyId: z13.string(), userId: z13.number().int() })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+  grantClientAccess: protectedProcedure.input(z14.object({ familyId: z14.string(), userId: z14.number().int() })).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.FAMILY_GRANT_CLIENT_ACCESS);
+    await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
     await db.insert(familyAccess).values({
       id: createId(),
@@ -4339,23 +4580,21 @@ var familyRouter = router({
       userId: input.userId,
       accessRole: "CLIENTE"
     }).onConflictDoNothing();
-    try {
-      await recordAudit({
-        action: "ACESSO_CLIENTE_CONCEDIDO",
-        entityType: "FAMILIA",
-        entityId: input.familyId,
-        actorUserId: user.id,
-        familyId: input.familyId
-      });
-    } catch {
-    }
+    await recordAuditSafe({
+      action: "ACESSO_CLIENTE_CONCEDIDO",
+      entityType: "FAMILIA",
+      entityId: input.familyId,
+      actorUserId: user.id,
+      familyId: input.familyId
+    });
     return { success: true };
   }),
-  generateFirstAccessLink: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+  generateFirstAccessLink: protectedProcedure.input(z14.object({ familyId: z14.string().min(1) })).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.FAMILY_GENERATE_FIRST_ACCESS_LINK);
+    await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
     const existingAccess = await db.select({ id: familyAccess.id }).from(familyAccess).where(
-      and11(
+      and12(
         eq20(familyAccess.familyId, input.familyId),
         eq20(familyAccess.accessRole, "CLIENTE")
       )
@@ -4380,23 +4619,21 @@ var familyRouter = router({
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3),
       createdBy: String(user.id)
     });
-    try {
-      await recordAudit({
-        action: "LINK_PRIMEIRO_ACESSO_GERADO",
-        entityType: "FAMILIA",
-        entityId: input.familyId,
-        actorUserId: user.id,
-        familyId: input.familyId
-      });
-    } catch {
-    }
+    await recordAuditSafe({
+      action: "LINK_PRIMEIRO_ACESSO_GERADO",
+      entityType: "FAMILIA",
+      entityId: input.familyId,
+      actorUserId: user.id,
+      familyId: input.familyId
+    });
     return { token, fullName: contact.fullName };
   }),
-  generatePasswordResetLink: protectedProcedure.input(z13.object({ familyId: z13.string().min(1) })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+  generatePasswordResetLink: protectedProcedure.input(z14.object({ familyId: z14.string().min(1) })).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.FAMILY_GENERATE_PASSWORD_RESET_LINK);
+    await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
     const existingAccess = await db.select({ id: familyAccess.id }).from(familyAccess).where(
-      and11(
+      and12(
         eq20(familyAccess.familyId, input.familyId),
         eq20(familyAccess.accessRole, "CLIENTE")
       )
@@ -4421,28 +4658,25 @@ var familyRouter = router({
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3),
       createdBy: String(user.id)
     });
-    try {
-      await recordAudit({
-        action: "LINK_REDEFINICAO_SENHA_GERADO",
-        entityType: "FAMILIA",
-        entityId: input.familyId,
-        actorUserId: user.id,
-        familyId: input.familyId
-      });
-    } catch {
-    }
+    await recordAuditSafe({
+      action: "LINK_REDEFINICAO_SENHA_GERADO",
+      entityType: "FAMILIA",
+      entityId: input.familyId,
+      actorUserId: user.id,
+      familyId: input.familyId
+    });
     return { token, fullName: contact.fullName };
   }),
   getDashboard: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user;
     if (user.role === "CLIENTE") return getClientDashboardData(user.id);
-    requireRole(ctx, ["SOCIO", "ADMIN"]);
+    requirePermission(ctx, Permission.FAMILY_GET_DASHBOARD);
     return getDashboardData();
   }),
   listStorage: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user;
     if (user.role === "CLIENTE") return listClientStorageFiles(user.id);
-    requireRole(ctx, ["SOCIO", "ADMIN"]);
+    requirePermission(ctx, Permission.FAMILY_LIST_STORAGE);
     return listStorageFiles();
   })
 });
@@ -4450,60 +4684,67 @@ var familyRouter = router({
 // server/features/reports/lwr-router.ts
 init_schema();
 import { desc as desc5, eq as eq21 } from "drizzle-orm";
-import { z as z15 } from "zod";
-init_roles();
+import { z as z16 } from "zod";
 init_database();
 
 // server/features/reports/lwr-types.ts
-import { z as z14 } from "zod";
-var lwrInputSchema = z14.object({
-  familyId: z14.string().min(1),
-  baseDate: z14.string().min(10),
-  proposedStructure: z14.string().min(10).max(12e3),
-  financialProposal: z14.string().max(12e3).optional().default("Proposta financeira gerenciada no m\xF3dulo aut\xF4nomo."),
-  canvaUrl: z14.string().max(1e3).optional(),
-  presentationFileKey: z14.string().max(500).optional()
+import { z as z15 } from "zod";
+var lwrInputSchema = z15.object({
+  familyId: z15.string().min(1),
+  baseDate: z15.string().min(10),
+  proposedStructure: z15.string().min(10).max(12e3),
+  financialProposal: z15.string().max(12e3).optional().default("Proposta financeira gerenciada no m\xF3dulo aut\xF4nomo."),
+  canvaUrl: z15.string().max(1e3).optional(),
+  presentationFileKey: z15.string().max(500).optional()
 });
 
 // server/features/reports/lwr-router.ts
 var lwrRouter = router({
-  list: protectedProcedure.input(z15.object({ familyId: z15.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z16.object({ familyId: z16.string() })).query(async ({ ctx, input }) => {
+    requirePermission(ctx, Permission.LWR_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
     return db.select().from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version));
   }),
   create: protectedProcedure.input(lwrInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
-    const db = await requireDatabase();
-    const previous = await db.select({ version: lwrReports.version }).from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version)).limit(1);
-    const version = (previous[0]?.version ?? 0) + 1;
-    const reportId = createId();
-    await db.insert(lwrReports).values({
-      id: reportId,
-      familyId: input.familyId,
-      version,
-      responsibleUserId: String(user.id),
-      baseDate: input.baseDate,
-      proposedStructure: input.proposedStructure,
-      financialProposal: input.financialProposal || "Proposta financeira gerenciada no m\xF3dulo aut\xF4nomo.",
-      canvaUrl: input.canvaUrl || null,
-      presentationFileKey: input.presentationFileKey || null
-    });
-    await recordAudit({ action: "LWR_CRIADO", entityType: "LWR", entityId: reportId, actorUserId: user.id, familyId: input.familyId, metadata: { version } });
-    return { reportId, version };
+    const user = requirePermission(ctx, Permission.LWR_CREATE);
+    await assertFamilyAccess(ctx, input.familyId);
+    return withAdvisoryLock(
+      requireDatabase(),
+      "LWR_CREATE",
+      input.familyId,
+      async (tx) => {
+        const previous = await tx.select({ version: lwrReports.version }).from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version)).limit(1);
+        const version = (previous[0]?.version ?? 0) + 1;
+        const reportId = createId();
+        await tx.insert(lwrReports).values({
+          id: reportId,
+          familyId: input.familyId,
+          version,
+          responsibleUserId: String(user.id),
+          baseDate: input.baseDate,
+          proposedStructure: input.proposedStructure,
+          financialProposal: input.financialProposal || "Proposta financeira gerenciada no m\xF3dulo aut\xF4nomo.",
+          canvaUrl: input.canvaUrl || null,
+          presentationFileKey: input.presentationFileKey || null
+        });
+        await recordAudit({ action: "LWR_CRIADO", entityType: "LWR", entityId: reportId, actorUserId: user.id, familyId: input.familyId, metadata: { version } });
+        return { reportId, version };
+      }
+    );
   })
 });
 
 // server/features/people/person-router.ts
-import { z as z16 } from "zod";
-init_roles();
+import { z as z17 } from "zod";
 var personRouter = router({
-  list: protectedProcedure.input(z16.object({ familyId: z16.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z17.object({ familyId: z17.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listPeopleByFamily(input.familyId);
   }),
   create: protectedProcedure.input(personInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PEOPLE_CREATE);
+    await assertFamilyAccess(ctx, input.familyId);
     const personId = await addPersonRecord(input);
     await ensureCertidoesForSubject({
       familyId: input.familyId,
@@ -4522,7 +4763,7 @@ var personRouter = router({
     return { personId };
   }),
   update: protectedProcedure.input(personUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PEOPLE_UPDATE);
     await assertFamilyAccess(ctx, input.familyId);
     const result = await updatePersonRecord(input);
     const person = await getPersonRecord(input.personId);
@@ -4557,7 +4798,7 @@ var personRouter = router({
     return result;
   }),
   remove: protectedProcedure.input(removePersonSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PEOPLE_REMOVE);
     await assertFamilyAccess(ctx, input.familyId);
     const result = await removePersonRecord(input.familyId, input.personId);
     await recordAudit({
@@ -4571,7 +4812,7 @@ var personRouter = router({
     return result;
   }),
   attachDocuments: protectedProcedure.input(attachDocumentsSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PEOPLE_ATTACH_DOCUMENTS);
     await assertFamilyAccess(ctx, input.familyId);
     const person = await getPersonRecord(input.personId);
     if (!person || person.familyId !== input.familyId) {
@@ -4609,7 +4850,7 @@ var personRouter = router({
     return { stored };
   }),
   setPrimaryContact: protectedProcedure.input(setPrimaryContactSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PEOPLE_SET_PRIMARY_CONTACT);
     const { migratedFiles } = await setPrimaryContact(input);
     await recordAudit({
       action: "TITULAR_FAMILIA_DEFINIDO",
@@ -4626,15 +4867,15 @@ var personRouter = router({
 // server/features/portal/portal-router.ts
 init_schema();
 import { createHash as createHash4, randomBytes as randomBytes2 } from "node:crypto";
-import { and as and12, desc as desc6, eq as eq22, gt as gt3, isNull as isNull3 } from "drizzle-orm";
-import { z as z17 } from "zod";
+import { and as and13, desc as desc6, eq as eq22, gt as gt3, isNull as isNull3 } from "drizzle-orm";
+import { z as z18 } from "zod";
 init_database();
 function hashToken2(token) {
   return createHash4("sha256").update(token).digest("hex");
 }
 async function getActivePortalLink(token) {
   const db = await requireDatabase();
-  const result = await db.select().from(portalLinks).where(and12(
+  const result = await db.select().from(portalLinks).where(and13(
     eq22(portalLinks.tokenHash, hashToken2(token)),
     isNull3(portalLinks.revokedAt),
     gt3(portalLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -4642,8 +4883,8 @@ async function getActivePortalLink(token) {
   return result[0] ?? null;
 }
 var portalRouter = router({
-  createLink: protectedProcedure.input(z17.object({ familyId: z17.string(), origin: z17.string().url() })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+  createLink: protectedProcedure.input(z18.object({ familyId: z18.string(), origin: z18.string().url() })).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.PORTAL_CREATE_LINK);
     const token = randomBytes2(24).toString("base64url");
     const db = await requireDatabase();
     const linkId = createId();
@@ -4657,13 +4898,13 @@ var portalRouter = router({
     await recordAudit({ action: "LINK_PORTAL_GERADO", entityType: "FAMILIA", entityId: input.familyId, actorUserId: user.id, familyId: input.familyId });
     return { id: linkId, url: `${input.origin}/portal/${token}`, expiresInDays: 7 };
   }),
-  listLinks: protectedProcedure.input(z17.object({ familyId: z17.string() })).query(async ({ ctx, input }) => {
-    requireRole(ctx, ["SOCIO"]);
+  listLinks: protectedProcedure.input(z18.object({ familyId: z18.string() })).query(async ({ ctx, input }) => {
+    requirePermission(ctx, Permission.PORTAL_LIST_LINKS);
     const db = await requireDatabase();
     return db.select({ id: portalLinks.id, expiresAt: portalLinks.expiresAt, revokedAt: portalLinks.revokedAt, createdAt: portalLinks.createdAt }).from(portalLinks).where(eq22(portalLinks.familyId, input.familyId)).orderBy(desc6(portalLinks.createdAt));
   }),
-  revokeLink: protectedProcedure.input(z17.object({ linkId: z17.string() })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+  revokeLink: protectedProcedure.input(z18.object({ linkId: z18.string() })).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.PORTAL_REVOKE_LINK);
     const db = await requireDatabase();
     const [link] = await db.select().from(portalLinks).where(eq22(portalLinks.id, input.linkId)).limit(1);
     if (!link) throw new Error("Link n\xE3o encontrado.");
@@ -4671,7 +4912,7 @@ var portalRouter = router({
     await recordAudit({ action: "LINK_PORTAL_REVOGADO", entityType: "FAMILIA", entityId: link.familyId, actorUserId: user.id, familyId: link.familyId });
     return { success: true };
   }),
-  status: publicProcedure.input(z17.object({ token: z17.string().min(16) })).query(async ({ input }) => {
+  status: publicProcedure.input(z18.object({ token: z18.string().min(16) })).query(async ({ input }) => {
     const link = await getActivePortalLink(input.token);
     if (!link) throw new Error("Link inv\xE1lido, revogado ou expirado.");
     const db = await requireDatabase();
@@ -4681,7 +4922,7 @@ var portalRouter = router({
     const reports = await db.select().from(lwrReports).where(eq22(lwrReports.familyId, link.familyId));
     return { family, project, documents: documentList, reports };
   }),
-  uploadDocument: publicProcedure.input(z17.object({ token: z17.string().min(16), documentId: z17.string(), fileName: z17.string(), mimeType: z17.string(), base64Data: z17.string() })).mutation(async ({ input }) => {
+  uploadDocument: publicProcedure.input(z18.object({ token: z18.string().min(16), documentId: z18.string(), fileName: z18.string(), mimeType: z18.string(), base64Data: z18.string() })).mutation(async ({ input }) => {
     const link = await getActivePortalLink(input.token);
     if (!link) throw new Error("Link inv\xE1lido, revogado ou expirado.");
     const document = await getDocumentRecord(input.documentId);
@@ -4693,51 +4934,50 @@ var portalRouter = router({
 });
 
 // server/features/properties/property-router.ts
-import { z as z19 } from "zod";
-init_roles();
+import { z as z20 } from "zod";
 
 // server/features/properties/property-repository.ts
 init_schema();
 init_database();
-import { desc as desc7, eq as eq23, and as and13 } from "drizzle-orm";
+import { desc as desc7, eq as eq23, and as and14 } from "drizzle-orm";
 
 // server/features/properties/property-types.ts
-import { z as z18 } from "zod";
+import { z as z19 } from "zod";
 init_schema();
-var propertyKindSchema = z18.enum(propertyKindValues);
-var propertyUtilitySchema = z18.enum(propertyUtilityValues);
-var encumbranceTypeSchema = z18.enum(encumbranceTypeValues);
-var moneySchema = z18.number().nonnegative();
-var propertyInputSchema = z18.object({
-  familyId: z18.string().min(1),
-  description: z18.string().min(3).max(240),
+var propertyKindSchema = z19.enum(propertyKindValues);
+var propertyUtilitySchema = z19.enum(propertyUtilityValues);
+var encumbranceTypeSchema = z19.enum(encumbranceTypeValues);
+var moneySchema = z19.number().nonnegative();
+var propertyInputSchema = z19.object({
+  familyId: z19.string().min(1, "Projeto obrigat\xF3rio."),
+  description: z19.string().min(3, "Informe a descri\xE7\xE3o (m\xEDnimo 3 caracteres).").max(240),
   kind: propertyKindSchema.optional(),
   uf: ufSchema.optional(),
-  hasRegistration: z18.boolean().default(true),
-  registrationNumber: z18.string().max(120).optional(),
-  alternativeDocType: z18.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
-  noRegistrationReason: z18.string().max(1e3).optional(),
-  registryOfficeNumber: z18.number().int().min(1).max(55).optional(),
+  hasRegistration: z19.boolean().default(true),
+  registrationNumber: z19.string().max(120).optional(),
+  alternativeDocType: z19.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
+  noRegistrationReason: z19.string().max(1e3).optional(),
+  registryOfficeNumber: z19.number().int().min(1).max(55).optional(),
   registryUf: ufSchema.optional(),
-  registryCity: z18.string().max(120).optional(),
-  propertyCity: z18.string().min(2).max(120),
-  inscricaoImobiliaria: z18.string().max(120).optional(),
-  ccir: z18.string().max(40).optional(),
-  nirf: z18.string().max(40).optional(),
-  notes: z18.string().max(4e3).optional(),
-  acquisitionDate: z18.string().optional(),
+  registryCity: z19.string().max(120).optional(),
+  propertyCity: z19.string().min(2, "Informe a cidade do im\xF3vel.").max(120),
+  inscricaoImobiliaria: z19.string().max(120).optional(),
+  ccir: z19.string().max(40).optional(),
+  nirf: z19.string().max(40).optional(),
+  notes: z19.string().max(4e3).optional(),
+  acquisitionDate: isoDateSchema("Data de aquisi\xE7\xE3o inv\xE1lida (use AAAA-MM-DD).").optional(),
   declaredValue: moneySchema.optional(),
   marketValue: moneySchema.optional(),
   venalValue: moneySchema.optional(),
   irGcapValue: moneySchema.optional(),
   emolumentsValue: moneySchema.optional(),
-  itbiRate: z18.number().min(0).max(100).optional(),
-  hasLaudemio: z18.boolean().default(false),
-  laudemioRate: z18.number().min(0).max(100).optional(),
+  itbiRate: z19.number().min(0, "Al\xEDquota de ITBI n\xE3o pode ser negativa.").max(100, "Al\xEDquota de ITBI deve estar entre 0 e 100.").optional(),
+  hasLaudemio: z19.boolean().default(false),
+  laudemioRate: z19.number().min(0, "Al\xEDquota de laudemio n\xE3o pode ser negativa.").max(100, "Al\xEDquota de laudemio deve estar entre 0 e 100.").optional(),
   utility: propertyUtilitySchema.default("PENDENTE"),
   rentValue: moneySchema.optional(),
   encumbranceType: encumbranceTypeSchema.default("PENDENTE"),
-  encumbranceNote: z18.string().max(1e3).optional()
+  encumbranceNote: z19.string().max(1e3).optional()
 }).refine(
   (data) => {
     if (!data.hasRegistration) {
@@ -4785,24 +5025,24 @@ var propertyInputSchema = z18.object({
     path: ["rentValue"]
   }
 );
-var propertyUpdateSchema = propertyInputSchema.omit({ familyId: true }).extend({ propertyId: z18.string().min(1) });
-var propertyOwnerInputSchema = z18.object({
-  propertyId: z18.string().min(1),
-  personId: z18.string().min(1).optional(),
-  companyId: z18.string().min(1).optional(),
-  ownershipPercentage: z18.number().positive().max(100),
-  rightType: z18.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
+var propertyUpdateSchema = propertyInputSchema.omit({ familyId: true }).extend({ propertyId: z19.string().min(1) });
+var propertyOwnerInputSchema = z19.object({
+  propertyId: z19.string().min(1),
+  personId: z19.string().min(1).optional(),
+  companyId: z19.string().min(1).optional(),
+  ownershipPercentage: z19.number().positive("Percentual deve ser maior que zero.").max(100, "Percentual deve estar entre 0 e 100."),
+  rightType: z19.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
 }).refine((data) => Boolean(data.personId) !== Boolean(data.companyId), {
   message: "A titularidade exige exatamente um dono: pessoa ou sociedade.",
   path: ["personId"]
 });
-var propertyOwnerUpdateSchema = z18.object({
-  propertyId: z18.string().min(1),
-  ownerId: z18.string().min(1),
-  personId: z18.string().min(1).optional(),
-  companyId: z18.string().min(1).optional(),
-  ownershipPercentage: z18.number().positive().max(100).optional(),
-  rightType: z18.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
+var propertyOwnerUpdateSchema = z19.object({
+  propertyId: z19.string().min(1),
+  ownerId: z19.string().min(1),
+  personId: z19.string().min(1).optional(),
+  companyId: z19.string().min(1).optional(),
+  ownershipPercentage: z19.number().positive().max(100).optional(),
+  rightType: z19.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
 }).refine(
   (data) => {
     if (data.personId === void 0 && data.companyId === void 0) {
@@ -4815,13 +5055,13 @@ var propertyOwnerUpdateSchema = z18.object({
     path: ["personId"]
   }
 );
-var propertyOwnerDeleteSchema = z18.object({
-  propertyId: z18.string().min(1),
-  ownerId: z18.string().min(1)
+var propertyOwnerDeleteSchema = z19.object({
+  propertyId: z19.string().min(1),
+  ownerId: z19.string().min(1)
 });
-var removePropertySchema = z18.object({
-  familyId: z18.string().min(1),
-  propertyId: z18.string().min(1)
+var removePropertySchema = z19.object({
+  familyId: z19.string().min(1),
+  propertyId: z19.string().min(1)
 });
 function isEncumbranceRed(value) {
   return Boolean(value) && value !== "PENDENTE" && value !== "NA" && value !== "NAO_HA";
@@ -4871,7 +5111,7 @@ async function createPropertyRecord(input) {
   const db = await requireDatabase();
   const id = createId();
   const existingProperty = await db.select().from(properties).where(
-    and13(
+    and14(
       eq23(properties.familyId, input.familyId),
       eq23(properties.description, input.description),
       eq23(properties.propertyCity, input.propertyCity)
@@ -4896,7 +5136,7 @@ async function updatePropertyRecord(input) {
 }
 async function removePropertyRecord(familyId, propertyId) {
   const db = await requireDatabase();
-  const [property] = await db.select().from(properties).where(and13(eq23(properties.id, propertyId), eq23(properties.familyId, familyId))).limit(1);
+  const [property] = await db.select().from(properties).where(and14(eq23(properties.id, propertyId), eq23(properties.familyId, familyId))).limit(1);
   if (!property) throw new Error("Im\xF3vel n\xE3o encontrado nesta fam\xEDlia.");
   const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq23(propertyOwners.propertyId, propertyId)).limit(1);
   if (owner) {
@@ -4905,11 +5145,11 @@ async function removePropertyRecord(familyId, propertyId) {
     );
   }
   const documentsToArchive = await db.select({ id: documents.id }).from(documents).where(
-    and13(eq23(documents.familyId, familyId), eq23(documents.entityId, propertyId))
+    and14(eq23(documents.familyId, familyId), eq23(documents.entityId, propertyId))
   );
   if (documentsToArchive.length) {
     await db.update(documents).set({ status: "DISPENSADO" }).where(
-      and13(
+      and14(
         eq23(documents.familyId, familyId),
         eq23(documents.entityId, propertyId)
       )
@@ -5020,18 +5260,19 @@ async function listPropertyOwners(propertyId) {
 
 // server/features/properties/property-router.ts
 var propertyRouter = router({
-  list: protectedProcedure.input(z19.object({ familyId: z19.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z20.object({ familyId: z20.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listPropertyRecords(input.familyId);
   }),
-  owners: protectedProcedure.input(z19.object({ propertyId: z19.string() })).query(async ({ ctx, input }) => {
+  owners: protectedProcedure.input(z20.object({ propertyId: z20.string() })).query(async ({ ctx, input }) => {
     const property = await getPropertyRecord(input.propertyId);
     if (!property) return [];
     await assertFamilyAccess(ctx, property.familyId);
     return listPropertyOwners(input.propertyId);
   }),
   create: protectedProcedure.input(propertyInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_CREATE);
+    await assertFamilyAccess(ctx, input.familyId);
     const propertyId = await createPropertyRecord(input);
     const { created, removed } = await reconcileEntityDocuments({
       familyId: input.familyId,
@@ -5050,7 +5291,7 @@ var propertyRouter = router({
     return { propertyId };
   }),
   update: protectedProcedure.input(propertyUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_UPDATE);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
@@ -5079,7 +5320,7 @@ var propertyRouter = router({
     return result;
   }),
   remove: protectedProcedure.input(removePropertySchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_REMOVE);
     await assertFamilyAccess(ctx, input.familyId);
     const result = await removePropertyRecord(input.familyId, input.propertyId);
     await recordAudit({
@@ -5093,7 +5334,7 @@ var propertyRouter = router({
     return result;
   }),
   addOwner: protectedProcedure.input(propertyOwnerInputSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_ADD_OWNER);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
@@ -5104,7 +5345,7 @@ var propertyRouter = router({
     return { ownerId };
   }),
   updateOwner: protectedProcedure.input(propertyOwnerUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_UPDATE_OWNER);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
@@ -5115,7 +5356,7 @@ var propertyRouter = router({
     return { success: true };
   }),
   removeOwner: protectedProcedure.input(propertyOwnerDeleteSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPERTY_REMOVE_OWNER);
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
@@ -5129,16 +5370,16 @@ var propertyRouter = router({
 init_schema();
 init_roles();
 import { desc as desc8, eq as eq24 } from "drizzle-orm";
-import { z as z20 } from "zod";
+import { z as z21 } from "zod";
 init_database();
 var userRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    requireRole(ctx, ["SOCIO"]);
+    requirePermission(ctx, Permission.USER_LIST);
     const db = await requireDatabase();
     return db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).orderBy(desc8(users.lastSignedIn));
   }),
-  changeRole: protectedProcedure.input(z20.object({ userId: z20.number().int(), role: z20.enum(APP_ROLES) })).mutation(async ({ ctx, input }) => {
-    const actor = requireRole(ctx, ["SOCIO"]);
+  changeRole: protectedProcedure.input(z21.object({ userId: z21.number().int(), role: z21.enum(APP_ROLES) })).mutation(async ({ ctx, input }) => {
+    const actor = requirePermission(ctx, Permission.USER_CHANGE_ROLE);
     if (input.userId === actor.id && input.role !== "SOCIO") throw new Error("O SOCIO respons\xE1vel n\xE3o pode remover o pr\xF3prio papel.");
     const db = await requireDatabase();
     await db.update(users).set({ role: input.role }).where(eq24(users.id, input.userId));
@@ -5150,11 +5391,11 @@ var userRouter = router({
 // server/features/audit/audit-router.ts
 init_schema();
 import { desc as desc9, eq as eq25 } from "drizzle-orm";
-import { z as z21 } from "zod";
+import { z as z22 } from "zod";
 init_database();
 var auditRouter = router({
-  listByFamily: protectedProcedure.input(z21.object({ familyId: z21.string() })).query(async ({ ctx, input }) => {
-    requireRole(ctx, ["SOCIO", "ADMIN"]);
+  listByFamily: protectedProcedure.input(z22.object({ familyId: z22.string() })).query(async ({ ctx, input }) => {
+    requirePermission(ctx, Permission.AUDIT_LIST_BY_FAMILY);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
     return db.select().from(auditLogs).where(eq25(auditLogs.familyId, input.familyId)).orderBy(desc9(auditLogs.createdAt));
@@ -5163,8 +5404,8 @@ var auditRouter = router({
 
 // server/features/people/first-access-router.ts
 import { createHash as createHash5 } from "node:crypto";
-import { and as and14, eq as eq26, isNull as isNull4, gt as gt4 } from "drizzle-orm";
-import { z as z22 } from "zod";
+import { and as and15, eq as eq26, isNull as isNull4, gt as gt4 } from "drizzle-orm";
+import { z as z23 } from "zod";
 import bcrypt2 from "bcryptjs";
 init_db();
 init_database();
@@ -5173,12 +5414,22 @@ var BCRYPT_ROUNDS2 = 12;
 function hashToken3(token) {
   return createHash5("sha256").update(token).digest("hex");
 }
+async function assertExistingClientUsable(db, existing, familyId) {
+  if (existing.role !== "CLIENTE") {
+    throw new Error("J\xE1 existe uma conta de equipe com este e-mail. Use a redefini\xE7\xE3o de senha para acess\xE1-la.");
+  }
+  const linked = await db.select({ id: familyAccess.id }).from(familyAccess).where(and15(eq26(familyAccess.userId, existing.id), eq26(familyAccess.familyId, familyId))).limit(1);
+  if (!linked[0]) {
+    throw new Error("J\xE1 existe uma conta com este e-mail sem v\xEDnculo com esta fam\xEDlia. Contate o s\xF3cio respons\xE1vel.");
+  }
+  return existing.id;
+}
 var firstAccessRouter = router({
-  verifyToken: publicProcedure.input(z22.object({ token: z22.string().min(16) })).query(async ({ input }) => {
+  verifyToken: publicProcedure.input(z23.object({ token: z23.string().min(16) })).query(async ({ input }) => {
     checkRateLimit(`verify:${input.token}`);
     const db = await requireDatabase();
     const [link] = await db.select().from(firstAccessLinks).where(
-      and14(
+      and15(
         eq26(firstAccessLinks.tokenHash, hashToken3(input.token)),
         isNull4(firstAccessLinks.consumedAt),
         gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -5193,66 +5444,79 @@ var firstAccessRouter = router({
       email: person.email ?? null
     };
   }),
-  setPassword: publicProcedure.input(z22.object({ token: z22.string().min(16), password: z22.string().min(6) })).mutation(async ({ input }) => {
+  setPassword: publicProcedure.input(z23.object({ token: z23.string().min(16), password: z23.string().min(6) })).mutation(async ({ input }) => {
     checkRateLimit(`setpwd:${input.token}`);
-    const db = await requireDatabase();
-    const [link] = await db.select().from(firstAccessLinks).where(
-      and14(
-        eq26(firstAccessLinks.tokenHash, hashToken3(input.token)),
-        isNull4(firstAccessLinks.consumedAt),
-        gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
-      )
-    ).limit(1);
-    if (!link) throw new Error("Link inv\xE1lido, expirado ou j\xE1 utilizado.");
-    const person = await getPersonRecord(link.personId);
-    if (!person) throw new Error("Pessoa n\xE3o encontrada.");
-    if (!person.email)
-      throw new Error("Pessoa sem e-mail cadastrado. Contate o s\xF3cio.");
-    let userId;
-    const existing = await getUserByEmail(person.email);
-    if (existing) {
-      userId = existing.id;
-      const passwordHash = await bcrypt2.hash(input.password, BCRYPT_ROUNDS2);
-      const { users: users2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      await db.update(users2).set({ passwordHash }).where(eq26(users2.id, userId));
-    } else {
-      const passwordHash = await bcrypt2.hash(input.password, BCRYPT_ROUNDS2);
-      try {
-        const created = await createUser({
-          name: person.fullName ?? void 0,
-          email: person.email,
-          passwordHash,
-          role: "CLIENTE",
-          lastSignedIn: /* @__PURE__ */ new Date()
+    return withAdvisoryLock(
+      requireDatabase(),
+      "FIRST_ACCESS",
+      input.token,
+      // discriminator: token Ãºnico por link
+      async (tx) => {
+        const [link] = await tx.select().from(firstAccessLinks).where(
+          and15(
+            eq26(firstAccessLinks.tokenHash, hashToken3(input.token)),
+            isNull4(firstAccessLinks.consumedAt),
+            gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
+          )
+        ).limit(1);
+        if (!link) throw new Error("Link inv\xE1lido, expirado ou j\xE1 utilizado.");
+        const person = await getPersonRecord(link.personId);
+        if (!person) throw new Error("Pessoa n\xE3o encontrada.");
+        if (!person.email) throw new Error("Pessoa sem e-mail cadastrado. Contate o s\xF3cio.");
+        let userId;
+        const existing = await getUserByEmail(person.email);
+        if (existing) {
+          userId = await assertExistingClientUsable(tx, existing, person.familyId);
+          const passwordHash = await bcrypt2.hash(input.password, BCRYPT_ROUNDS2);
+          await tx.update(users).set({ passwordHash }).where(eq26(users.id, userId));
+        } else {
+          const passwordHash = await bcrypt2.hash(input.password, BCRYPT_ROUNDS2);
+          try {
+            const created = await createUser({
+              name: person.fullName ?? void 0,
+              email: person.email,
+              passwordHash,
+              role: "CLIENTE",
+              lastSignedIn: /* @__PURE__ */ new Date()
+            });
+            userId = created.id;
+          } catch (error) {
+            const raced = await getUserByEmail(person.email);
+            if (!raced) throw error;
+            if (raced.role !== "CLIENTE") {
+              throw new Error("J\xE1 existe uma conta de equipe com este e-mail. Use a redefini\xE7\xE3o de senha para acess\xE1-la.");
+            }
+            userId = raced.id;
+          }
+        }
+        await tx.insert(familyAccess).values({
+          id: createId(),
+          familyId: person.familyId,
+          userId,
+          accessRole: "CLIENTE"
+        }).onConflictDoNothing();
+        await tx.update(firstAccessLinks).set({ consumedAt: /* @__PURE__ */ new Date() }).where(eq26(firstAccessLinks.id, link.id));
+        await recordAuditSafe({
+          action: "PRIMEIRO_ACESSO_SENHA_DEFINIDA",
+          entityType: "USUARIO",
+          entityId: String(userId),
+          actorUserId: userId,
+          familyId: person.familyId,
+          metadata: { personId: person.id, tokenHash: hashToken3(input.token) }
         });
-        userId = created.id;
-      } catch (error) {
-        const message = String(error);
-        if (!message.includes("J\xE1 existe")) throw error;
-        const raced = await getUserByEmail(person.email);
-        if (!raced) throw error;
-        userId = raced.id;
+        return { success: true };
       }
-    }
-    await db.insert(familyAccess).values({
-      id: createId(),
-      familyId: person.familyId,
-      userId,
-      accessRole: "CLIENTE"
-    }).onConflictDoNothing();
-    await db.update(firstAccessLinks).set({ consumedAt: /* @__PURE__ */ new Date() }).where(eq26(firstAccessLinks.id, link.id));
-    return { success: true };
+    );
   })
 });
 
 // server/features/assets/assets-router.ts
-init_roles();
-import { z as z24 } from "zod";
+import { z as z25 } from "zod";
 
 // server/features/assets/assets-repository.ts
 init_schema();
 init_database();
-import { and as and15, desc as desc10, eq as eq27 } from "drizzle-orm";
+import { and as and16, desc as desc10, eq as eq27 } from "drizzle-orm";
 async function createAssetRecord(input) {
   const db = await requireDatabase();
   const id = createId();
@@ -5289,10 +5553,10 @@ async function updateAssetRecord(input) {
 }
 async function removeAssetRecord(familyId, assetId) {
   const db = await requireDatabase();
-  const [asset] = await db.select().from(otherAssets).where(and15(eq27(otherAssets.id, assetId), eq27(otherAssets.familyId, familyId))).limit(1);
+  const [asset] = await db.select().from(otherAssets).where(and16(eq27(otherAssets.id, assetId), eq27(otherAssets.familyId, familyId))).limit(1);
   if (!asset) throw new Error("Ativo n\xE3o encontrado nesta fam\xEDlia.");
   const docs = await db.select({ id: documents.id }).from(documents).where(
-    and15(eq27(documents.entityType, "ATIVO"), eq27(documents.entityId, assetId))
+    and16(eq27(documents.entityType, "ATIVO"), eq27(documents.entityId, assetId))
   );
   for (const doc of docs) {
     await db.update(documents).set({ status: "DISPENSADO" }).where(eq27(documents.id, doc.id));
@@ -5303,30 +5567,30 @@ async function removeAssetRecord(familyId, assetId) {
 
 // server/features/assets/assets-types.ts
 init_schema();
-import { z as z23 } from "zod";
-var assetCategorySchema = z23.enum(assetCategoryValues);
-var createAssetSchema = z23.object({
-  familyId: z23.string().min(1),
+import { z as z24 } from "zod";
+var assetCategorySchema = z24.enum(assetCategoryValues);
+var createAssetSchema = z24.object({
+  familyId: z24.string().min(1),
   category: assetCategorySchema,
-  description: z23.string().min(2).max(240),
-  declaredValue: z23.number().positive("Informe o valor declarado (> 0)."),
-  ownerPersonId: z23.string().min(1, "Informe o respons\xE1vel pelo ativo."),
-  notes: z23.string().max(1e3).optional()
+  description: z24.string().min(2).max(240),
+  declaredValue: z24.number().positive("Informe o valor declarado (> 0)."),
+  ownerPersonId: z24.string().min(1, "Informe o respons\xE1vel pelo ativo."),
+  notes: z24.string().max(1e3).optional()
 });
-var updateAssetSchema = createAssetSchema.omit({ familyId: true }).extend({ assetId: z23.string().min(1) });
-var removeAssetSchema = z23.object({
-  familyId: z23.string().min(1),
-  assetId: z23.string().min(1)
+var updateAssetSchema = createAssetSchema.omit({ familyId: true }).extend({ assetId: z24.string().min(1) });
+var removeAssetSchema = z24.object({
+  familyId: z24.string().min(1),
+  assetId: z24.string().min(1)
 });
 
 // server/features/assets/assets-router.ts
 var assetRouter = router({
-  list: protectedProcedure.input(z24.object({ familyId: z24.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z25.object({ familyId: z25.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listAssetRecords(input.familyId);
   }),
   create: protectedProcedure.input(createAssetSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.ASSET_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const assetId = await createAssetRecord(input);
     const { created, removed } = await reconcileEntityDocuments({
@@ -5346,7 +5610,7 @@ var assetRouter = router({
     return { assetId };
   }),
   update: protectedProcedure.input(updateAssetSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.ASSET_UPDATE);
     const asset = await getAssetRecord(input.assetId);
     if (!asset) throw new Error("Ativo n\xE3o encontrado.");
     await assertFamilyAccess(ctx, asset.familyId);
@@ -5368,7 +5632,7 @@ var assetRouter = router({
     return result;
   }),
   remove: protectedProcedure.input(removeAssetSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.ASSET_REMOVE);
     await assertFamilyAccess(ctx, input.familyId);
     const result = await removeAssetRecord(input.familyId, input.assetId);
     await recordAudit({
@@ -5384,8 +5648,7 @@ var assetRouter = router({
 });
 
 // server/features/proposals/proposal-router.ts
-init_roles();
-import { z as z26 } from "zod";
+import { z as z27 } from "zod";
 
 // server/features/proposals/proposal-repository.ts
 init_schema();
@@ -5440,42 +5703,42 @@ async function reviewCounterProposalRecord(input) {
 }
 
 // server/features/proposals/proposal-types.ts
-import { z as z25 } from "zod";
-var proposalStatusSchema = z25.enum([
+import { z as z26 } from "zod";
+var proposalStatusSchema = z26.enum([
   "RASCUNHO",
   "ENVIADA",
   "ACEITA",
   "CONTRAPROPOSTA_RECEBIDA",
   "RECUSADA"
 ]);
-var createProposalSchema = z25.object({
-  familyId: z25.string().min(1),
-  scopeDescription: z25.string().min(10, "Descri\xE7\xE3o do escopo de trabalho deve ter ao menos 10 caracteres."),
-  proposedValue: z25.number().positive("Valor da proposta deve ser maior que zero.")
+var createProposalSchema = z26.object({
+  familyId: z26.string().min(1),
+  scopeDescription: z26.string().min(10, "Descri\xE7\xE3o do escopo de trabalho deve ter ao menos 10 caracteres."),
+  proposedValue: z26.number().positive("Valor da proposta deve ser maior que zero.")
 });
-var acceptProposalSchema = z25.object({
-  proposalId: z25.string().min(1),
-  clientNotes: z25.string().max(1e3).optional()
+var acceptProposalSchema = z26.object({
+  proposalId: z26.string().min(1),
+  clientNotes: z26.string().max(1e3).optional()
 });
-var counterProposalSchema = z25.object({
-  proposalId: z25.string().min(1),
-  counterProposalValue: z25.number().positive("Valor da contraproposta deve ser maior que zero."),
-  counterProposalNotes: z25.string().min(3, "Justificativa da contraproposta \xE9 obrigat\xF3ria.").max(1e3)
+var counterProposalSchema = z26.object({
+  proposalId: z26.string().min(1),
+  counterProposalValue: z26.number().positive("Valor da contraproposta deve ser maior que zero."),
+  counterProposalNotes: z26.string().min(3, "Justificativa da contraproposta \xE9 obrigat\xF3ria.").max(1e3)
 });
-var reviewCounterProposalSchema = z25.object({
-  proposalId: z25.string().min(1),
-  decision: z25.enum(["ACEITAR", "RECUSAR"]),
-  notes: z25.string().max(1e3).optional()
+var reviewCounterProposalSchema = z26.object({
+  proposalId: z26.string().min(1),
+  decision: z26.enum(["ACEITAR", "RECUSAR"]),
+  notes: z26.string().max(1e3).optional()
 });
 
 // server/features/proposals/proposal-router.ts
 var proposalRouter = router({
-  list: protectedProcedure.input(z26.object({ familyId: z26.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z27.object({ familyId: z27.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listProposalRecords(input.familyId);
   }),
   create: protectedProcedure.input(createProposalSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.PROPOSAL_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const proposalId = await createProposalRecord(input);
     await recordAudit({
@@ -5521,20 +5784,20 @@ var proposalRouter = router({
     return { success: true };
   }),
   reviewCounterProposal: protectedProcedure.input(reviewCounterProposalSchema).mutation(async ({ ctx, input }) => {
-    const socio = requireRole(ctx, ["SOCIO"]);
+    const user = requirePermission(ctx, Permission.PROPOSAL_REVIEW_COUNTER);
     const proposal = await getProposalRecord(input.proposalId);
     if (!proposal) throw new Error("Proposta financeira n\xE3o encontrada.");
     await reviewCounterProposalRecord({
       proposalId: input.proposalId,
       decision: input.decision,
-      socioUserId: socio.id,
+      socioUserId: user.id,
       notes: input.notes
     });
     await recordAudit({
       action: input.decision === "ACEITAR" ? "CONTRAPROPOSTA_ACEITA_PELO_SOCIO" : "CONTRAPROPOSTA_RECUSADA_PELO_SOCIO",
       entityType: "PROPOSTA_FINANCEIRA",
       entityId: input.proposalId,
-      actorUserId: socio.id,
+      actorUserId: user.id,
       familyId: proposal.familyId,
       metadata: { decision: input.decision, notes: input.notes || "" }
     });
@@ -5547,46 +5810,47 @@ var leadRouter = router({
   // PÃºblica â€” usada pela tela de "Tenho interesse" no login, sem autenticaÃ§Ã£o.
   create: publicProcedure.input(leadCreateSchema).mutation(async ({ ctx, input }) => {
     checkRateLimit(`lead:create:${ctx.req.ip ?? "unknown"}`, 10);
-    return createLeadRecord(input);
+    const result = await createLeadRecord(input);
+    await recordAuditSafe({
+      action: "LEAD_CRIADO",
+      entityType: "LEAD",
+      entityId: result.leadId,
+      familyId: result.familyId,
+      metadata: { source: "public_form" }
+    });
+    return result;
   }),
   list: protectedProcedure.query(async ({ ctx }) => {
-    requireRole(ctx, ["SOCIO", "ADMIN"]);
+    requirePermission(ctx, Permission.LEAD_LIST);
     return listLeadRecords();
   }),
   accept: protectedProcedure.input(leadAcceptSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+    const user = requirePermission(ctx, Permission.LEAD_ACCEPT);
     const result = await acceptLeadRecord(input, user.id);
-    try {
-      await recordAudit({ action: "INTERESSADO_ACEITO", entityType: "FAMILIA", entityId: result.familyId, actorUserId: user.id, familyId: result.familyId });
-    } catch {
-    }
+    await recordAuditSafe({ action: "INTERESSADO_ACEITO", entityType: "FAMILIA", entityId: result.familyId, actorUserId: user.id, familyId: result.familyId });
     return result;
   }),
   reject: protectedProcedure.input(leadRejectSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+    const user = requirePermission(ctx, Permission.LEAD_REJECT);
     const result = await rejectLeadRecord(input.leadId, user.id, input.reviewNote);
-    try {
-      await recordAudit({ action: "INTERESSADO_RECUSADO", entityType: "INTERESSADO", entityId: input.leadId, actorUserId: user.id });
-    } catch {
-    }
+    await recordAuditSafe({ action: "INTERESSADO_RECUSADO", entityType: "INTERESSADO", entityId: input.leadId, actorUserId: user.id });
     return result;
   })
 });
 
 // server/features/certidoes/certidao-router.ts
-import { z as z27 } from "zod";
-init_roles();
+import { z as z28 } from "zod";
 var certidaoRouter = router({
-  list: protectedProcedure.input(z27.object({ familyId: z27.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z28.object({ familyId: z28.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCertidaoRecords(input.familyId);
   }),
-  summary: protectedProcedure.input(z27.object({ familyId: z27.string() })).query(async ({ ctx, input }) => {
+  summary: protectedProcedure.input(z28.object({ familyId: z28.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getProjectAlertSummary(input.familyId);
   }),
-  generate: protectedProcedure.input(z27.object({ familyId: z27.string() })).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+  generate: protectedProcedure.input(z28.object({ familyId: z28.string() })).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.CERTIDAO_GENERATE);
     await assertFamilyAccess(ctx, input.familyId);
     const created = await ensureFamilyCertidoes(input.familyId);
     await recordAudit({
@@ -5600,7 +5864,7 @@ var certidaoRouter = router({
     return { created };
   }),
   updateStatus: protectedProcedure.input(certidaoUpdateSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, ["SOCIO"]);
+    const user = requirePermission(ctx, Permission.CERTIDAO_UPDATE_STATUS);
     const certidao = await getCertidaoRecord(input.certidaoId);
     if (!certidao) throw new Error("Certid\xE3o n\xE3o encontrada.");
     await assertFamilyAccess(ctx, certidao.familyId);
@@ -5627,9 +5891,12 @@ var appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
+    logout: publicProcedure.mutation(async ({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      if (ctx.sessionJti && ctx.user) {
+        await revokeSession(ctx.sessionJti, ctx.user.id, "LOGOUT");
+      }
       return {
         success: true
       };
@@ -5654,15 +5921,20 @@ var appRouter = router({
 // server/_core/context.ts
 async function createContext(opts) {
   let user = null;
+  let sessionJti = null;
   try {
-    user = await authenticateRequest(opts.req);
+    const session = await authenticateRequest(opts.req);
+    user = session.user;
+    sessionJti = session.jti;
   } catch {
     user = null;
+    sessionJti = null;
   }
   return {
     req: opts.req,
     res: opts.res,
-    user
+    user,
+    sessionJti
   };
 }
 

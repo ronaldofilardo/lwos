@@ -1,19 +1,19 @@
 // @ts-nocheck
 import { ForbiddenError } from "../../shared/_core/errors";
-import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
+import { COOKIE_NAME, SESSION_TTL_MS } from "../../shared/const";
 import bcrypt from "bcryptjs";
 import { parse as parseCookieHeader } from "cookie";
 import type { Express, Request, Response } from "express";
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify, type JWTHeaderParameters, type JWTPayload } from "jose";
 import type { User } from "../../drizzle/schema";
-import { createUser, getUserByEmail, getUserById, touchLastSignedIn, updateUserPassword } from "../db";
+import { createUser, getUserByEmail, getUserById, touchLastSignedIn, revokeSessionByJti } from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { ENV } from "./env";
 import { RateLimitError, checkRateLimit, resetRateLimit } from "./rateLimit";
 
 const BCRYPT_ROUNDS = 12;
 
-type SessionPayload = { userId: number };
+type SessionPayload = { userId: number; jti: string };
 
 function getSessionSecret() {
   if (!ENV.cookieSecret) {
@@ -22,21 +22,27 @@ function getSessionSecret() {
   return new TextEncoder().encode(ENV.cookieSecret);
 }
 
-async function signSession(userId: number, expiresInMs = ONE_YEAR_MS): Promise<string> {
+async function signSession(userId: number, expiresInMs = SESSION_TTL_MS): Promise<{ token: string; jti: string }> {
   const expirationSeconds = Math.floor((Date.now() + expiresInMs) / 1000);
-  return new SignJWT({ userId })
+  const jti = crypto.randomUUID();
+  const token = await new SignJWT({ userId, jti })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setJti(jti)
     .setExpirationTime(expirationSeconds)
     .sign(getSessionSecret());
+  return { token, jti };
 }
 
 async function verifySession(cookieValue: string | undefined | null): Promise<SessionPayload | null> {
   if (!cookieValue) return null;
   try {
     const { payload } = await jwtVerify(cookieValue, getSessionSecret(), { algorithms: ["HS256"] });
-    const { userId } = payload as Record<string, unknown>;
-    if (typeof userId !== "number") return null;
-    return { userId };
+    const { userId, jti } = payload as Record<string, unknown>;
+    if (typeof userId !== "number" || typeof jti !== "string") return null;
+    // Verifica revogação (logout em outros dispositivos / suspeita).
+    const revoked = await revokeSessionByJti(jti);
+    if (revoked) return null;
+    return { userId, jti };
   } catch {
     return null;
   }
@@ -86,39 +92,10 @@ export async function registerUser(input: { name: string; email: string; passwor
 
 /** Autentica email+senha e retorna o usuário, ou lança erro se inválido. */
 export async function loginWithPassword(email: string, password: string): Promise<User> {
-  const normalizedEmail = normalizeEmail(email);
-  let user = await getUserByEmail(normalizedEmail);
-
-  // Auto-provisionamento de emergência/bootstrap para sócio ou admin inicial
-  if (!user && (normalizedEmail === "socio@adv.com" || normalizedEmail === "admin@adv.com")) {
-    if (password === "123456") {
-      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      try {
-        user = await createUser({
-          name: normalizedEmail === "socio@adv.com" ? "Sócio Responsável" : "Administrador",
-          email: normalizedEmail,
-          passwordHash,
-          role: normalizedEmail === "socio@adv.com" ? "SOCIO" : "ADMIN",
-          lastSignedIn: new Date(),
-        });
-      } catch {
-        // Se já foi inserido concorrentemente, busca de novo
-        user = await getUserByEmail(normalizedEmail);
-      }
-    }
-  }
-
+  const user = await getUserByEmail(normalizeEmail(email));
   if (!user) throw new Error("E-mail ou senha inválidos.");
 
-  let passwordMatches = await bcrypt.compare(password, user.passwordHash);
-
-  // Auto-sincronização caso o banco tenha recebido o hash antigo de seed
-  if (!passwordMatches && (normalizedEmail === "socio@adv.com" || normalizedEmail === "admin@adv.com") && password === "123456") {
-    const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    await updateUserPassword(user.id, newHash);
-    passwordMatches = true;
-  }
-
+  const passwordMatches = await bcrypt.compare(password, user.passwordHash);
   if (!passwordMatches) throw new Error("E-mail ou senha inválidos.");
 
   await touchLastSignedIn(user.id);
@@ -140,9 +117,10 @@ export function registerAuthRoutes(app: Express) {
       checkRateLimit(credKey, 10);
       checkRateLimit(ipKey, 30);
       const user = await loginWithPassword(email, password);
-      const sessionToken = await signSession(user.id);
+      const { token, jti } = await signSession(user.id);
+      await revokeOtherSessions(user.id, jti);
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_TTL_MS });
       resetRateLimit(credKey);
       resetRateLimit(ipKey);
       res.json({ success: true });
@@ -167,9 +145,10 @@ export function registerAuthRoutes(app: Express) {
     try {
       checkRateLimit(`register:ip:${req.ip ?? "unknown"}`, 10);
       const user = await registerUser({ name, email, password });
-      const sessionToken = await signSession(user.id);
+      const { token, jti } = await signSession(user.id);
+      await revokeOtherSessions(user.id, jti);
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_TTL_MS });
       res.json({ success: true });
     } catch (error) {
       if (error instanceof RateLimitError) {
@@ -184,7 +163,7 @@ export function registerAuthRoutes(app: Express) {
 }
 
 /** Usado pelo contexto tRPC em cada request. */
-export async function authenticateRequest(req: Request): Promise<User> {
+export async function authenticateRequest(req: Request): Promise<{ user: User; jti: string }> {
   const cookies = parseCookies(req.headers.cookie);
   const sessionToken = cookies.get(COOKIE_NAME);
 
@@ -194,6 +173,12 @@ export async function authenticateRequest(req: Request): Promise<User> {
   const user = await getUserById(session.userId);
   if (!user) throw ForbiddenError("Usuário não encontrado");
 
-  return user;
+  return { user, jti: session.jti };
+}
+
+/** Revoga todas as sessões do usuário exceto a sessão corrente (jti). */
+async function revokeOtherSessions(userId: number, currentJti: string) {
+  const { revokeUserSessions } = await import("../db");
+  await revokeUserSessions(userId, currentJti);
 }
 

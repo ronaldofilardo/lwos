@@ -13,6 +13,7 @@ export {
   formatarIdadeDecimal,
   isNascimentoValido,
 } from "./datas";
+export { isoDateSchema } from "./datas-schema";
 export {
   MAX_DINHEIRO,
   parseNumeroPtBR,

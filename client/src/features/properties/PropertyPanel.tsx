@@ -3,6 +3,7 @@ import { Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/trpcError";
 import { PropertyRow } from "./PropertyRow";
 import { PropertyFormModal } from "./PropertyFormModal";
 
@@ -17,7 +18,7 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
       setCreating(false);
       toast.success("Imóvel cadastrado na Due Diligence.");
     },
-    onError: e => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   return (

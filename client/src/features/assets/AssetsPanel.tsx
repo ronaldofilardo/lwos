@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/trpcError";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
 import { levelFor } from "@/features/alerts/alerts";
 import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
@@ -86,7 +87,7 @@ function AssetFormModal({
       toast.success("Ativo atualizado.");
       onClose();
     },
-    onError: e => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const handleSubmit = (event: FormEvent) => {
@@ -206,7 +207,7 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
       setRemoving(null);
       toast.success("Ativo excluído.");
     },
-    onError: e => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const value = Number(declaredValue.replace(",", "."));

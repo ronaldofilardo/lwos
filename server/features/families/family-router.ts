@@ -7,12 +7,12 @@ import {
   projectStatusValues,
 } from "../../../drizzle/schema";
 import { protectedProcedure, router } from "../../_core/trpc";
-import { recordAudit } from "../audit/audit-repository";
+import { recordAudit, recordAuditSafe } from "../audit/audit-repository";
 import { createId } from "../_shared/ids";
 import { requireDatabase } from "../_shared/database";
 import { assertFamilyAccess } from "../access/family-access";
-import { requireRole } from "../access/authorization";
-import { TEAM_ROLES } from "../../../shared/domain/roles";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import {
   getConclusionBlockers,
   listProjectAlertLevels,
@@ -77,7 +77,7 @@ export const familyRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.FAMILY_UPDATE_STATUS);
       await assertFamilyAccess(ctx, input.familyId);
       if (input.status === "CONCLUIDO") {
         const blockers = await getConclusionBlockers(
@@ -113,25 +113,22 @@ export const familyRouter = router({
   create: protectedProcedure
     .input(familyInputSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.FAMILY_CREATE);
       const result = await createFamilyRecord(input, user.id);
-      try {
-        await recordAudit({
-          action: "FAMILIA_CRIADA",
-          entityType: "FAMILIA",
-          entityId: result.familyId,
-          actorUserId: user.id,
-          familyId: result.familyId,
-        });
-      } catch {
-        /* audit failure should not break main operation */
-      }
+      await recordAuditSafe({
+        action: "FAMILIA_CRIADA",
+        entityType: "FAMILIA",
+        entityId: result.familyId,
+        actorUserId: user.id,
+        familyId: result.familyId,
+      });
       return result;
     }),
   grantClientAccess: protectedProcedure
     .input(z.object({ familyId: z.string(), userId: z.number().int() }))
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, ["SOCIO"]);
+      const user = requirePermission(ctx, Permission.FAMILY_GRANT_CLIENT_ACCESS);
+      await assertFamilyAccess(ctx, input.familyId);
       const db = await requireDatabase();
       await db
         .insert(familyAccess)
@@ -142,23 +139,20 @@ export const familyRouter = router({
           accessRole: "CLIENTE",
         })
         .onConflictDoNothing();
-      try {
-        await recordAudit({
-          action: "ACESSO_CLIENTE_CONCEDIDO",
-          entityType: "FAMILIA",
-          entityId: input.familyId,
-          actorUserId: user.id,
-          familyId: input.familyId,
-        });
-      } catch {
-        /* audit failure should not break main operation */
-      }
+      await recordAuditSafe({
+        action: "ACESSO_CLIENTE_CONCEDIDO",
+        entityType: "FAMILIA",
+        entityId: input.familyId,
+        actorUserId: user.id,
+        familyId: input.familyId,
+      });
       return { success: true };
     }),
   generateFirstAccessLink: protectedProcedure
     .input(z.object({ familyId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, ["SOCIO"]);
+      const user = requirePermission(ctx, Permission.FAMILY_GENERATE_FIRST_ACCESS_LINK);
+      await assertFamilyAccess(ctx, input.familyId);
       const db = await requireDatabase();
 
       const existingAccess = await db
@@ -193,25 +187,21 @@ export const familyRouter = router({
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         createdBy: String(user.id),
       });
-
-      try {
-        await recordAudit({
-          action: "LINK_PRIMEIRO_ACESSO_GERADO",
-          entityType: "FAMILIA",
-          entityId: input.familyId,
-          actorUserId: user.id,
-          familyId: input.familyId,
-        });
-      } catch {
-        /* audit failure should not break main operation */
-      }
+      await recordAuditSafe({
+        action: "LINK_PRIMEIRO_ACESSO_GERADO",
+        entityType: "FAMILIA",
+        entityId: input.familyId,
+        actorUserId: user.id,
+        familyId: input.familyId,
+      });
 
       return { token, fullName: contact.fullName };
     }),
   generatePasswordResetLink: protectedProcedure
     .input(z.object({ familyId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, ["SOCIO"]);
+      const user = requirePermission(ctx, Permission.FAMILY_GENERATE_PASSWORD_RESET_LINK);
+      await assertFamilyAccess(ctx, input.familyId);
       const db = await requireDatabase();
 
       const existingAccess = await db
@@ -246,31 +236,26 @@ export const familyRouter = router({
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         createdBy: String(user.id),
       });
-
-      try {
-        await recordAudit({
-          action: "LINK_REDEFINICAO_SENHA_GERADO",
-          entityType: "FAMILIA",
-          entityId: input.familyId,
-          actorUserId: user.id,
-          familyId: input.familyId,
-        });
-      } catch {
-        /* audit failure should not break main operation */
-      }
+      await recordAuditSafe({
+        action: "LINK_REDEFINICAO_SENHA_GERADO",
+        entityType: "FAMILIA",
+        entityId: input.familyId,
+        actorUserId: user.id,
+        familyId: input.familyId,
+      });
 
       return { token, fullName: contact.fullName };
     }),
   getDashboard: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user!;
     if (user.role === "CLIENTE") return getClientDashboardData(user.id);
-    requireRole(ctx, ["SOCIO", "ADMIN"]);
+    requirePermission(ctx, Permission.FAMILY_GET_DASHBOARD);
     return getDashboardData();
   }),
   listStorage: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user!;
     if (user.role === "CLIENTE") return listClientStorageFiles(user.id);
-    requireRole(ctx, ["SOCIO", "ADMIN"]);
+    requirePermission(ctx, Permission.FAMILY_LIST_STORAGE);
     return listStorageFiles();
   }),
 });

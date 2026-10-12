@@ -1,6 +1,6 @@
 /**
  * @description Exercita I/O real isolado do storage local: bloqueio de path traversal,
- * persistência com chave única, hash SHA-256 e limite de 5KB.
+ * persistência com chave única, hash SHA-256 e limite de 5MB.
  * @see server/storage.ts
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,23 +42,12 @@ describe("storage local", () => {
     await expect(storedFileExists("familia-2/inexistente.pdf")).resolves.toBe(false);
   });
 
-  it("limita arquivos a 5KB - maior que 5KB deve falhar em produção", async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
-
-    try {
-      // 6KB de dados -> deve lançar erro
-      const bigData = "x".repeat(6000);
-      await expect(storagePut("familia-3/grande.pdf", bigData)).rejects.toThrow(
-        "Arquivo excede 5KB. Tamanho máximo permitido em produção."
-      );
-    } finally {
-      process.env.NODE_ENV = originalEnv;
-    }
-    
-    // Em dev/test, não deve falhar
-    const bigResult = await storagePut("familia-3/grande_dev.pdf", "x".repeat(6000));
-    expect(bigResult.key).toBeDefined();
+  it("limita arquivos a 5MB em qualquer ambiente", async () => {
+    // 6MB de dados -> deve lançar erro
+    const bigData = "x".repeat(6 * 1024 * 1024 + 1);
+    await expect(storagePut("familia-3/grande.pdf", bigData)).rejects.toThrow(
+      "Arquivo inválido ou maior que 5 MB."
+    );
 
     // Arquivo pequeno deve persistir normalmente
     const smallResult = await storagePut("familia-3/pequeno.pdf", "dados");

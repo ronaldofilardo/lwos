@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/trpcError";
 import { parsePercentual } from "@shared/validation";
 import type { EncumbranceSeverity } from "./types";
 
@@ -39,7 +40,7 @@ export function PropertyOwnerForm({
   const [editPercentage, setEditPercentage] = useState("");
   const [editRightType, setEditRightType] = useState<RightType>("PROPRIEDADE");
 
-  const onError = (error: { message: string }) => toast.error(error.message);
+  const onError = (error: unknown) => toast.error(errorMessage(error));
   const addOwner = trpc.properties.addOwner.useMutation({
     onSuccess: () => {
       refresh();

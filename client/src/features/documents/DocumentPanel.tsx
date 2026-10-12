@@ -5,6 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { StatusBadge } from "@/components/lucathi/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 import {
   certidaoStatusLabels,
   certidaoStatusValues,
@@ -18,13 +19,14 @@ import {
   groupDocumentsByMember,
   isResolvedStatus,
 } from "./groupDocuments";
+import { canEdit, canReview } from "@shared/domain/permissions";
 
 export function DocumentPanel({ familyId }: { familyId: string }) {
   const { documents, loading } = useDocuments(familyId);
   const { user } = useAuth();
   const actions = useDocumentActions(familyId);
-  const canReview = user?.role === "SOCIO";
-  const canEdit = user?.role === "SOCIO" || user?.role === "ANALISTA";
+  const canReviewFlag = canReview(user?.role);
+  const canEditFlag = canEdit(user?.role);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewModalReason, setReviewModalReason] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -50,7 +52,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
       utils.documents.list.invalidate({ familyId });
       toast.success("Situação da certidão atualizada.");
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   const generate = trpc.documents.generateRequirements.useMutation({
@@ -62,7 +64,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
           : "Matriz documental já está em dia."
       );
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
     onSettled: () => setSyncing(false),
   });
 
@@ -126,7 +128,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {canEdit ? (
+          {canEditFlag ? (
             <Button
               variant="outline"
               size="sm"
@@ -296,7 +298,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                                     <span className="text-xs text-lucathi-gray">
                                       Situação da certidão:
                                     </span>
-                                    {canReview ? (
+                                    {canReviewFlag ? (
                                       <>
                                         <select
                                           value={certidao.status}
@@ -365,7 +367,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                                   </div>
                                 ) : null}
 
-                                {document.status === "REJEITADO" && canEdit && (
+                                {document.status === "REJEITADO" && canEditFlag && (
                                   <button
                                     onClick={e => {
                                       e.stopPropagation();
@@ -380,7 +382,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                                 <div className="mt-3">
                                   <DocumentActions
                                     documentId={document.id}
-                                    canReview={canReview}
+                                    canReview={canReviewFlag}
                                     disabled={sameAddressState[document.id]}
                                     busy={
                                       actions.uploading ||

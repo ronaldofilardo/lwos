@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/trpcError";
+import { isSocio, isTeam } from "@shared/domain/permissions";
 
 export function FinancialProposalPanel({ familyId }: { familyId: string }) {
   const { user } = useAuth();
@@ -27,7 +29,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
       setProposedValue("");
       toast.success("Proposta financeira registrada e disponibilizada.");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const accept = trpc.proposals.accept.useMutation({
@@ -35,7 +37,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
       utils.proposals.list.invalidate({ familyId });
       toast.success("Proposta financeira aceita com sucesso!");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const counter = trpc.proposals.counterProposal.useMutation({
@@ -46,7 +48,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
       setCounterNotes("");
       toast.success("Contraproposta enviada para análise do Sócio.");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const reviewCounter = trpc.proposals.reviewCounterProposal.useMutation({
@@ -54,11 +56,11 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
       utils.proposals.list.invalidate({ familyId });
       toast.success("Deliberação da contraproposta registrada.");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
-  const isSocio = user?.role === "SOCIO";
-  const isTeam = user?.role === "SOCIO" || user?.role === "ANALISTA" || user?.role === "ADMIN";
+  const isSocioFlag = isSocio(user?.role);
+  const isTeamFlag = isTeam(user?.role);
 
   const handleCreate = () => {
     if (!scopeDescription.trim() || !proposedValue) return;
@@ -112,7 +114,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
         </div>
       </div>
 
-      {isTeam ? (
+      {isTeamFlag ? (
         <div className="mt-5 rounded-xl border border-dashed border-lucathi-line p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray">
             Nova Proposta Comercial / Aditivo
@@ -275,7 +277,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
                 )}
 
                 {/* Deliberação exclusiva do Sócio para contrapropostas recebidas */}
-                {isCounter && isSocio && (
+                {isCounter && isSocioFlag && (
                   <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50/80 p-3">
                     <p className="text-xs font-semibold text-amber-900">
                       Deliberação do Sócio: O cliente propôs R${" "}

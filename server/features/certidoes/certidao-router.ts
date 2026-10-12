@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../../_core/trpc";
-import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { assertFamilyAccess } from "../access/family-access";
-import { requireRole } from "../access/authorization";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import { recordAudit } from "../audit/audit-repository";
 import { getProjectAlertSummary } from "../alerts/project-alerts-repository";
 import {
@@ -33,7 +33,7 @@ export const certidaoRouter = router({
   generate: protectedProcedure
     .input(z.object({ familyId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.CERTIDAO_GENERATE);
       await assertFamilyAccess(ctx, input.familyId);
       const created = await ensureFamilyCertidoes(input.familyId);
       await recordAudit({
@@ -49,7 +49,7 @@ export const certidaoRouter = router({
   updateStatus: protectedProcedure
     .input(certidaoUpdateSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, ["SOCIO"]);
+      const user = requirePermission(ctx, Permission.CERTIDAO_UPDATE_STATUS);
       const certidao = await getCertidaoRecord(input.certidaoId);
       if (!certidao) throw new Error("Certidão não encontrada.");
       await assertFamilyAccess(ctx, certidao.familyId);

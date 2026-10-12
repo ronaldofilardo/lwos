@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 import {
   certidaoStatusLabels,
   certidaoTypeLabels,
@@ -88,7 +89,7 @@ function BalanceUpload({
       setBase64("");
       toast.success(`${category} enviado.`);
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   return (
@@ -248,7 +249,7 @@ export function CompanyDetailsModal({
       toast.success("Detalhes da holding salvos.");
       onClose();
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   const update = (key: keyof HoldingFormState, value: string) =>

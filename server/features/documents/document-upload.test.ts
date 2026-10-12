@@ -51,10 +51,19 @@ function fakeTx() {
   const set = vi.fn(() => ({ where: vi.fn(async () => undefined) }));
   const update = vi.fn(() => ({ set }));
   const insert = vi.fn(() => ({ values: insertValues }));
-  const transaction = vi.fn(async (operation: (tx: unknown) => Promise<void>) => {
-    await operation({ insert, update });
+  const select = vi.fn().mockReturnValue({
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        limit: vi.fn().mockResolvedValue([{ currentVersion: 2 }]),
+      }),
+    }),
   });
-  return { db: { transaction }, insertValues, set, update, transaction };
+  const execute = vi.fn().mockResolvedValue([{ acquired: true }]);
+  const tx = { insert, update, select, execute };
+  const transaction = vi.fn(async (operation: (tx: typeof tx) => Promise<unknown>) => {
+    return await operation(tx);
+  });
+  return { db: { transaction, execute }, insertValues, set, update, transaction, select };
 }
 
 describe("storeDocumentVersion", () => {
@@ -97,6 +106,7 @@ describe("storeDocumentVersion", () => {
   it("grava a versão no storage, incrementa o documento e libera os docs do casal", async () => {
     const { db, insertValues, set, transaction } = fakeTx();
     databaseMocks.requireDatabase.mockResolvedValue(db);
+    storageMocks.storagePut.mockResolvedValue({ key: "11122233344/doc-1/v3/rg.pdf", url: "/api/local-storage/..." });
 
     const bytes = Buffer.from("conteudo");
     const result = await storeDocumentVersion(baseInput);

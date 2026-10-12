@@ -4,10 +4,11 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import ClientFamilyDashboard from "./ClientFamilyDashboard";
+import { isClient } from "@shared/domain/permissions";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  if (user?.role === "CLIENTE") return <ClientFamilyDashboard />;
+  if (isClient(user?.role)) return <ClientFamilyDashboard />;
   return <TeamDashboard />;
 }
 

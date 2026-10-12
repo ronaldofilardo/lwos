@@ -3,6 +3,7 @@ import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
+import { revokeSession } from "./db";
 import { companyRouter } from "./features/companies/company-router";
 import { documentRouter } from "./features/documents/document-router";
 import { familyRouter } from "./features/families/family-router";
@@ -23,9 +24,13 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
+    logout: publicProcedure.mutation(async ({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      // Revoga o jti da sessão atual para que tokens capturados não sejam reutilizados.
+      if (ctx.sessionJti && ctx.user) {
+        await revokeSession(ctx.sessionJti, ctx.user.id, "LOGOUT");
+      }
       return {
         success: true,
       } as const;

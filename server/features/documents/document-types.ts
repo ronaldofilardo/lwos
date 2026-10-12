@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { entityTypeValues } from "../../../drizzle/schema";
+import { isoDateSchema } from "../../../shared/validation";
 
 export const documentEntitySchema = z.enum(entityTypeValues);
 export const documentStatusSchema = z.enum([
@@ -18,12 +19,9 @@ export const createDocumentSchema = z.object({
   entityType: documentEntitySchema,
   entityId: z.string().min(1),
   category: z.string().min(2).max(80),
-  validUntil: z.string().optional(),
+  validUntil: isoDateSchema("Data de validade inválida (use AAAA-MM-DD).").optional(),
   /** Data-base do documento (ex.: balanço fechado / balancete). */
-  referenceDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data-base inválida (use AAAA-MM-DD).")
-    .optional(),
+  referenceDate: isoDateSchema("Data-base inválida (use AAAA-MM-DD).").optional(),
 });
 
 export const uploadVersionSchema = z.object({

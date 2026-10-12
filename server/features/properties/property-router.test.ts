@@ -27,6 +27,7 @@ const documentRequirementMocks = vi.hoisted(() => ({
 const accessMocks = vi.hoisted(() => ({
   assertFamilyAccess: vi.fn(),
   requireRole: vi.fn(),
+  requirePermission: vi.fn(),
 }));
 
 vi.mock("./property-repository", () => propertyRepoMocks);
@@ -40,6 +41,7 @@ vi.mock("../access/family-access", () => ({
 }));
 vi.mock("../access/authorization", () => ({
   requireRole: accessMocks.requireRole,
+  requirePermission: accessMocks.requirePermission,
 }));
 
 import { propertyRouter } from "./property-router";
@@ -68,10 +70,15 @@ const validInput = {
 describe("propertyRouter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    accessMocks.requireRole.mockImplementation((_ctx: never, role: never) => ({
-      id: 7,
-      role,
-    }));
+    accessMocks.requireRole.mockImplementation((_ctx: never, role: never) => {
+      if (role === "CLIENTE") throw new Error("Permissão insuficiente.");
+      return { id: 7, role };
+    });
+    accessMocks.requirePermission.mockImplementation((ctx: never) => {
+      const role = (ctx as { user: { role: string } }).user?.role;
+      if (role === "CLIENTE") throw new Error("Permissão insuficiente.");
+      return { id: 7 };
+    });
     accessMocks.assertFamilyAccess.mockResolvedValue(undefined);
     auditMocks.recordAudit.mockResolvedValue(undefined);
     documentRequirementMocks.reconcileEntityDocuments.mockResolvedValue({

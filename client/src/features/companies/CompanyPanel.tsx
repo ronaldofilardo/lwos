@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 import { CompanyDetailsModal } from "./CompanyDetailsModal";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
 import { levelFor } from "@/features/alerts/alerts";
@@ -30,7 +31,7 @@ function StakeholderManager({
   const [externalName, setExternalName] = useState("");
   const [percentage, setPercentage] = useState("");
 
-  const onError = (error: { message: string }) => toast.error(error.message);
+  const onError = (error: unknown) => toast.error(errorMessage(error));
   const add = trpc.companies.addStakeholder.useMutation({
     onSuccess: () => {
       refresh();
@@ -232,7 +233,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
       setTaxNumber("");
       toast.success("Sociedade criada.");
     },
-    onError: e => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   return (

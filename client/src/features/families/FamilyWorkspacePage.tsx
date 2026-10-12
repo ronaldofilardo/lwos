@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { errorMessage } from "@/lib/trpcError";
 import { PeoplePanel } from "@/features/people/PeoplePanel";
 import { DocumentPanel } from "@/features/documents/DocumentPanel";
 import { PropertyPanel } from "@/features/properties/PropertyPanel";
@@ -27,6 +28,7 @@ import { ProcessTimeline } from "./common/ProcessTimeline";
 import { UnifiedRequirementsMap } from "./common/UnifiedRequirementsMap";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
 import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
+import { isClient } from "@shared/domain/permissions";
 import {
   projectObjectiveLabels,
   projectStatusLabels,
@@ -48,13 +50,13 @@ export function FamilyWorkspacePage() {
   const familyId = params?.familyId ?? "";
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const isClient = user?.role === "CLIENTE";
+  const isClientFlag = isClient(user?.role);
 
   // O titular (CLIENTE) não usa a área de trabalho do sócio: segue para a
   // página dedicada da própria família.
   useEffect(() => {
-    if (isClient && familyId) navigate(`/minha-familia/${familyId}`);
-  }, [isClient, familyId, navigate]);
+    if (isClientFlag && familyId) navigate(`/minha-familia/${familyId}`);
+  }, [isClientFlag, familyId, navigate]);
 
   const family = trpc.families.get.useQuery(
     { familyId },
@@ -75,10 +77,10 @@ export function FamilyWorkspacePage() {
       setJustification("");
       toast.success("Projeto concluído.");
     },
-    onError: e => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
-  if (!user || isClient) {
+  if (!user || isClientFlag) {
     return (
       <p className="text-sm text-lucathi-gray">Abrindo sua família…</p>
     );

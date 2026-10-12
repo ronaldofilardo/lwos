@@ -99,6 +99,15 @@ describe("storage em produção (PostgreSQL)", () => {
     expect(db.state.executeCalls).toBe(1);
   });
 
+  it("recusa arquivo maior que 5MB antes de tocar no banco", async () => {
+    const bigData = "x".repeat(5 * 1024 * 1024 + 1);
+    await expect(storagePut("familia-1/grande.pdf", bigData)).rejects.toThrow(
+      "Arquivo inválido ou maior que 5 MB."
+    );
+    expect(db.state.executeCalls).toBe(0);
+    expect(db.state.inserted).toBeNull();
+  });
+
   it("lê o conteúdo base64 do banco e sinaliza ausência de registro", async () => {
     db.state.rows = [{ content: Buffer.from("pdf").toString("base64") }];
     await expect(readStoredFile("familia-1/doc.pdf")).resolves.toEqual(Buffer.from("pdf"));

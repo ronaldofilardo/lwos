@@ -37,14 +37,14 @@ describe("storage proxy", () => {
     await handler()({ params: { 0: "familia/a.pdf" } }, res);
     expect(res.status).toHaveBeenCalledWith(401);
 
-    authMocks.authenticateRequest.mockResolvedValue({ id: 1, role: "SOCIO" });
+    authMocks.authenticateRequest.mockResolvedValue({ user: { id: 1, role: "SOCIO" }, jti: "jti-1" });
     const second = response();
     await handler()({ params: {} }, second);
     expect(second.status).toHaveBeenCalledWith(400);
   });
 
   it("não expõe chave órfã ou documento de família não autorizada", async () => {
-    authMocks.authenticateRequest.mockResolvedValue({ id: 1, role: "CLIENTE" });
+    authMocks.authenticateRequest.mockResolvedValue({ user: { id: 1, role: "CLIENTE" }, jti: "jti-1" });
     documentMocks.getDocumentVersionByStorageKey.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ familyId: "familia-2" });
     leadMocks.getLeadRecordByStorageKey.mockResolvedValue(null);
     accessMocks.userHasFamilyAccess.mockResolvedValue(false);
@@ -60,7 +60,7 @@ describe("storage proxy", () => {
   });
 
   it("restringe arquivo de interessado ao time e serve para sócio", async () => {
-    authMocks.authenticateRequest.mockResolvedValue({ id: 1, role: "CLIENTE" });
+    authMocks.authenticateRequest.mockResolvedValue({ user: { id: 1, role: "CLIENTE" }, jti: "jti-1" });
     documentMocks.getDocumentVersionByStorageKey.mockResolvedValue(undefined);
     leadMocks.getLeadRecordByStorageKey.mockResolvedValue({ id: "lead-1" });
 
@@ -69,7 +69,7 @@ describe("storage proxy", () => {
     expect(cliente.status).toHaveBeenCalledWith(403);
     expect(storageMocks.readStoredFile).not.toHaveBeenCalled();
 
-    authMocks.authenticateRequest.mockResolvedValue({ id: 2, role: "SOCIO" });
+    authMocks.authenticateRequest.mockResolvedValue({ user: { id: 2, role: "SOCIO" }, jti: "jti-2" });
     storageMocks.storedFileExists.mockResolvedValue(true);
     storageMocks.readStoredFile.mockResolvedValue(Buffer.from("pdf"));
 
@@ -80,7 +80,7 @@ describe("storage proxy", () => {
   });
 
   it("serve somente arquivo existente e autorizado com cache desabilitado", async () => {
-    authMocks.authenticateRequest.mockResolvedValue({ id: 1, role: "CLIENTE" });
+    authMocks.authenticateRequest.mockResolvedValue({ user: { id: 1, role: "CLIENTE" }, jti: "jti-1" });
     documentMocks.getDocumentVersionByStorageKey.mockResolvedValue({ familyId: "familia-1" });
     accessMocks.userHasFamilyAccess.mockResolvedValue(true);
     storageMocks.storedFileExists.mockResolvedValue(true);
@@ -95,7 +95,7 @@ describe("storage proxy", () => {
   });
 
   it("responde 404 quando o arquivo autorizado não existe fisicamente", async () => {
-    authMocks.authenticateRequest.mockResolvedValue({ id: 1, role: "CLIENTE" });
+    authMocks.authenticateRequest.mockResolvedValue({ user: { id: 1, role: "CLIENTE" }, jti: "jti-1" });
     documentMocks.getDocumentVersionByStorageKey.mockResolvedValue({ familyId: "familia-1" });
     accessMocks.userHasFamilyAccess.mockResolvedValue(true);
     storageMocks.storedFileExists.mockResolvedValue(false);
@@ -110,7 +110,7 @@ describe("storage proxy", () => {
 
   it("responde 500 sem vazar detalhes quando a leitura do arquivo falha", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    authMocks.authenticateRequest.mockResolvedValue({ id: 1, role: "CLIENTE" });
+    authMocks.authenticateRequest.mockResolvedValue({ user: { id: 1, role: "CLIENTE" }, jti: "jti-1" });
     documentMocks.getDocumentVersionByStorageKey.mockResolvedValue({ familyId: "familia-1" });
     accessMocks.userHasFamilyAccess.mockResolvedValue(true);
     storageMocks.storedFileExists.mockResolvedValue(true);

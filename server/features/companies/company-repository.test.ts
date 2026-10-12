@@ -33,6 +33,7 @@ type StakeholderRow = {
 
 function mockDb(existing: StakeholderRow[]) {
   const insertValues = vi.fn().mockResolvedValue(undefined);
+  const execute = vi.fn().mockResolvedValue([{ acquired: true }]);
   const tx = {
     select: vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -40,6 +41,7 @@ function mockDb(existing: StakeholderRow[]) {
       }),
     }),
     insert: vi.fn().mockReturnValue({ values: insertValues }),
+    execute,
   };
   const db = {
     transaction: vi.fn(
@@ -47,6 +49,7 @@ function mockDb(existing: StakeholderRow[]) {
     ),
     select: tx.select,
     insert: tx.insert,
+    execute,
   };
   return { db, insertValues };
 }
@@ -193,10 +196,11 @@ function fullDb(config: FullConfig = {}) {
     }),
   }));
   const insert = vi.fn(() => ({ values: insertValues }));
+  const execute = vi.fn().mockResolvedValue([{ acquired: true }]);
   const transaction = vi.fn(async (operation: (tx: unknown) => Promise<unknown>) =>
-    operation({ select, insert, update })
+    operation({ select, insert, update, execute })
   );
-  const db = { select, insert, update, delete: remove, transaction };
+  const db = { select, insert, update, delete: remove, transaction, execute };
   return { db, insertValues, setValues, remove, transaction };
 }
 

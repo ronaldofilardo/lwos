@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { StatusBadge } from "@/components/lucathi/StatusBadge";
 import { BrandMark } from "@/components/lucathi/BrandMark";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/trpcError";
 import { PortalDocumentRow } from "./PortalDocumentRow";
 
 async function base64(file: File) {
@@ -13,7 +14,7 @@ async function base64(file: File) {
 export function ClientPortalPage() {
   const [, params] = useRoute("/portal/:token"); const token = params?.token ?? "";
   const status = trpc.portal.status.useQuery({ token }, { enabled: Boolean(token), retry: false }); const utils = trpc.useUtils();
-  const upload = trpc.portal.uploadDocument.useMutation({ onSuccess: () => { utils.portal.status.invalidate({ token }); toast.success("Documento enviado para análise."); }, onError: e => toast.error(e.message) });
+  const upload = trpc.portal.uploadDocument.useMutation({ onSuccess: () => { utils.portal.status.invalidate({ token }); toast.success("Documento enviado para análise."); }, onError: (error) => toast.error(errorMessage(error)) });
   const select = async (documentId: string, file?: File) => { if (!file) return; await upload.mutateAsync({ token, documentId, fileName: file.name, mimeType: file.type, base64Data: await base64(file) }); };
   if (status.isLoading) return <div className="grid min-h-screen place-items-center bg-lucathi-canvas text-lucathi-gray">Carregando portal seguro…</div>;
   if (status.error || !status.data?.family) return <div className="grid min-h-screen place-items-center bg-lucathi-canvas p-6"><div className="max-w-md text-center"><BrandMark /><h1 className="mt-8 font-display text-4xl text-lucathi-navy">Link indisponível</h1><p className="mt-3 text-sm text-lucathi-gray">Este link pode ter expirado ou sido revogado. Solicite um novo acesso ao seu consultor.</p></div></div>;

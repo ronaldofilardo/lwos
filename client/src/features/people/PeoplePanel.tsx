@@ -27,6 +27,7 @@ import { usePeople } from "./hooks/usePeople";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
 import { levelFor } from "@/features/alerts/alerts";
 import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
+import { canEdit } from "@shared/domain/permissions";
 
 function VinculoBadge({ vinculo }: { vinculo: Vinculo | null }) {
   if (!vinculo) return null;
@@ -101,7 +102,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
     markingPrimary,
   } = usePeople(familyId);
   const { bySubject } = useProjectAlerts(familyId);
-  const canEdit = user?.role === "SOCIO" || user?.role === "ANALISTA";
+  const canEditFlag = canEdit(user?.role);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<PersonRow | null>(null);
   const [deleting, setDeleting] = useState<PersonRow | null>(null);
@@ -123,7 +124,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
             </p>
           </div>
         </div>
-        {canEdit ? (
+        {canEditFlag ? (
           <Button
             size="sm"
             className="bg-lucathi-deep hover:bg-lucathi-navy"
@@ -175,7 +176,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                         <Crown className="size-3.5" />
                         Titular
                       </span>
-                    ) : canEdit ? (
+                    ) : canEditFlag ? (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -186,7 +187,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                         Definir como titular
                       </Button>
                     ) : null}
-                    {canEdit ? (
+                    {canEditFlag ? (
                       <>
                         <Button
                           variant="ghost"

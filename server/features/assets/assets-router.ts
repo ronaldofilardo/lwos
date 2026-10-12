@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { protectedProcedure, router } from "../../_core/trpc";
 import { assertFamilyAccess } from "../access/family-access";
-import { requireRole } from "../access/authorization";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import { recordAudit } from "../audit/audit-repository";
 import {
   createAssetRecord,
@@ -20,7 +20,7 @@ export const assetRouter = router({
     return listAssetRecords(input.familyId);
   }),
   create: protectedProcedure.input(createAssetSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.ASSET_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const assetId = await createAssetRecord(input);
     const { created, removed } = await reconcileEntityDocuments({
@@ -40,7 +40,7 @@ export const assetRouter = router({
     return { assetId };
   }),
   update: protectedProcedure.input(updateAssetSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.ASSET_UPDATE);
     const asset = await getAssetRecord(input.assetId);
     if (!asset) throw new Error("Ativo não encontrado.");
     await assertFamilyAccess(ctx, asset.familyId);
@@ -62,7 +62,7 @@ export const assetRouter = router({
     return result;
   }),
   remove: protectedProcedure.input(removeAssetSchema).mutation(async ({ ctx, input }) => {
-    const user = requireRole(ctx, TEAM_ROLES);
+    const user = requirePermission(ctx, Permission.ASSET_REMOVE);
     await assertFamilyAccess(ctx, input.familyId);
     const result = await removeAssetRecord(input.familyId, input.assetId);
     await recordAudit({

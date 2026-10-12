@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../../_core/trpc";
-import { TEAM_ROLES } from "../../../shared/domain/roles";
 import { assertFamilyAccess } from "../access/family-access";
-import { requireRole } from "../access/authorization";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import { recordAudit } from "../audit/audit-repository";
 import {
   findOrCreateDocumentRecord,
@@ -44,7 +44,7 @@ export const documentRouter = router({
   create: protectedProcedure
     .input(createDocumentSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.DOCUMENT_CREATE);
       await assertFamilyAccess(ctx, input.familyId);
       const documentId = await findOrCreateDocumentRecord(input);
       await recordAudit({
@@ -59,7 +59,7 @@ export const documentRouter = router({
   generateRequirements: protectedProcedure
     .input(z.object({ familyId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.DOCUMENT_GENERATE_REQUIREMENTS);
       await assertFamilyAccess(ctx, input.familyId);
       const { created, removed } = await reconcileFamilyDocumentRequirements(
         input.familyId
@@ -79,7 +79,8 @@ export const documentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const document = await getDocumentRecord(input.documentId);
       if (!document) throw new Error("Documento não encontrado.");
-      const user = await assertFamilyAccess(ctx, document.familyId);
+      const user = requirePermission(ctx, Permission.DOCUMENT_UPLOAD_VERSION);
+      await assertFamilyAccess(ctx, document.familyId);
       const result = await storeDocumentVersion({ ...input, userId: user.id });
       await recordAudit({
         action: "VERSAO_DOCUMENTO_ENVIADA",
@@ -94,7 +95,7 @@ export const documentRouter = router({
   review: protectedProcedure
     .input(reviewDocumentSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, ["SOCIO"]);
+      const user = requirePermission(ctx, Permission.DOCUMENT_REVIEW);
       const document = await getDocumentRecord(input.documentId);
       if (!document) throw new Error("Documento não encontrado.");
       await reviewDocumentRecord(input);
@@ -110,7 +111,7 @@ export const documentRouter = router({
   dispense: protectedProcedure
     .input(dispenseDocumentSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, ["SOCIO"]);
+      const user = requirePermission(ctx, Permission.DOCUMENT_DISPENSE);
       const document = await getDocumentRecord(input.documentId);
       if (!document) throw new Error("Documento não encontrado.");
       await dispenseDocumentRecord({
@@ -146,7 +147,7 @@ export const documentRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.DOCUMENT_UPLOAD_BALANCE);
       await assertFamilyAccess(ctx, input.familyId);
       const documentId = await findOrCreateDocumentRecord({
         familyId: input.familyId,

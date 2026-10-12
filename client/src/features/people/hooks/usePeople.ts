@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 import type { PersonFormSubmit } from "@/features/people/common/PersonForm";
 
 export function usePeople(familyId: string) {
@@ -13,7 +14,7 @@ export function usePeople(familyId: string) {
       utils.certidoes.list.invalidate({ familyId });
       toast.success("Pessoa cadastrada e requisitos documentais criados.");
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   const addPerson = async (data: PersonFormSubmit) =>
@@ -29,7 +30,7 @@ export function usePeople(familyId: string) {
           : "Pessoa atualizada."
       );
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
   const updatePerson = async (data: PersonFormSubmit & { personId: string }) =>
     update.mutateAsync({ familyId, ...data });
@@ -44,7 +45,7 @@ export function usePeople(familyId: string) {
           : "Pessoa excluída."
       );
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
   const removePerson = (personId: string) =>
     remove.mutateAsync({ familyId, personId });
@@ -59,7 +60,7 @@ export function usePeople(familyId: string) {
           : "Titular da família atualizado."
       );
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
   const markPrimary = (personId: string) =>
     setPrimary.mutateAsync({ familyId, personId });

@@ -11,6 +11,8 @@ const dbMocks = vi.hoisted(() => ({
   getUserById: vi.fn(),
   touchLastSignedIn: vi.fn(),
   updateUserPassword: vi.fn(),
+  revokeUserSessions: vi.fn(),
+  revokeSessionByJti: vi.fn(),
 }));
 const bcryptMocks = vi.hoisted(() => ({ hash: vi.fn(), compare: vi.fn() }));
 

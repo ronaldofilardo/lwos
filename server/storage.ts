@@ -1,5 +1,5 @@
 // Storage para o MVP com persistência em PostgreSQL (banco Neon).
-// Arquivos ≤ 5KB são gravados como base64 na tabela `fileBlobs`.
+// Arquivos ≤ 5MB são gravados como base64 na tabela `fileBlobs`.
 // O prefixo de URL foi alterado de `/local-storage/` para `/api/local-storage/`
 // p/ funcionar no Vercel serverless (disco efêmero).
 
@@ -13,6 +13,7 @@ import { createHash } from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { ENV } from "./_core/env";
+import { assertStorageSize } from "../shared/validation/storage-limits";
 
 function getStoragePath(relKey: string) {
   const root = ENV.storageRoot || path.resolve(process.cwd(), "storage");
@@ -91,11 +92,9 @@ export async function storagePut(
 ): Promise<{ key: string; url: string }> {
   const key = appendHashSuffix(assertSafeRelativeKey(relKey));
 
-  // Converter para Buffer e validar limite 5KB (somente em produção)
+  // Converter para Buffer e validar limite (igual em todos os ambientes).
   const buffer = typeof data === "string" ? Buffer.from(data, "utf-8") : Buffer.from(data);
-  if (process.env.NODE_ENV === "production" && buffer.length > 5120) {
-    throw new Error("Arquivo excede 5KB. Tamanho máximo permitido em produção.");
-  }
+  assertStorageSize(buffer);
 
   const sha256 = createHash("sha256").update(buffer).digest("hex");
 

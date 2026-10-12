@@ -9,6 +9,7 @@ import type {
   stakeholderInputSchema,
   stakeholderUpdateSchema,
 } from "./company-stakeholder";
+import { withAdvisoryLock, AdvisoryLockKey } from "../../_shared/advisory-lock";
 
 /** Tolerância de fração de centavo na soma das participações. */
 const PCT_EPSILON = 0.001;
@@ -71,90 +72,98 @@ export async function listStakeholderRecords(companyId: string) {
 }
 
 export async function createStakeholderRecord(input: z.infer<typeof stakeholderInputSchema>) {
-  const db = await requireDatabase();
-  const id = createId();
-  const externalName = input.externalName?.trim() || null;
-  await db.transaction(async tx => {
-    const existing = await tx
-      .select()
-      .from(companyStakeholders)
-      .where(eq(companyStakeholders.companyId, input.companyId));
-    if (input.personId && existing.some(row => row.personId === input.personId)) {
-      throw new Error("Este membro já participa da sociedade.");
+  return withAdvisoryLock(
+    requireDatabase(),
+    "STAKEHOLDER_PERCENT",
+    input.companyId,
+    async (tx) => {
+      const id = createId();
+      const externalName = input.externalName?.trim() || null;
+      const existing = await tx
+        .select()
+        .from(companyStakeholders)
+        .where(eq(companyStakeholders.companyId, input.companyId));
+      if (input.personId && existing.some(row => row.personId === input.personId)) {
+        throw new Error("Este membro já participa da sociedade.");
+      }
+      if (externalName && existing.some(row => normalizeName(row.externalName) === normalizeName(externalName))) {
+        throw new Error("Este não-membro já participa da sociedade.");
+      }
+      const total = totalPercentage(existing) + input.percentage;
+      if (total > 100 + PCT_EPSILON) {
+        throw new Error(
+          `A soma das participações não pode passar de 100% (atual ${totalPercentage(existing)}%).`
+        );
+      }
+      await tx
+        .insert(companyStakeholders)
+        .values({
+          id,
+          companyId: input.companyId,
+          personId: input.personId ?? null,
+          externalName,
+          percentage: input.percentage.toFixed(2),
+        });
+      return id;
     }
-    if (externalName && existing.some(row => normalizeName(row.externalName) === normalizeName(externalName))) {
-      throw new Error("Este não-membro já participa da sociedade.");
-    }
-    const total = totalPercentage(existing) + input.percentage;
-    if (total > 100 + PCT_EPSILON) {
-      throw new Error(
-        `A soma das participações não pode passar de 100% (atual ${totalPercentage(existing)}%).`
-      );
-    }
-    await tx
-      .insert(companyStakeholders)
-      .values({
-        id,
-        companyId: input.companyId,
-        personId: input.personId ?? null,
-        externalName,
-        percentage: input.percentage.toFixed(2),
-      });
-  });
-  return id;
+  );
 }
 
 export async function updateStakeholderRecord(
   input: z.infer<typeof stakeholderUpdateSchema>
 ) {
-  const db = await requireDatabase();
-  await db.transaction(async tx => {
-    const current = await tx
-      .select()
-      .from(companyStakeholders)
-      .where(eq(companyStakeholders.id, input.stakeholderId))
-      .limit(1);
-    const stakeholder = current[0];
-    if (!stakeholder || stakeholder.companyId !== input.companyId) {
-      throw new Error("Participação não encontrada.");
-    }
-    const others = await tx
-      .select()
-      .from(companyStakeholders)
-      .where(eq(companyStakeholders.companyId, input.companyId));
-    const remaining = others.filter(row => row.id !== input.stakeholderId);
+  return withAdvisoryLock(
+    requireDatabase(),
+    "STAKEHOLDER_PERCENT",
+    input.companyId,
+    async (tx) => {
+      const current = await tx
+        .select()
+        .from(companyStakeholders)
+        .where(eq(companyStakeholders.id, input.stakeholderId))
+        .limit(1);
+      const stakeholder = current[0];
+      if (!stakeholder || stakeholder.companyId !== input.companyId) {
+        throw new Error("Participação não encontrada.");
+      }
+      const others = await tx
+        .select()
+        .from(companyStakeholders)
+        .where(eq(companyStakeholders.companyId, input.companyId));
+      const remaining = others.filter(row => row.id !== input.stakeholderId);
 
-    const personId = input.personId !== undefined ? input.personId : stakeholder.personId;
-    const externalName =
-      input.externalName !== undefined
-        ? input.externalName.trim() || null
-        : stakeholder.externalName;
-    if (!personId && !externalName) {
-      throw new Error("Informe um membro da família ou o nome do não-membro.");
-    }
-    if (personId && remaining.some(row => row.personId === personId)) {
-      throw new Error("Este membro já participa da sociedade.");
-    }
-    if (
-      externalName &&
-      remaining.some(row => normalizeName(row.externalName) === normalizeName(externalName))
-    ) {
-      throw new Error("Este não-membro já participa da sociedade.");
-    }
+      const personId = input.personId !== undefined ? input.personId : stakeholder.personId;
+      const externalName =
+        input.externalName !== undefined
+          ? input.externalName.trim() || null
+          : stakeholder.externalName;
+      if (!personId && !externalName) {
+        throw new Error("Informe um membro da família ou o nome do não-membro.");
+      }
+      if (personId && remaining.some(row => row.personId === personId)) {
+        throw new Error("Este membro já participa da sociedade.");
+      }
+      if (
+        externalName &&
+        remaining.some(row => normalizeName(row.externalName) === normalizeName(externalName))
+      ) {
+        throw new Error("Este não-membro já participa da sociedade.");
+      }
 
-    const percentage = input.percentage ?? Number(stakeholder.percentage);
-    const total = totalPercentage(remaining) + percentage;
-    if (total > 100 + PCT_EPSILON) {
-      throw new Error(
-        `A soma das participações não pode passar de 100% (atual ${totalPercentage(remaining)}%).`
-      );
-    }
+      const percentage = input.percentage ?? Number(stakeholder.percentage);
+      const total = totalPercentage(remaining) + percentage;
+      if (total > 100 + PCT_EPSILON) {
+        throw new Error(
+          `A soma das participações não pode passar de 100% (atual ${totalPercentage(remaining)}%).`
+        );
+      }
 
-    await tx
-      .update(companyStakeholders)
-      .set({ personId, externalName, percentage: percentage.toFixed(2) })
-      .where(eq(companyStakeholders.id, input.stakeholderId));
-  });
+      await tx
+        .update(companyStakeholders)
+        .set({ personId, externalName, percentage: percentage.toFixed(2) })
+        .where(eq(companyStakeholders.id, input.stakeholderId));
+    }
+  );
 }
 
 export async function removeStakeholderRecord(

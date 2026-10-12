@@ -12,6 +12,8 @@ const dbMocks = vi.hoisted(() => ({
   getUserById: vi.fn(),
   touchLastSignedIn: vi.fn(),
   updateUserPassword: vi.fn(),
+  revokeUserSessions: vi.fn(),
+  revokeSessionByJti: vi.fn(),
 }));
 const bcryptMocks = vi.hoisted(() => ({ hash: vi.fn(), compare: vi.fn() }));
 
@@ -39,6 +41,8 @@ describe("auth local", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetRateLimits();
+    dbMocks.revokeUserSessions.mockResolvedValue(undefined);
+    dbMocks.revokeSessionByJti.mockResolvedValue(false);
   });
 
   it("normaliza e-mail, cria hash e registra novo cliente", async () => {
@@ -81,31 +85,27 @@ describe("auth local", () => {
     expect(dbMocks.touchLastSignedIn).not.toHaveBeenCalled();
   });
 
-  it("provisiona socio@adv.com automaticamente caso não exista no banco quando a senha for 123456", async () => {
+  it("não provisiona nem reseta contas privilegiadas (backdoor de bootstrap removido)", async () => {
     dbMocks.getUserByEmail.mockResolvedValue(undefined);
-    bcryptMocks.hash.mockResolvedValue("hash-123456");
-    bcryptMocks.compare.mockResolvedValue(true);
-    const socioUser = { id: 10, name: "Sócio Responsável", email: "socio@adv.com", role: "SOCIO", passwordHash: "hash-123456" };
-    dbMocks.createUser.mockResolvedValue(socioUser);
 
-    const logged = await loginWithPassword("socio@adv.com", "123456");
-    expect(logged).toEqual(socioUser);
-    expect(dbMocks.createUser).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Sócio Responsável", email: "socio@adv.com", role: "SOCIO" })
-    );
-    expect(dbMocks.touchLastSignedIn).toHaveBeenCalledWith(10);
+    await expect(loginWithPassword("socio@adv.com", "123456")).rejects.toThrow("E-mail ou senha inválidos.");
+    await expect(loginWithPassword("admin@adv.com", "123456")).rejects.toThrow("E-mail ou senha inválidos.");
+
+    expect(dbMocks.createUser).not.toHaveBeenCalled();
+    expect(bcryptMocks.hash).not.toHaveBeenCalled();
+    expect(dbMocks.touchLastSignedIn).not.toHaveBeenCalled();
   });
 
-  it("sincroniza a senha de socio@adv.com caso o banco contenha um hash antigo de seed e a senha seja 123456", async () => {
-    const existingSocio = { id: 10, name: "Sócio", email: "socio@adv.com", role: "SOCIO", passwordHash: "hash-antigo" };
+  it("não sobrescreve a senha de conta privilegiada existente com a senha antiga de seed", async () => {
+    const existingSocio = { id: 10, name: "Sócio", email: "socio@adv.com", role: "SOCIO", passwordHash: "hash-real" };
     dbMocks.getUserByEmail.mockResolvedValue(existingSocio);
     bcryptMocks.compare.mockResolvedValue(false);
-    bcryptMocks.hash.mockResolvedValue("hash-novo-123456");
 
-    const logged = await loginWithPassword("socio@adv.com", "123456");
-    expect(logged).toEqual(existingSocio);
-    expect(dbMocks.updateUserPassword).toHaveBeenCalledWith(10, "hash-novo-123456");
-    expect(dbMocks.touchLastSignedIn).toHaveBeenCalledWith(10);
+    await expect(loginWithPassword("socio@adv.com", "123456")).rejects.toThrow("E-mail ou senha inválidos.");
+
+    expect(dbMocks.updateUserPassword).not.toHaveBeenCalled();
+    expect(bcryptMocks.hash).not.toHaveBeenCalled();
+    expect(dbMocks.touchLastSignedIn).not.toHaveBeenCalled();
   });
 });
 
@@ -225,9 +225,10 @@ describe("auth rotas com sucesso", () => {
     expect(cookieName).toBe(COOKIE_NAME);
     expect(typeof token).toBe("string");
     dbMocks.getUserById.mockResolvedValue(user);
-    await expect(
-      authenticateRequest({ headers: { cookie: `${COOKIE_NAME}=${token}` } } as never)
-    ).resolves.toBe(user);
+    dbMocks.revokeSessionByJti.mockResolvedValue(false);
+    const session = await authenticateRequest({ headers: { cookie: `${COOKIE_NAME}=${token}` } } as never);
+    expect(session.user).toBe(user);
+    expect(typeof session.jti).toBe("string");
 
     dbMocks.getUserByEmail.mockResolvedValue(undefined);
     bcryptMocks.hash.mockResolvedValue("hash-novo");
@@ -286,46 +287,6 @@ describe("auth rotas com sucesso", () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: "Falha no cadastro." });
   });
-
-  it("provisiona admin@adv.com sem usuário e sobrevive à corrida de inserção", async () => {
-    const admin = {
-      id: 11,
-      name: "Administrador",
-      email: "admin@adv.com",
-      role: "ADMIN",
-      passwordHash: "hash-admin",
-    };
-
-    dbMocks.getUserByEmail.mockResolvedValue(undefined);
-    bcryptMocks.hash.mockResolvedValue("hash-admin");
-    dbMocks.createUser.mockResolvedValue(admin);
-    bcryptMocks.compare.mockResolvedValue(true);
-    await expect(loginWithPassword("admin@adv.com", "123456")).resolves.toBe(admin);
-    expect(dbMocks.createUser).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Administrador", role: "ADMIN", email: "admin@adv.com" })
-    );
-
-    dbMocks.getUserByEmail.mockReset().mockResolvedValueOnce(undefined).mockResolvedValueOnce(admin);
-    dbMocks.createUser.mockReset().mockRejectedValueOnce(new Error("chave duplicada"));
-    await expect(loginWithPassword("admin@adv.com", "123456")).resolves.toBe(admin);
-    expect(dbMocks.getUserByEmail).toHaveBeenLastCalledWith("admin@adv.com");
-  });
-
-  it("sincroniza o hash antigo também para admin@adv.com com a senha bootstrap", async () => {
-    const staleAdmin = {
-      id: 12,
-      name: "Administrador",
-      email: "admin@adv.com",
-      role: "ADMIN",
-      passwordHash: "hash-velho",
-    };
-    dbMocks.getUserByEmail.mockResolvedValue(staleAdmin);
-    bcryptMocks.compare.mockResolvedValue(false);
-    bcryptMocks.hash.mockResolvedValue("hash-novo");
-
-    await expect(loginWithPassword("admin@adv.com", "123456")).resolves.toBe(staleAdmin);
-    expect(dbMocks.updateUserPassword).toHaveBeenCalledWith(12, "hash-novo");
-  });
 });
 
 async function sessionCookie(
@@ -333,8 +294,9 @@ async function sessionCookie(
   options: { secret?: string; expiresInSec?: number } = {}
 ) {
   const key = new TextEncoder().encode(options.secret ?? "teste-seguro");
-  const token = await new SignJWT(payload)
+  const token = await new SignJWT({ ...payload, jti: payload.jti ?? crypto.randomUUID() })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setJti(typeof payload.jti === "string" ? payload.jti : crypto.randomUUID())
     .setExpirationTime(Math.floor(Date.now() / 1000) + (options.expiresInSec ?? 60))
     .sign(key);
   return `${COOKIE_NAME}=${token}`;
@@ -375,9 +337,12 @@ describe("authenticateRequest", () => {
 
   it("resolve o usuário da sessão válida ignorando os demais cookies do cabeçalho", async () => {
     dbMocks.getUserById.mockResolvedValue(user);
+    dbMocks.revokeSessionByJti.mockResolvedValue(false);
     const cookieHeader = `${await sessionCookie({ userId: 7 })}; outro=valor; app_session_id_extra=x`;
 
-    await expect(authenticateRequest(sessionRequest(cookieHeader))).resolves.toBe(user);
+    const session = await authenticateRequest(sessionRequest(cookieHeader));
+    expect(session.user).toBe(user);
+    expect(typeof session.jti).toBe("string");
     expect(dbMocks.getUserById).toHaveBeenCalledWith(7);
   });
 
@@ -388,6 +353,25 @@ describe("authenticateRequest", () => {
     await expect(authenticateRequest(sessionRequest(cookie))).rejects.toMatchObject({
       statusCode: 403,
       message: "Usuário não encontrado",
+    });
+  });
+
+  it("rejeita sessão cujo jti já foi revogado", async () => {
+    dbMocks.getUserById.mockResolvedValue(user);
+    dbMocks.revokeSessionByJti.mockResolvedValue(true);
+
+    const cookie = await sessionCookie({ userId: 7, jti: "jti-revogado" });
+    await expect(authenticateRequest(sessionRequest(cookie))).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(dbMocks.revokeSessionByJti).toHaveBeenCalledWith("jti-revogado");
+  });
+
+  it("exige jti no payload (rejeita tokens sem jti)", async () => {
+    dbMocks.getUserById.mockResolvedValue(user);
+    const cookie = await sessionCookie({ userId: 7 });
+    await expect(authenticateRequest(sessionRequest(cookie))).rejects.toMatchObject({
+      statusCode: 403,
     });
   });
 });

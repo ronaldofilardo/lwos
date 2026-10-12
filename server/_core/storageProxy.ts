@@ -24,9 +24,10 @@ const MIME_BY_EXT: Record<string, string> = {
  */
 export function registerStorageProxy(app: Express) {
   app.get(["/api/local-storage/*", "/local-storage/*"], async (req, res) => {
-    let user;
+    let user: { id: number; role: string } | null = null;
     try {
-      user = await authenticateRequest(req);
+      const session = await authenticateRequest(req);
+      user = session.user as { id: number; role: string };
     } catch {
       res.status(401).send("Não autenticado.");
       return;
@@ -52,7 +53,7 @@ export function registerStorageProxy(app: Express) {
         return;
       }
     } else {
-      const allowed = await userHasFamilyAccess(user, versionInfo.familyId);
+      const allowed = await userHasFamilyAccess(user as never, versionInfo.familyId);
       if (!allowed) {
         res.status(403).send("Acesso não autorizado a este documento.");
         return;
@@ -77,4 +78,3 @@ export function registerStorageProxy(app: Express) {
     }
   });
 }
-

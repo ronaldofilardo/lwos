@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/trpcError";
 
 export function LwrPanel({ familyId }: { familyId: string }) {
   const utils = trpc.useUtils();
@@ -20,7 +21,7 @@ export function LwrPanel({ familyId }: { familyId: string }) {
       setCanvaUrl("");
       toast.success("Versão do Lucathi Wealth Report (LWR) registrada.");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const ready = structure.trim().length >= 10;

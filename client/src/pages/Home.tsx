@@ -4,18 +4,20 @@ import { useEffect } from "react";
 import { MetricCard } from "@/components/lucathi/MetricCard";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { isClient } from "@shared/domain/permissions";
 
 export default function Home() {
   const { user, loading } = useAuth();
   const [, navigate] = useLocation();
+  const isClientFlag = isClient(user?.role);
 
   // CLIENTE não tem o que fazer nessa landing (é o painel/CTA do time) —
   // manda direto pra própria visão geral dele.
   useEffect(() => {
-    if (!loading && user?.role === "CLIENTE") navigate("/dashboard");
-  }, [loading, user, navigate]);
+    if (!loading && isClientFlag) navigate("/dashboard");
+  }, [loading, isClientFlag, navigate]);
 
-  if (loading || user?.role === "CLIENTE") return null;
+  if (loading || isClientFlag) return null;
 
   const families = trpc.families.list.useQuery();
   const total = families.data?.length ?? 0;

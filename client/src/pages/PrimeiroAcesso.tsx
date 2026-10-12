@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertCircle, Lock, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 
 export default function PrimeiroAcesso() {
   const searchParams = new URLSearchParams(window.location.search);
@@ -12,7 +13,7 @@ export default function PrimeiroAcesso() {
     onSuccess: () => {
       window.location.href = "/";
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(errorMessage(error)),
   });
 
   const [password, setNewPassword] = useState("");
@@ -22,7 +23,7 @@ export default function PrimeiroAcesso() {
   if (!token) return <div className="min-h-screen flex items-center justify-center"><div className="text-center max-w-md"><AlertCircle className="mx-auto size-12 text-red-500" /><h1 className="mt-4 text-2xl font-display">Link inválido</h1><p className="mt-2 text-lucathi-gray">Token não fornecido.</p></div></div>;
   if (verify.isLoading) return <div className="min-h-screen flex items-center justify-center"><p>Verificando identidade…</p></div>;
   if (verify.isError) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="text-center max-w-md"><AlertCircle className="mx-auto size-12 text-red-500" /><h1 className="mt-4 text-2xl font-display">Link inválido</h1><p className="mt-2 text-lucathi-gray">{verify.error?.message ?? "Não foi possível verificar sua identidade."}</p></div></div>;
+    return <div className="min-h-screen flex items-center justify-center"><div className="text-center max-w-md"><AlertCircle className="mx-auto size-12 text-red-500" /><h1 className="mt-4 text-2xl font-display">Link inválido</h1><p className="mt-2 text-lucathi-gray">{errorMessage(verify.error) || "Não foi possível verificar sua identidade."}</p></div></div>;
   }
 
   const person = verify.data;

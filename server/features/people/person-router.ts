@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../../_core/trpc";
-import { TEAM_ROLES } from "../../../shared/domain/roles";
-import { requireRole } from "../access/authorization";
+import { requirePermission } from "../access/authorization";
+import { Permission } from "../../../shared/domain/permissions";
 import { assertFamilyAccess } from "../access/family-access";
 import { recordAudit } from "../audit/audit-repository";
 import { ensureCertidoesForSubject } from "../certidoes/certidao-repository";
@@ -39,7 +39,8 @@ export const personRouter = router({
   create: protectedProcedure
     .input(personInputSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.PEOPLE_CREATE);
+      await assertFamilyAccess(ctx, input.familyId);
       const personId = await addPersonRecord(input);
       await ensureCertidoesForSubject({
         familyId: input.familyId,
@@ -60,7 +61,7 @@ export const personRouter = router({
   update: protectedProcedure
     .input(personUpdateSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.PEOPLE_UPDATE);
       await assertFamilyAccess(ctx, input.familyId);
       const result = await updatePersonRecord(input);
       const person = await getPersonRecord(input.personId);
@@ -97,7 +98,7 @@ export const personRouter = router({
   remove: protectedProcedure
     .input(removePersonSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.PEOPLE_REMOVE);
       await assertFamilyAccess(ctx, input.familyId);
       const result = await removePersonRecord(input.familyId, input.personId);
       await recordAudit({
@@ -113,7 +114,7 @@ export const personRouter = router({
   attachDocuments: protectedProcedure
     .input(attachDocumentsSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.PEOPLE_ATTACH_DOCUMENTS);
       await assertFamilyAccess(ctx, input.familyId);
       const person = await getPersonRecord(input.personId);
       if (!person || person.familyId !== input.familyId) {
@@ -155,7 +156,7 @@ export const personRouter = router({
   setPrimaryContact: protectedProcedure
     .input(setPrimaryContactSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = requireRole(ctx, TEAM_ROLES);
+      const user = requirePermission(ctx, Permission.PEOPLE_SET_PRIMARY_CONTACT);
       const { migratedFiles } = await setPrimaryContact(input);
       await recordAudit({
         action: "TITULAR_FAMILIA_DEFINIDO",
