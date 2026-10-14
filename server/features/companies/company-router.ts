@@ -16,10 +16,12 @@ import {
   getCompanyRecord,
   listCompanyRecords,
   listStakeholderRecords,
+  normalizeName,
+  removeCompanyRecord,
   removeStakeholderRecord,
   updateStakeholderRecord,
 } from "./company-repository";
-import { companyInputSchema } from "./company-types";
+import { companyInputSchema, removeCompanySchema } from "./company-types";
 import {
   companyDetailsIdSchema,
   companyDetailsUpsertSchema,
@@ -34,6 +36,8 @@ import {
   stakeholderInputSchema,
   stakeholderUpdateSchema,
 } from "./company-stakeholder";
+import { fetchCompanyByCnpj } from "./brasilapi-client";
+import { mapBrasilApiToCompanyData } from "./brasilapi-mapper";
 
 async function requireCompanyFamily(companyId: string) {
   const company = await getCompanyRecord(companyId);
@@ -42,6 +46,13 @@ async function requireCompanyFamily(companyId: string) {
 }
 
 export const companyRouter = router({
+  lookupCnpj: protectedProcedure
+    .input(z.object({ cnpj: z.string().min(14) }))
+    .query(async ({ input }) => {
+      const apiData = await fetchCompanyByCnpj(input.cnpj);
+      if (!apiData) return null;
+      return mapBrasilApiToCompanyData(apiData);
+    }),
   list: protectedProcedure.input(z.object({ familyId: z.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCompanyRecords(input.familyId);
@@ -54,7 +65,62 @@ export const companyRouter = router({
   create: protectedProcedure.input(companyInputSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.COMPANY_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
-    const companyId = await createCompanyRecord(input);
+
+    let finalLegalName = input.legalName;
+    let mappedData = null;
+    let fromApi = false;
+
+    if (!input.isOffshore && input.taxNumber) {
+      const apiData = await fetchCompanyByCnpj(input.taxNumber);
+      if (apiData) {
+        fromApi = true;
+        mappedData = mapBrasilApiToCompanyData(apiData);
+        if (mappedData.legalName) {
+          finalLegalName = mappedData.legalName;
+        }
+      }
+    }
+
+    const companyId = await createCompanyRecord({
+      ...input,
+      legalName: finalLegalName,
+    });
+
+    if (mappedData) {
+      await upsertCompanyDetailsRecord({
+        companyId,
+        fields: {
+          uf: mappedData.uf,
+          sede: mappedData.sede,
+          societaryType: mappedData.societaryType,
+          taxRegime: mappedData.taxRegime,
+          corporatePurpose: mappedData.corporatePurpose,
+          capitalSocial: mappedData.capitalSocial,
+          administrator1: mappedData.administrator1,
+          administrator2: mappedData.administrator2,
+        },
+      });
+
+      if (mappedData.stakeholders.length) {
+        const people = (await listPeopleByFamily(input.familyId)) ?? [];
+        for (const item of mappedData.stakeholders) {
+          try {
+            const match = people.find(
+              p => normalizeName(p.fullName) === normalizeName(item.name)
+            );
+            await createStakeholderRecord({
+              companyId,
+              personId: match?.id,
+              externalName: match ? undefined : item.name,
+              percentage: 0,
+            });
+          } catch {
+            // Ignora duplicidades pontuais de sócios
+          }
+        }
+      }
+    }
+
     // Certidões e requisitos nacionais não se aplicam a offshore.
     let requirementsCount = 0;
     if (!input.isOffshore) {
@@ -70,7 +136,7 @@ export const companyRouter = router({
       entityId: companyId,
       categories: computeCompanyCategories({
         isOffshore: input.isOffshore,
-        societaryType: null,
+        societaryType: mappedData?.societaryType ?? null,
       }),
     });
     requirementsCount = reconciled.created;
@@ -80,9 +146,23 @@ export const companyRouter = router({
       entityId: companyId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { isOffshore: input.isOffshore, requirements: requirementsCount },
+      metadata: { isOffshore: input.isOffshore, requirements: requirementsCount, fromApi },
     });
-    return { companyId };
+    return { companyId, fromApi };
+  }),
+  remove: protectedProcedure.input(removeCompanySchema).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.COMPANY_REMOVE);
+    await assertFamilyAccess(ctx, input.familyId);
+    const result = await removeCompanyRecord(input.familyId, input.companyId);
+    await recordAudit({
+      action: "SOCIEDADE_EXCLUIDA",
+      entityType: "SOCIEDADE",
+      entityId: input.companyId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: { archivedDocuments: result.archivedDocuments },
+    });
+    return result;
   }),
   addStakeholder: protectedProcedure.input(stakeholderInputSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.COMPANY_ADD_STAKEHOLDER);

@@ -6,7 +6,7 @@ export const stakeholderInputSchema = z
     // Sócio membro da família (people) OU não-membro informado em externalName.
     personId: z.string().min(1).optional(),
     externalName: z.string().min(2).max(160).optional(),
-    percentage: z.number().positive().max(100),
+    percentage: z.number().min(0).max(100),
   })
   .refine(data => Boolean(data.personId || data.externalName?.trim()), {
     message: "Informe um membro da família ou o nome do não-membro.",
@@ -19,7 +19,7 @@ export const stakeholderUpdateSchema = z
     stakeholderId: z.string().min(1),
     personId: z.string().min(1).optional(),
     externalName: z.string().min(2).max(160).optional(),
-    percentage: z.number().positive().max(100).optional(),
+    percentage: z.number().min(0).max(100).optional(),
   })
   .refine(
     data =>

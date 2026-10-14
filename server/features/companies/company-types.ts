@@ -41,3 +41,8 @@ export const companyInputSchema = z
       });
     }
   });
+
+export const removeCompanySchema = z.object({
+  familyId: z.string().min(1),
+  companyId: z.string().min(1),
+});

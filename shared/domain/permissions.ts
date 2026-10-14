@@ -1,8 +1,8 @@
 import { type AppRole, APP_ROLES } from "./roles";
 
 /**
- * Permissıes granulares ó cada uma È uma aÁ„o sobre uma entidade.
- * A matriz define qual papel pode executar cada aÁ„o.
+ * Permiss√µes granulares ¬ó cada uma √© uma a√ß√£o sobre uma entidade.
+ * A matriz define qual papel pode executar cada a√ß√£o.
  */
 export const Permission = {
   // Pessoas
@@ -30,6 +30,7 @@ export const Permission = {
   
   // Sociedades
   COMPANY_CREATE: "company.create" as const,
+  COMPANY_REMOVE: "company.remove" as const,
   COMPANY_ADD_STAKEHOLDER: "company.addStakeholder" as const,
   COMPANY_UPDATE_STAKEHOLDER: "company.updateStakeholder" as const,
   COMPANY_REMOVE_STAKEHOLDER: "company.removeStakeholder" as const,
@@ -40,7 +41,7 @@ export const Permission = {
   ASSET_UPDATE: "asset.update" as const,
   ASSET_REMOVE: "asset.remove" as const,
   
-  // Certidıes
+  // Certid√µes
   CERTIDAO_GENERATE: "certidao.generate" as const,
   CERTIDAO_UPDATE_STATUS: "certidao.updateStatus" as const,
   
@@ -53,7 +54,7 @@ export const Permission = {
   PORTAL_LIST_LINKS: "portal.listLinks" as const,
   PORTAL_REVOKE_LINK: "portal.revokeLink" as const,
   
-  // FamÌlias
+  // Fam√≠lias
   FAMILY_CREATE: "family.create" as const,
   FAMILY_UPDATE_STATUS: "family.updateStatus" as const,
   FAMILY_GRANT_CLIENT_ACCESS: "family.grantClientAccess" as const,
@@ -70,7 +71,7 @@ export const Permission = {
   LEAD_ACCEPT: "lead.accept" as const,
   LEAD_REJECT: "lead.reject" as const,
   
-  // Usu·rios
+  // Usu√°rios
   USER_LIST: "user.list" as const,
   USER_CHANGE_ROLE: "user.changeRole" as const,
   
@@ -81,11 +82,11 @@ export const Permission = {
 export type Permission = (typeof Permission)[keyof typeof Permission];
 
 /**
- * Matriz de permissıes: papel -> conjunto de permissıes permitidas.
+ * Matriz de permiss√µes: papel -> conjunto de permiss√µes permitidas.
  */
 const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
   SOCIO: [
-    // Todas as permissıes
+    // Todas as permiss√µes
     ...Object.values(Permission),
   ],
   ANALISTA: [
@@ -109,6 +110,7 @@ const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
     Permission.DOCUMENT_UPLOAD_BALANCE,
     // Sociedades
     Permission.COMPANY_CREATE,
+    Permission.COMPANY_REMOVE,
     Permission.COMPANY_ADD_STAKEHOLDER,
     Permission.COMPANY_UPDATE_STAKEHOLDER,
     Permission.COMPANY_REMOVE_STAKEHOLDER,
@@ -117,7 +119,7 @@ const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
     Permission.ASSET_CREATE,
     Permission.ASSET_UPDATE,
     Permission.ASSET_REMOVE,
-    // Certidıes
+    // Certid√µes
     Permission.CERTIDAO_GENERATE,
     // Propostas
     Permission.PROPOSAL_CREATE,
@@ -125,7 +127,7 @@ const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
     Permission.LWR_CREATE,
   ],
   ADMIN: [
-    // FamÌlias
+    // Fam√≠lias
     Permission.FAMILY_GET_DASHBOARD,
     Permission.FAMILY_LIST_STORAGE,
     // Auditoria
@@ -152,6 +154,7 @@ const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
     Permission.DOCUMENT_UPLOAD_BALANCE,
     // Sociedades
     Permission.COMPANY_CREATE,
+    Permission.COMPANY_REMOVE,
     Permission.COMPANY_ADD_STAKEHOLDER,
     Permission.COMPANY_UPDATE_STAKEHOLDER,
     Permission.COMPANY_REMOVE_STAKEHOLDER,
@@ -160,7 +163,7 @@ const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
     Permission.ASSET_CREATE,
     Permission.ASSET_UPDATE,
     Permission.ASSET_REMOVE,
-    // Certidıes
+    // Certid√µes
     Permission.CERTIDAO_GENERATE,
     // Propostas
     Permission.PROPOSAL_CREATE,
@@ -171,14 +174,14 @@ const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
 };
 
 /**
- * Verifica se um papel possui uma permiss„o especÌfica.
+ * Verifica se um papel possui uma permiss√£o espec√≠fica.
  */
 export function hasPermission(role: AppRole, permission: Permission): boolean {
   return PERMISSION_MATRIX[role].includes(permission);
 }
 
 /**
- * Verifica se o usu·rio autenticado possui uma permiss„o.
+ * Verifica se o usu√°rio autenticado possui uma permiss√£o.
  */
 export function userHasPermission(user: { role: AppRole } | null | undefined, permission: Permission): boolean {
   if (!user) return false;
@@ -186,7 +189,7 @@ export function userHasPermission(user: { role: AppRole } | null | undefined, pe
 }
 
 /**
- * Derivadores de UI ó substituem os inline checks espalhados.
+ * Derivadores de UI ¬ó substituem os inline checks espalhados.
  */
 export function canEdit(role: AppRole | null | undefined): boolean {
   return role === "SOCIO" || role === "ANALISTA";

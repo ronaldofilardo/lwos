@@ -1,5 +1,12 @@
-import { eq } from "drizzle-orm";
-import { companyDetails, companies, companyStakeholders } from "../../../drizzle/schema";
+import { and, eq } from "drizzle-orm";
+import {
+  certidoes,
+  companies,
+  companyDetails,
+  companyStakeholders,
+  documents,
+  propertyOwners,
+} from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import type { z } from "zod";
@@ -24,7 +31,7 @@ function totalPercentage(rows: StakeholderRow[]) {
   return rows.reduce((sum, row) => sum + Number(row.percentage ?? 0), 0);
 }
 
-function normalizeName(name: string | null) {
+export function normalizeName(name: string | null) {
   const withoutAccents = (name ?? "")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
@@ -182,4 +189,76 @@ export async function removeStakeholderRecord(
     throw new Error("Participação não encontrada.");
   }
   return row.id;
+}
+
+export async function removeCompanyRecord(
+  familyId: string,
+  companyId: string
+): Promise<{ archivedDocuments: number }> {
+  const db = await requireDatabase();
+
+  const [company] = await db
+    .select()
+    .from(companies)
+    .where(and(eq(companies.id, companyId), eq(companies.familyId, familyId)))
+    .limit(1);
+  if (!company) throw new Error("Sociedade não encontrada nesta família.");
+
+  const [owner] = await db
+    .select({ id: propertyOwners.id })
+    .from(propertyOwners)
+    .where(eq(propertyOwners.companyId, companyId))
+    .limit(1);
+  if (owner) {
+    throw new Error(
+      "Não é possível excluir: a sociedade é titular de imóvel. Remova a titularidade antes."
+    );
+  }
+
+  const documentsToArchive = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.familyId, familyId),
+        eq(documents.entityType, "SOCIEDADE"),
+        eq(documents.entityId, companyId)
+      )
+    );
+  if (documentsToArchive.length) {
+    await db
+      .update(documents)
+      .set({ status: "DISPENSADO" })
+      .where(
+        and(
+          eq(documents.familyId, familyId),
+          eq(documents.entityType, "SOCIEDADE"),
+          eq(documents.entityId, companyId)
+        )
+      );
+  }
+
+  await db
+    .delete(certidoes)
+    .where(
+      and(
+        eq(certidoes.familyId, familyId),
+        eq(certidoes.scope, "SOCIEDADE"),
+        eq(certidoes.subjectId, companyId)
+      )
+    );
+
+  await db
+    .delete(companyStakeholders)
+    .where(eq(companyStakeholders.companyId, companyId));
+
+  await db
+    .delete(companyDetails)
+    .where(eq(companyDetails.companyId, companyId));
+
+  await db
+    .delete(companies)
+    .where(eq(companies.id, companyId));
+
+  return { archivedDocuments: documentsToArchive.length };
 }

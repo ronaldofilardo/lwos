@@ -11,6 +11,7 @@ const repoMocks = vi.hoisted(() => ({
   getCompanyRecord: vi.fn(),
   listCompanyRecords: vi.fn(),
   listStakeholderRecords: vi.fn(),
+  removeCompanyRecord: vi.fn(),
   removeStakeholderRecord: vi.fn(),
   updateStakeholderRecord: vi.fn(),
 }));
@@ -29,6 +30,7 @@ const docRequirementMocks = vi.hoisted(() => ({
 }));
 const peopleMocks = vi.hoisted(() => ({ listPeopleByFamily: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
+const brasilApiMocks = vi.hoisted(() => ({ fetchCompanyByCnpj: vi.fn() }));
 
 vi.mock("./company-repository", () => repoMocks);
 vi.mock("./company-details-repository", () => detailsMocks);
@@ -36,6 +38,7 @@ vi.mock("../certidoes/certidao-repository", () => certidaoMocks);
 vi.mock("../documents/document-requirements", () => docRequirementMocks);
 vi.mock("../people/person-repository", () => peopleMocks);
 vi.mock("../audit/audit-repository", () => auditMocks);
+vi.mock("./brasilapi-client", () => brasilApiMocks);
 
 import { companyRouter } from "./company-router";
 
@@ -129,6 +132,7 @@ describe("company-router mutações", () => {
     repoMocks.createStakeholderRecord.mockResolvedValue("st-9");
     repoMocks.updateStakeholderRecord.mockResolvedValue(undefined);
     repoMocks.removeStakeholderRecord.mockResolvedValue(undefined);
+    repoMocks.removeCompanyRecord.mockResolvedValue({ archivedDocuments: 0 });
     certidaoMocks.ensureCertidoesForSubject.mockResolvedValue(undefined);
     docRequirementMocks.reconcileEntityDocuments.mockResolvedValue({
       created: 2,
@@ -139,6 +143,8 @@ describe("company-router mutações", () => {
     ]);
     detailsMocks.upsertCompanyDetailsRecord.mockResolvedValue(undefined);
     auditMocks.recordAudit.mockResolvedValue(undefined);
+    brasilApiMocks.fetchCompanyByCnpj.mockResolvedValue(null);
+    peopleMocks.listPeopleByFamily.mockResolvedValue([]);
   });
 
   it("cria a sociedade, gera certidões/requisitos e audita", async () => {
@@ -149,7 +155,7 @@ describe("company-router mutações", () => {
       isOffshore: false,
     });
 
-    expect(result).toEqual({ companyId: "soc-9" });
+    expect(result).toEqual({ companyId: "soc-9", fromApi: false });
     expect(certidaoMocks.ensureCertidoesForSubject).toHaveBeenCalledWith({
       familyId: "fam-1",
       scope: "SOCIEDADE",
@@ -165,7 +171,51 @@ describe("company-router mutações", () => {
       expect.objectContaining({
         action: "SOCIEDADE_CRIADA",
         actorUserId: 1,
-        metadata: { isOffshore: false, requirements: 2 },
+        metadata: { isOffshore: false, requirements: 2, fromApi: false },
+      })
+    );
+  });
+
+  it("cria a sociedade preenchendo dados oficiais quando a BrasilAPI responde", async () => {
+    brasilApiMocks.fetchCompanyByCnpj.mockResolvedValue({
+      cnpj: "11222333000181",
+      razao_social: "OFICIAL HOLDING LTDA",
+      uf: "SP",
+      codigo_natureza_juridica: 2062,
+      natureza_juridica: "Sociedade Empresária Limitada",
+      capital_social: 100000,
+      qsa: [{ nome_socio: "Carlos Sócio", qualificacao_socio: "Sócio-Administrador" }],
+    });
+
+    const result = await caller().create({
+      familyId: "fam-1",
+      legalName: "Nome Digitado",
+      taxNumber: "11222333000181",
+      isOffshore: false,
+    });
+
+    expect(result).toEqual({ companyId: "soc-9", fromApi: true });
+    expect(repoMocks.createCompanyRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        legalName: "OFICIAL HOLDING LTDA",
+      })
+    );
+    expect(detailsMocks.upsertCompanyDetailsRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "soc-9",
+        fields: expect.objectContaining({
+          uf: "SP",
+          societaryType: "LTDA",
+          capitalSocial: 100000,
+          administrator1: "Carlos Sócio",
+        }),
+      })
+    );
+    expect(repoMocks.createStakeholderRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "soc-9",
+        externalName: "Carlos Sócio",
+        percentage: 0,
       })
     );
   });
@@ -200,7 +250,31 @@ describe("company-router mutações", () => {
   it("cria offshore sem CNPJ", async () => {
     await expect(
       caller().create({ familyId: "fam-1", legalName: "Hold Off", isOffshore: true })
-    ).resolves.toEqual({ companyId: "soc-9" });
+    ).resolves.toEqual({ companyId: "soc-9", fromApi: false });
+  });
+
+  it("exclui a sociedade e audita", async () => {
+    repoMocks.removeCompanyRecord.mockResolvedValue({ archivedDocuments: 1 });
+    const result = await caller().remove({
+      familyId: "fam-1",
+      companyId: "soc-1",
+    });
+
+    expect(result).toEqual({ archivedDocuments: 1 });
+    expect(repoMocks.removeCompanyRecord).toHaveBeenCalledWith("fam-1", "soc-1");
+    expect(auditMocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "SOCIEDADE_EXCLUIDA",
+        entityType: "SOCIEDADE",
+        entityId: "soc-1",
+      })
+    );
+  });
+
+  it("bloqueia exclusao de sociedade para cliente", async () => {
+    await expect(
+      caller("CLIENTE").remove({ familyId: "fam-1", companyId: "soc-1" })
+    ).rejects.toThrow("Permissão insuficiente.");
   });
 
   it("adiciona participacao de membro e de nao-membro com metadados distintos", async () => {

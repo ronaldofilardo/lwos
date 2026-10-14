@@ -3,6 +3,14 @@ import { Building2, Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { errorMessage } from "@/lib/trpcError";
 import { CompanyDetailsModal } from "./CompanyDetailsModal";
@@ -46,6 +54,13 @@ function StakeholderManager({
     onSuccess: () => {
       refresh();
       toast.success("Participação removida.");
+    },
+    onError,
+  });
+  const updateStakeholder = trpc.companies.updateStakeholder.useMutation({
+    onSuccess: () => {
+      refresh();
+      toast.success("Participação atualizada.");
     },
     onError,
   });
@@ -96,8 +111,33 @@ function StakeholderManager({
                 className="flex flex-wrap items-center gap-2 rounded-lg border border-lucathi-line/60 bg-white px-2.5 py-1.5 text-xs"
               >
                 <span className="font-medium text-lucathi-navy">{label}</span>
-                <span className="text-lucathi-gray">
-                  {row.percentage}%
+                <span className="flex items-center gap-1 text-lucathi-gray">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    defaultValue={row.percentage}
+                    key={row.percentage}
+                    onBlur={e => {
+                      const val = Number(e.target.value.replace(",", "."));
+                      if (!isNaN(val) && val !== Number(row.percentage)) {
+                        updateStakeholder.mutate({
+                          companyId,
+                          stakeholderId: row.id,
+                          percentage: val,
+                        });
+                      }
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    className="h-6 w-14 rounded border border-input bg-transparent px-1 text-right text-xs"
+                    title="Editar participação (%)"
+                  />
+                  %
                   {person ? "" : " · não-membro"}
                 </span>
                 <span className="text-lucathi-gray">
@@ -219,22 +259,54 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
   const [isOffshore, setIsOffshore] = useState(false);
   const [taxNumber, setTaxNumber] = useState("");
   const [detailsCompanyId, setDetailsCompanyId] = useState<string | null>(null);
+  const [removingCompany, setRemovingCompany] = useState<{
+    id: string;
+    legalName: string;
+  } | null>(null);
 
   const list = trpc.companies.list.useQuery({ familyId });
   const people = trpc.people.list.useQuery({ familyId });
   const { bySubject } = useProjectAlerts(familyId);
 
-  const create = trpc.companies.create.useMutation({
+  const removeCompany = trpc.companies.remove.useMutation({
     onSuccess: () => {
+      utils.companies.list.invalidate({ familyId });
+      utils.certidoes.list.invalidate({ familyId });
+      utils.documents.list.invalidate({ familyId });
+      setRemovingCompany(null);
+      toast.success("Sociedade excluída.");
+    },
+    onError: error => toast.error(errorMessage(error)),
+  });
+
+  const create = trpc.companies.create.useMutation({
+    onSuccess: (result) => {
       utils.companies.list.invalidate({ familyId });
       utils.certidoes.list.invalidate({ familyId });
       utils.documents.list.invalidate({ familyId });
       setName("");
       setTaxNumber("");
-      toast.success("Sociedade criada.");
+      if (result.fromApi) {
+        toast.success("Sociedade criada com dados oficiais da Receita Federal.");
+      } else {
+        toast.success("Sociedade criada.");
+      }
+      setDetailsCompanyId(result.companyId);
     },
     onError: (error) => toast.error(errorMessage(error)),
   });
+
+  const handleTaxNumberChange = (value: string) => {
+    setTaxNumber(value);
+    const cleaned = value.replace(/\D/g, "");
+    if (cleaned.length === 14 && !name.trim()) {
+      utils.companies.lookupCnpj.fetch({ cnpj: cleaned }).then(res => {
+        if (res?.legalName && !name.trim()) {
+          setName(res.legalName);
+        }
+      }).catch(() => {});
+    }
+  };
 
   return (
     <section className="rounded-2xl border border-lucathi-line bg-white p-6">
@@ -259,7 +331,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
         {isOffshore ? null : (
           <Input
             value={taxNumber}
-            onChange={e => setTaxNumber(e.target.value)}
+            onChange={e => handleTaxNumberChange(e.target.value)}
             placeholder="CNPJ"
           />
         )}
@@ -277,12 +349,13 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
         </label>
         <Button
           disabled={
-            !name || (!isOffshore && !taxNumber.trim()) || create.isPending
+            create.isPending ||
+            (isOffshore ? !name.trim() : !taxNumber.trim())
           }
           onClick={() =>
             create.mutate({
               familyId,
-              legalName: name,
+              legalName: name.trim() || "Nova Sociedade",
               taxNumber: taxNumber.trim() || undefined,
               isOffshore,
             })
@@ -318,14 +391,27 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
                     {simples ? " · Simples Nacional" : ""}
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 px-2 text-xs"
-                  onClick={() => setDetailsCompanyId(item.id)}
-                >
-                  <Info className="mr-1 size-3.5" /> Detalhes
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-2 text-xs"
+                    onClick={() => setDetailsCompanyId(item.id)}
+                  >
+                    <Info className="mr-1 size-3.5" /> Detalhes
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                    onClick={() =>
+                      setRemovingCompany({ id: item.id, legalName: item.legalName })
+                    }
+                    title="Excluir sociedade"
+                  >
+                    <Trash2 className="mr-1 size-3.5" /> Excluir
+                  </Button>
+                </div>
               </div>
               <StakeholderManager
                 companyId={item.id}
@@ -348,6 +434,44 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
         companyId={detailsCompanyId}
         onClose={() => setDetailsCompanyId(null)}
       />
+
+      <Dialog
+        open={Boolean(removingCompany)}
+        onOpenChange={open => !open && setRemovingCompany(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir sociedade</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir «{removingCompany?.legalName}»? Esta
+              ação removerá a ficha da sociedade e o quadro societário vinculado.
+              Documentos enviados permanecem arquivados.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setRemovingCompany(null)}
+              disabled={removeCompany.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={removeCompany.isPending}
+              onClick={() => {
+                if (!removingCompany) return;
+                removeCompany.mutate({
+                  familyId,
+                  companyId: removingCompany.id,
+                });
+              }}
+            >
+              {removeCompany.isPending ? "Excluindo…" : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
