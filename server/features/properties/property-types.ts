@@ -18,6 +18,7 @@ export const propertyInputSchema = z
     description: z.string().min(3, "Informe a descrição (mínimo 3 caracteres).").max(240),
     kind: propertyKindSchema.optional(),
     uf: ufSchema.optional(),
+    cep: z.string().max(8).optional().or(z.literal("")),
     hasRegistration: z.boolean().default(true),
     registrationNumber: z.string().max(120).optional(),
     alternativeDocType: z

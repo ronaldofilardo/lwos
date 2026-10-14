@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useCepLookup } from "@/shared/hooks/useCepLookup";
 import {
   isCpfValido,
   isNascimentoValido,
@@ -111,6 +112,7 @@ export function PersonForm({
   const [district, setDistrict] = useState(initial?.district ?? "");
   const [city, setCity] = useState(initial?.city ?? "");
   const [uf, setUf] = useState<Uf | "">(initial?.uf ?? "");
+  const { lookupCep, loading: loadingCep } = useCepLookup();
 
   const needsParent = vinculo === "NETO" || vinculo === "BISNETO";
   const showCivilStatus = vinculo !== "CONJUGE";
@@ -378,12 +380,29 @@ export function PersonForm({
         ) : null}
         {!addressSameAsPrimary || isTitular ? (
           <div className="grid gap-2 md:grid-cols-3">
-            <Input
-              value={cep}
-              onChange={e => setCep(e.target.value.replace(/\D/g, "").slice(0, 8))}
-              placeholder="CEP"
-              inputMode="numeric"
-            />
+            <div className="relative">
+              <Input
+                value={cep}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 8);
+                  setCep(val);
+                  if (val.length === 8) {
+                    lookupCep(val, addr => {
+                      if (addr.street) setStreet(addr.street);
+                      if (addr.complement && !complement) setComplement(addr.complement);
+                      if (addr.district) setDistrict(addr.district);
+                      if (addr.city) setCity(addr.city);
+                      if (addr.uf && UFS.includes(addr.uf as Uf)) setUf(addr.uf as Uf);
+                    });
+                  }
+                }}
+                placeholder={loadingCep ? "Buscando CEP..." : "CEP"}
+                inputMode="numeric"
+              />
+              {loadingCep ? (
+                <Loader2 className="absolute right-2.5 top-2.5 size-4 animate-spin text-muted-foreground" />
+              ) : null}
+            </div>
             <Input
               value={street}
               onChange={e => setStreet(e.target.value)}

@@ -459,6 +459,7 @@ var init_schema = __esm({
         registryCity: varchar("registryCity", { length: 120 }),
         propertyCity: varchar("propertyCity", { length: 120 }).notNull(),
         uf: varchar("uf", { length: 2 }),
+        cep: varchar("cep", { length: 8 }),
         notes: text("notes"),
         acquisitionDate: date("acquisitionDate"),
         irpfBalanceValue: decimal("irpfBalanceValue", { precision: 15, scale: 2 }),
@@ -631,6 +632,12 @@ var init_schema = __esm({
         nire: varchar("nire", { length: 20 }),
         uf: ufEnum("uf"),
         sede: varchar("sede", { length: 160 }),
+        cep: varchar("cep", { length: 8 }),
+        street: varchar("street", { length: 160 }),
+        number: varchar("number", { length: 20 }),
+        complement: varchar("complement", { length: 80 }),
+        district: varchar("district", { length: 80 }),
+        city: varchar("city", { length: 120 }),
         societaryType: societaryTypeEnum("societaryType"),
         taxRegime: taxRegimeEnum("taxRegime"),
         corporatePurpose: text("corporatePurpose"),
@@ -1986,6 +1993,7 @@ var Permission = {
   DOCUMENT_DISPENSE: "document.dispense",
   // Sociedades
   COMPANY_CREATE: "company.create",
+  COMPANY_REMOVE: "company.remove",
   COMPANY_ADD_STAKEHOLDER: "company.addStakeholder",
   COMPANY_UPDATE_STAKEHOLDER: "company.updateStakeholder",
   COMPANY_REMOVE_STAKEHOLDER: "company.removeStakeholder",
@@ -1994,7 +2002,7 @@ var Permission = {
   ASSET_CREATE: "asset.create",
   ASSET_UPDATE: "asset.update",
   ASSET_REMOVE: "asset.remove",
-  // Certidões
+  // CertidÃµes
   CERTIDAO_GENERATE: "certidao.generate",
   CERTIDAO_UPDATE_STATUS: "certidao.updateStatus",
   // Propostas
@@ -2004,7 +2012,7 @@ var Permission = {
   PORTAL_CREATE_LINK: "portal.createLink",
   PORTAL_LIST_LINKS: "portal.listLinks",
   PORTAL_REVOKE_LINK: "portal.revokeLink",
-  // Famílias
+  // FamÃ­lias
   FAMILY_CREATE: "family.create",
   FAMILY_UPDATE_STATUS: "family.updateStatus",
   FAMILY_GRANT_CLIENT_ACCESS: "family.grantClientAccess",
@@ -2018,7 +2026,7 @@ var Permission = {
   LEAD_LIST: "lead.list",
   LEAD_ACCEPT: "lead.accept",
   LEAD_REJECT: "lead.reject",
-  // Usuários
+  // UsuÃ¡rios
   USER_LIST: "user.list",
   USER_CHANGE_ROLE: "user.changeRole",
   // LWR
@@ -2026,7 +2034,7 @@ var Permission = {
 };
 var PERMISSION_MATRIX = {
   SOCIO: [
-    // Todas as permissões
+    // Todas as permissÃµes
     ...Object.values(Permission)
   ],
   ANALISTA: [
@@ -2050,6 +2058,7 @@ var PERMISSION_MATRIX = {
     Permission.DOCUMENT_UPLOAD_BALANCE,
     // Sociedades
     Permission.COMPANY_CREATE,
+    Permission.COMPANY_REMOVE,
     Permission.COMPANY_ADD_STAKEHOLDER,
     Permission.COMPANY_UPDATE_STAKEHOLDER,
     Permission.COMPANY_REMOVE_STAKEHOLDER,
@@ -2058,7 +2067,7 @@ var PERMISSION_MATRIX = {
     Permission.ASSET_CREATE,
     Permission.ASSET_UPDATE,
     Permission.ASSET_REMOVE,
-    // Certidões
+    // CertidÃµes
     Permission.CERTIDAO_GENERATE,
     // Propostas
     Permission.PROPOSAL_CREATE,
@@ -2066,7 +2075,7 @@ var PERMISSION_MATRIX = {
     Permission.LWR_CREATE
   ],
   ADMIN: [
-    // Famílias
+    // FamÃ­lias
     Permission.FAMILY_GET_DASHBOARD,
     Permission.FAMILY_LIST_STORAGE,
     // Auditoria
@@ -2093,6 +2102,7 @@ var PERMISSION_MATRIX = {
     Permission.DOCUMENT_UPLOAD_BALANCE,
     // Sociedades
     Permission.COMPANY_CREATE,
+    Permission.COMPANY_REMOVE,
     Permission.COMPANY_ADD_STAKEHOLDER,
     Permission.COMPANY_UPDATE_STAKEHOLDER,
     Permission.COMPANY_REMOVE_STAKEHOLDER,
@@ -2101,7 +2111,7 @@ var PERMISSION_MATRIX = {
     Permission.ASSET_CREATE,
     Permission.ASSET_UPDATE,
     Permission.ASSET_REMOVE,
-    // Certidões
+    // CertidÃµes
     Permission.CERTIDAO_GENERATE,
     // Propostas
     Permission.PROPOSAL_CREATE,
@@ -3246,7 +3256,7 @@ async function setPrimaryContact(input) {
 // server/features/companies/company-repository.ts
 init_schema();
 init_database();
-import { eq as eq13 } from "drizzle-orm";
+import { and as and10, eq as eq13 } from "drizzle-orm";
 
 // server/_shared/advisory-lock.ts
 import { sql as sql4 } from "drizzle-orm";
@@ -3404,6 +3414,44 @@ async function removeStakeholderRecord(input) {
   }
   return row.id;
 }
+async function removeCompanyRecord(familyId, companyId) {
+  const db = await requireDatabase();
+  const [company] = await db.select().from(companies).where(and10(eq13(companies.id, companyId), eq13(companies.familyId, familyId))).limit(1);
+  if (!company) throw new Error("Sociedade n\xE3o encontrada nesta fam\xEDlia.");
+  const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq13(propertyOwners.companyId, companyId)).limit(1);
+  if (owner) {
+    throw new Error(
+      "N\xE3o \xE9 poss\xEDvel excluir: a sociedade \xE9 titular de im\xF3vel. Remova a titularidade antes."
+    );
+  }
+  const documentsToArchive = await db.select({ id: documents.id }).from(documents).where(
+    and10(
+      eq13(documents.familyId, familyId),
+      eq13(documents.entityType, "SOCIEDADE"),
+      eq13(documents.entityId, companyId)
+    )
+  );
+  if (documentsToArchive.length) {
+    await db.update(documents).set({ status: "DISPENSADO" }).where(
+      and10(
+        eq13(documents.familyId, familyId),
+        eq13(documents.entityType, "SOCIEDADE"),
+        eq13(documents.entityId, companyId)
+      )
+    );
+  }
+  await db.delete(certidoes).where(
+    and10(
+      eq13(certidoes.familyId, familyId),
+      eq13(certidoes.scope, "SOCIEDADE"),
+      eq13(certidoes.subjectId, companyId)
+    )
+  );
+  await db.delete(companyStakeholders).where(eq13(companyStakeholders.companyId, companyId));
+  await db.delete(companyDetails).where(eq13(companyDetails.companyId, companyId));
+  await db.delete(companies).where(eq13(companies.id, companyId));
+  return { archivedDocuments: documentsToArchive.length };
+}
 
 // server/features/companies/company-types.ts
 import { z as z8 } from "zod";
@@ -3440,6 +3488,10 @@ var companyInputSchema = z8.object({
     });
   }
 });
+var removeCompanySchema = z8.object({
+  familyId: z8.string().min(1),
+  companyId: z8.string().min(1)
+});
 
 // server/features/companies/company-details.ts
 init_schema();
@@ -3451,6 +3503,12 @@ var companyDetailsFieldsSchema = z9.object({
   nire: text2(20),
   uf: z9.enum(UFS).nullish(),
   sede: text2(160),
+  cep: z9.string().max(8).transform((v) => v.replace(/\D/g, "") || null).nullish(),
+  street: text2(160),
+  number: text2(20),
+  complement: text2(80),
+  district: text2(80),
+  city: text2(120),
   societaryType: z9.enum(societaryTypeValues).nullish(),
   taxRegime: z9.enum(taxRegimeValues).nullish(),
   corporatePurpose: text2(4e3),
@@ -3500,6 +3558,12 @@ function detailValues(fields) {
     nire: text3(fields.nire),
     uf: fields.uf ?? null,
     sede: text3(fields.sede),
+    cep: text3(fields.cep),
+    street: text3(fields.street),
+    number: text3(fields.number),
+    complement: text3(fields.complement),
+    district: text3(fields.district),
+    city: text3(fields.city),
     societaryType: fields.societaryType ?? null,
     taxRegime: fields.taxRegime ?? null,
     corporatePurpose: text3(fields.corporatePurpose),
@@ -3564,7 +3628,7 @@ var stakeholderInputSchema = z10.object({
   // SÃ³cio membro da famÃ­lia (people) OU nÃ£o-membro informado em externalName.
   personId: z10.string().min(1).optional(),
   externalName: z10.string().min(2).max(160).optional(),
-  percentage: z10.number().positive().max(100)
+  percentage: z10.number().min(0).max(100)
 }).refine((data) => Boolean(data.personId || data.externalName?.trim()), {
   message: "Informe um membro da fam\xEDlia ou o nome do n\xE3o-membro.",
   path: ["personId"]
@@ -3574,7 +3638,7 @@ var stakeholderUpdateSchema = z10.object({
   stakeholderId: z10.string().min(1),
   personId: z10.string().min(1).optional(),
   externalName: z10.string().min(2).max(160).optional(),
-  percentage: z10.number().positive().max(100).optional()
+  percentage: z10.number().min(0).max(100).optional()
 }).refine(
   (data) => data.percentage !== void 0 || data.personId !== void 0 || data.externalName !== void 0,
   { message: "Nada para atualizar.", path: ["percentage"] }
@@ -3584,6 +3648,99 @@ var stakeholderDeleteSchema = z10.object({
   stakeholderId: z10.string().min(1)
 });
 
+// server/features/companies/brasilapi-client.ts
+var BRASIL_API_TIMEOUT_MS = 6e3;
+var BRASIL_API_BASE_URL = "https://brasilapi.com.br/api/cnpj/v1";
+var HTTP_USER_AGENT = "LWOS-App/1.0 (Family Office Platform; contato@lucathi.com.br)";
+async function fetchCompanyByCnpj(rawCnpj) {
+  const digits = rawCnpj.replace(/\D/g, "");
+  if (digits.length !== 14) {
+    return null;
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BRASIL_API_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${BRASIL_API_BASE_URL}/${digits}`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": HTTP_USER_AGENT
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return data && data.cnpj ? data : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// server/features/companies/brasilapi-mapper.ts
+init_uf();
+function resolveSocietaryType(code, desc12) {
+  const text3 = (desc12 ?? "").toUpperCase();
+  if (code === 2062 || text3.includes("LIMITADA") || text3.includes("LTDA")) return "LTDA";
+  if (code === 2046 || code === 2054 || text3.includes("ANONIMA") || text3.includes("AN\xD4NIMA")) return "SA";
+  if (text3.includes("CONTA DE PARTICIP") || text3.includes("SCP")) return "SCP";
+  return null;
+}
+function formatSede(data) {
+  const parts = [
+    data.descricao_tipo_de_logradouro ? `${data.descricao_tipo_de_logradouro} ${data.logradouro ?? ""}`.trim() : data.logradouro,
+    data.numero ? `n\xBA ${data.numero}` : null,
+    data.complemento,
+    data.bairro,
+    data.municipio && data.uf ? `${data.municipio}/${data.uf}` : data.municipio,
+    data.cep ? `CEP ${data.cep}` : null
+  ].filter(Boolean);
+  return parts.length ? parts.join(", ").slice(0, 160) : null;
+}
+function isAdminRole(qual) {
+  const q = (qual ?? "").toUpperCase();
+  return q.includes("ADMINISTRA") || q.includes("DIRETOR") || q.includes("PRESIDENTE");
+}
+function extractAdministrators(qsa) {
+  if (!qsa?.length) return [null, null];
+  const admins = qsa.filter((item) => Boolean(item.nome_socio?.trim()) && isAdminRole(item.qualificacao_socio)).map((item) => item.nome_socio.trim().slice(0, 120));
+  const fallback = qsa.filter((item) => Boolean(item.nome_socio?.trim())).map((item) => item.nome_socio.trim().slice(0, 120));
+  const pool = admins.length ? admins : fallback;
+  return [pool[0] ?? null, pool[1] ?? null];
+}
+function mapBrasilApiToCompanyData(data) {
+  const societaryType = resolveSocietaryType(
+    data.codigo_natureza_juridica,
+    data.natureza_juridica
+  );
+  const isSimples = data.opcao_pelo_simples === true && societaryType !== "SA";
+  const taxRegime = isSimples ? "SIMPLES_NACIONAL" : null;
+  const uf = data.uf && UFS.includes(data.uf) ? data.uf : null;
+  const [administrator1, administrator2] = extractAdministrators(data.qsa);
+  const stakeholders = (data.qsa ?? []).map((item) => item.nome_socio?.trim()).filter((name) => Boolean(name)).map((name) => ({ name: name.slice(0, 160), percentage: 0 }));
+  return {
+    legalName: data.razao_social?.trim() ? data.razao_social.trim().slice(0, 180) : null,
+    uf,
+    sede: formatSede(data),
+    cep: data.cep ? String(data.cep).replace(/\D/g, "").slice(0, 8) || null : null,
+    street: data.logradouro ? [data.descricao_tipo_de_logradouro, data.logradouro].filter(Boolean).join(" ").trim().slice(0, 160) : null,
+    number: data.numero ? String(data.numero).trim().slice(0, 20) : null,
+    complement: data.complemento ? data.complemento.trim().slice(0, 80) : null,
+    district: data.bairro ? data.bairro.trim().slice(0, 80) : null,
+    city: data.municipio ? data.municipio.trim().slice(0, 120) : null,
+    societaryType,
+    taxRegime,
+    corporatePurpose: data.cnae_fiscal_descricao?.trim() ? data.cnae_fiscal_descricao.trim().slice(0, 4e3) : null,
+    capitalSocial: typeof data.capital_social === "number" ? data.capital_social : null,
+    administrator1,
+    administrator2,
+    stakeholders
+  };
+}
+
 // server/features/companies/company-router.ts
 async function requireCompanyFamily(companyId) {
   const company = await getCompanyRecord(companyId);
@@ -3591,6 +3748,11 @@ async function requireCompanyFamily(companyId) {
   return company;
 }
 var companyRouter = router({
+  lookupCnpj: protectedProcedure.input(z11.object({ cnpj: z11.string().min(14) })).query(async ({ input }) => {
+    const apiData = await fetchCompanyByCnpj(input.cnpj);
+    if (!apiData) return null;
+    return mapBrasilApiToCompanyData(apiData);
+  }),
   list: protectedProcedure.input(z11.object({ familyId: z11.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCompanyRecords(input.familyId);
@@ -3603,7 +3765,61 @@ var companyRouter = router({
   create: protectedProcedure.input(companyInputSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.COMPANY_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
-    const companyId = await createCompanyRecord(input);
+    let finalLegalName = input.legalName;
+    let mappedData = null;
+    let fromApi = false;
+    if (!input.isOffshore && input.taxNumber) {
+      const apiData = await fetchCompanyByCnpj(input.taxNumber);
+      if (apiData) {
+        fromApi = true;
+        mappedData = mapBrasilApiToCompanyData(apiData);
+        if (mappedData.legalName) {
+          finalLegalName = mappedData.legalName;
+        }
+      }
+    }
+    const companyId = await createCompanyRecord({
+      ...input,
+      legalName: finalLegalName
+    });
+    if (mappedData) {
+      await upsertCompanyDetailsRecord({
+        companyId,
+        fields: {
+          uf: mappedData.uf,
+          sede: mappedData.sede,
+          cep: mappedData.cep,
+          street: mappedData.street,
+          number: mappedData.number,
+          complement: mappedData.complement,
+          district: mappedData.district,
+          city: mappedData.city,
+          societaryType: mappedData.societaryType,
+          taxRegime: mappedData.taxRegime,
+          corporatePurpose: mappedData.corporatePurpose,
+          capitalSocial: mappedData.capitalSocial,
+          administrator1: mappedData.administrator1,
+          administrator2: mappedData.administrator2
+        }
+      });
+      if (mappedData.stakeholders.length) {
+        const people2 = await listPeopleByFamily(input.familyId) ?? [];
+        for (const item of mappedData.stakeholders) {
+          try {
+            const match = people2.find(
+              (p) => normalizeName(p.fullName) === normalizeName(item.name)
+            );
+            await createStakeholderRecord({
+              companyId,
+              personId: match?.id,
+              externalName: match ? void 0 : item.name,
+              percentage: 0
+            });
+          } catch {
+          }
+        }
+      }
+    }
     let requirementsCount = 0;
     if (!input.isOffshore) {
       await ensureCertidoesForSubject({
@@ -3618,7 +3834,7 @@ var companyRouter = router({
       entityId: companyId,
       categories: computeCompanyCategories({
         isOffshore: input.isOffshore,
-        societaryType: null
+        societaryType: mappedData?.societaryType ?? null
       })
     });
     requirementsCount = reconciled.created;
@@ -3628,9 +3844,23 @@ var companyRouter = router({
       entityId: companyId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { isOffshore: input.isOffshore, requirements: requirementsCount }
+      metadata: { isOffshore: input.isOffshore, requirements: requirementsCount, fromApi }
     });
-    return { companyId };
+    return { companyId, fromApi };
+  }),
+  remove: protectedProcedure.input(removeCompanySchema).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.COMPANY_REMOVE);
+    await assertFamilyAccess(ctx, input.familyId);
+    const result = await removeCompanyRecord(input.familyId, input.companyId);
+    await recordAudit({
+      action: "SOCIEDADE_EXCLUIDA",
+      entityType: "SOCIEDADE",
+      entityId: input.companyId,
+      actorUserId: user.id,
+      familyId: input.familyId,
+      metadata: { archivedDocuments: result.archivedDocuments }
+    });
+    return result;
   }),
   addStakeholder: protectedProcedure.input(stakeholderInputSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.COMPANY_ADD_STAKEHOLDER);
@@ -3758,13 +3988,13 @@ import { eq as eq16 } from "drizzle-orm";
 // server/features/documents/couple-docs.ts
 init_schema();
 init_database();
-import { and as and10, eq as eq15, inArray as inArray6, ne as ne3 } from "drizzle-orm";
+import { and as and11, eq as eq15, inArray as inArray6, ne as ne3 } from "drizzle-orm";
 async function releaseSpouseCoupleDocs(sourceDocument) {
   if (sourceDocument.entityType !== "PESSOA") return 0;
   if (!isCoupleSharedCategory(sourceDocument.category)) return 0;
   const db = await requireDatabase();
   const [spouse] = await db.select({ id: people.id }).from(people).where(
-    and10(
+    and11(
       eq15(people.familyId, sourceDocument.familyId),
       eq15(people.vinculo, "CONJUGE"),
       ne3(people.id, sourceDocument.entityId)
@@ -3779,7 +4009,7 @@ async function releaseSpouseCoupleDocs(sourceDocument) {
     dispensedAt: /* @__PURE__ */ new Date(),
     rejectionReason: null
   }).where(
-    and10(
+    and11(
       eq15(documents.familyId, sourceDocument.familyId),
       eq15(documents.entityType, "PESSOA"),
       eq15(documents.entityId, spouse.id),
@@ -4072,7 +4302,7 @@ var documentRouter = router({
 // server/features/families/family-router.ts
 init_schema();
 import { createHash as createHash3, randomBytes } from "node:crypto";
-import { and as and12, eq as eq20 } from "drizzle-orm";
+import { and as and13, eq as eq20 } from "drizzle-orm";
 import { z as z14 } from "zod";
 init_database();
 
@@ -4241,7 +4471,7 @@ async function listProjectAlertLevels(familyIds) {
 // server/features/families/family-timeline-repository.ts
 init_schema();
 init_database();
-import { and as and11, count as count2, desc as desc4, eq as eq19, gt, isNull } from "drizzle-orm";
+import { and as and12, count as count2, desc as desc4, eq as eq19, gt, isNull } from "drizzle-orm";
 
 // server/features/families/family-timeline.ts
 var iso = (value) => value ? new Date(value).toISOString() : null;
@@ -4432,7 +4662,7 @@ async function getFamilyTimelineRecord(familyId) {
   }).from(leads).where(eq19(leads.familyId, familyId)).orderBy(desc4(leads.createdAt)).limit(1);
   const [{ total: peopleTotal }] = await db.select({ total: count2() }).from(people).where(eq19(people.familyId, familyId));
   const [{ total: titularCount }] = await db.select({ total: count2() }).from(people).where(
-    and11(eq19(people.familyId, familyId), eq19(people.isPrimaryContact, true))
+    and12(eq19(people.familyId, familyId), eq19(people.isPrimaryContact, true))
   );
   const [{ total: propertiesTotal }] = await db.select({ total: count2() }).from(properties).where(eq19(properties.familyId, familyId));
   const [{ total: companiesTotal }] = await db.select({ total: count2() }).from(companies).where(eq19(companies.familyId, familyId));
@@ -4446,13 +4676,13 @@ async function getFamilyTimelineRecord(familyId) {
     acceptedAt: financialProposals.acceptedAt
   }).from(financialProposals).where(eq19(financialProposals.familyId, familyId)).orderBy(desc4(financialProposals.createdAt)).limit(1);
   const [{ total: clientAccessCount }] = await db.select({ total: count2() }).from(familyAccess).where(
-    and11(
+    and12(
       eq19(familyAccess.familyId, familyId),
       eq19(familyAccess.accessRole, "CLIENTE")
     )
   );
   const [{ total: activePortalLinks }] = await db.select({ total: count2() }).from(portalLinks).where(
-    and11(
+    and12(
       eq19(portalLinks.familyId, familyId),
       isNull(portalLinks.revokedAt),
       gt(portalLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -4594,7 +4824,7 @@ var familyRouter = router({
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
     const existingAccess = await db.select({ id: familyAccess.id }).from(familyAccess).where(
-      and12(
+      and13(
         eq20(familyAccess.familyId, input.familyId),
         eq20(familyAccess.accessRole, "CLIENTE")
       )
@@ -4633,7 +4863,7 @@ var familyRouter = router({
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
     const existingAccess = await db.select({ id: familyAccess.id }).from(familyAccess).where(
-      and12(
+      and13(
         eq20(familyAccess.familyId, input.familyId),
         eq20(familyAccess.accessRole, "CLIENTE")
       )
@@ -4867,7 +5097,7 @@ var personRouter = router({
 // server/features/portal/portal-router.ts
 init_schema();
 import { createHash as createHash4, randomBytes as randomBytes2 } from "node:crypto";
-import { and as and13, desc as desc6, eq as eq22, gt as gt3, isNull as isNull3 } from "drizzle-orm";
+import { and as and14, desc as desc6, eq as eq22, gt as gt3, isNull as isNull3 } from "drizzle-orm";
 import { z as z18 } from "zod";
 init_database();
 function hashToken2(token) {
@@ -4875,7 +5105,7 @@ function hashToken2(token) {
 }
 async function getActivePortalLink(token) {
   const db = await requireDatabase();
-  const result = await db.select().from(portalLinks).where(and13(
+  const result = await db.select().from(portalLinks).where(and14(
     eq22(portalLinks.tokenHash, hashToken2(token)),
     isNull3(portalLinks.revokedAt),
     gt3(portalLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -4939,7 +5169,7 @@ import { z as z20 } from "zod";
 // server/features/properties/property-repository.ts
 init_schema();
 init_database();
-import { desc as desc7, eq as eq23, and as and14 } from "drizzle-orm";
+import { desc as desc7, eq as eq23, and as and15 } from "drizzle-orm";
 
 // server/features/properties/property-types.ts
 import { z as z19 } from "zod";
@@ -4953,6 +5183,7 @@ var propertyInputSchema = z19.object({
   description: z19.string().min(3, "Informe a descri\xE7\xE3o (m\xEDnimo 3 caracteres).").max(240),
   kind: propertyKindSchema.optional(),
   uf: ufSchema.optional(),
+  cep: z19.string().max(8).optional().or(z19.literal("")),
   hasRegistration: z19.boolean().default(true),
   registrationNumber: z19.string().max(120).optional(),
   alternativeDocType: z19.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
@@ -5080,6 +5311,7 @@ function propertyValues(input) {
     description: input.description,
     kind: input.kind ?? null,
     uf: input.uf ?? null,
+    cep: input.cep ? input.cep.replace(/\D/g, "").slice(0, 8) || null : null,
     hasRegistration: input.hasRegistration,
     registrationNumber: input.hasRegistration ? input.registrationNumber || null : null,
     alternativeDocType: input.hasRegistration ? null : input.alternativeDocType || null,
@@ -5111,7 +5343,7 @@ async function createPropertyRecord(input) {
   const db = await requireDatabase();
   const id = createId();
   const existingProperty = await db.select().from(properties).where(
-    and14(
+    and15(
       eq23(properties.familyId, input.familyId),
       eq23(properties.description, input.description),
       eq23(properties.propertyCity, input.propertyCity)
@@ -5136,7 +5368,7 @@ async function updatePropertyRecord(input) {
 }
 async function removePropertyRecord(familyId, propertyId) {
   const db = await requireDatabase();
-  const [property] = await db.select().from(properties).where(and14(eq23(properties.id, propertyId), eq23(properties.familyId, familyId))).limit(1);
+  const [property] = await db.select().from(properties).where(and15(eq23(properties.id, propertyId), eq23(properties.familyId, familyId))).limit(1);
   if (!property) throw new Error("Im\xF3vel n\xE3o encontrado nesta fam\xEDlia.");
   const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq23(propertyOwners.propertyId, propertyId)).limit(1);
   if (owner) {
@@ -5145,11 +5377,11 @@ async function removePropertyRecord(familyId, propertyId) {
     );
   }
   const documentsToArchive = await db.select({ id: documents.id }).from(documents).where(
-    and14(eq23(documents.familyId, familyId), eq23(documents.entityId, propertyId))
+    and15(eq23(documents.familyId, familyId), eq23(documents.entityId, propertyId))
   );
   if (documentsToArchive.length) {
     await db.update(documents).set({ status: "DISPENSADO" }).where(
-      and14(
+      and15(
         eq23(documents.familyId, familyId),
         eq23(documents.entityId, propertyId)
       )
@@ -5404,7 +5636,7 @@ var auditRouter = router({
 
 // server/features/people/first-access-router.ts
 import { createHash as createHash5 } from "node:crypto";
-import { and as and15, eq as eq26, isNull as isNull4, gt as gt4 } from "drizzle-orm";
+import { and as and16, eq as eq26, isNull as isNull4, gt as gt4 } from "drizzle-orm";
 import { z as z23 } from "zod";
 import bcrypt2 from "bcryptjs";
 init_db();
@@ -5418,7 +5650,7 @@ async function assertExistingClientUsable(db, existing, familyId) {
   if (existing.role !== "CLIENTE") {
     throw new Error("J\xE1 existe uma conta de equipe com este e-mail. Use a redefini\xE7\xE3o de senha para acess\xE1-la.");
   }
-  const linked = await db.select({ id: familyAccess.id }).from(familyAccess).where(and15(eq26(familyAccess.userId, existing.id), eq26(familyAccess.familyId, familyId))).limit(1);
+  const linked = await db.select({ id: familyAccess.id }).from(familyAccess).where(and16(eq26(familyAccess.userId, existing.id), eq26(familyAccess.familyId, familyId))).limit(1);
   if (!linked[0]) {
     throw new Error("J\xE1 existe uma conta com este e-mail sem v\xEDnculo com esta fam\xEDlia. Contate o s\xF3cio respons\xE1vel.");
   }
@@ -5429,7 +5661,7 @@ var firstAccessRouter = router({
     checkRateLimit(`verify:${input.token}`);
     const db = await requireDatabase();
     const [link] = await db.select().from(firstAccessLinks).where(
-      and15(
+      and16(
         eq26(firstAccessLinks.tokenHash, hashToken3(input.token)),
         isNull4(firstAccessLinks.consumedAt),
         gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -5453,7 +5685,7 @@ var firstAccessRouter = router({
       // discriminator: token Ãºnico por link
       async (tx) => {
         const [link] = await tx.select().from(firstAccessLinks).where(
-          and15(
+          and16(
             eq26(firstAccessLinks.tokenHash, hashToken3(input.token)),
             isNull4(firstAccessLinks.consumedAt),
             gt4(firstAccessLinks.expiresAt, /* @__PURE__ */ new Date())
@@ -5516,7 +5748,7 @@ import { z as z25 } from "zod";
 // server/features/assets/assets-repository.ts
 init_schema();
 init_database();
-import { and as and16, desc as desc10, eq as eq27 } from "drizzle-orm";
+import { and as and17, desc as desc10, eq as eq27 } from "drizzle-orm";
 async function createAssetRecord(input) {
   const db = await requireDatabase();
   const id = createId();
@@ -5553,10 +5785,10 @@ async function updateAssetRecord(input) {
 }
 async function removeAssetRecord(familyId, assetId) {
   const db = await requireDatabase();
-  const [asset] = await db.select().from(otherAssets).where(and16(eq27(otherAssets.id, assetId), eq27(otherAssets.familyId, familyId))).limit(1);
+  const [asset] = await db.select().from(otherAssets).where(and17(eq27(otherAssets.id, assetId), eq27(otherAssets.familyId, familyId))).limit(1);
   if (!asset) throw new Error("Ativo n\xE3o encontrado nesta fam\xEDlia.");
   const docs = await db.select({ id: documents.id }).from(documents).where(
-    and16(eq27(documents.entityType, "ATIVO"), eq27(documents.entityId, assetId))
+    and17(eq27(documents.entityType, "ATIVO"), eq27(documents.entityId, assetId))
   );
   for (const doc of docs) {
     await db.update(documents).set({ status: "DISPENSADO" }).where(eq27(documents.id, doc.id));
@@ -5885,10 +6117,84 @@ var certidaoRouter = router({
   })
 });
 
+// server/features/address/address-router.ts
+import { z as z29 } from "zod";
+
+// server/features/address/viacep-client.ts
+var TIMEOUT_MS = 4e3;
+var USER_AGENT = "LWOS-App/1.0 (Family Office Platform; contato@lucathi.com.br)";
+function sanitizeCep(raw) {
+  const digits = raw.replace(/\D/g, "");
+  return digits.length === 8 ? digits : null;
+}
+async function fetchWithTimeout(url, timeoutMs, headers) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal, headers });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function fetchFromViaCep(cleanCep) {
+  try {
+    const url = `https://viacep.com.br/ws/${cleanCep}/json/`;
+    const response = await fetchWithTimeout(url, TIMEOUT_MS);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.erro === true || data.erro === "true") return null;
+    return {
+      cep: cleanCep,
+      street: (data.logradouro ?? "").trim(),
+      complement: (data.complemento ?? "").trim(),
+      district: (data.bairro ?? "").trim(),
+      city: (data.localidade ?? "").trim(),
+      uf: (data.uf ?? "").trim().toUpperCase(),
+      source: "VIACEP"
+    };
+  } catch {
+    return null;
+  }
+}
+async function fetchFromBrasilApi(cleanCep) {
+  try {
+    const url = `https://brasilapi.com.br/api/cep/v1/${cleanCep}`;
+    const response = await fetchWithTimeout(url, TIMEOUT_MS, { "User-Agent": USER_AGENT });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      cep: cleanCep,
+      street: (data.street ?? "").trim(),
+      complement: "",
+      district: (data.neighborhood ?? "").trim(),
+      city: (data.city ?? "").trim(),
+      uf: (data.state ?? "").trim().toUpperCase(),
+      source: "BRASILAPI"
+    };
+  } catch {
+    return null;
+  }
+}
+async function lookupAddressByCep(rawCep) {
+  const cleanCep = sanitizeCep(rawCep);
+  if (!cleanCep) return null;
+  const viaCepResult = await fetchFromViaCep(cleanCep);
+  if (viaCepResult) return viaCepResult;
+  return fetchFromBrasilApi(cleanCep);
+}
+
+// server/features/address/address-router.ts
+var addressRouter = router({
+  lookupCep: protectedProcedure.input(z29.object({ cep: z29.string().min(1, "Informe o CEP.") })).query(async ({ input }) => {
+    return lookupAddressByCep(input.cep);
+  })
+});
+
 // server/routers.ts
 var appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+  address: addressRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(async ({ ctx }) => {

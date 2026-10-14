@@ -92,6 +92,12 @@ export const companyRouter = router({
         fields: {
           uf: mappedData.uf,
           sede: mappedData.sede,
+          cep: mappedData.cep,
+          street: mappedData.street,
+          number: mappedData.number,
+          complement: mappedData.complement,
+          district: mappedData.district,
+          city: mappedData.city,
           societaryType: mappedData.societaryType,
           taxRegime: mappedData.taxRegime,
           corporatePurpose: mappedData.corporatePurpose,

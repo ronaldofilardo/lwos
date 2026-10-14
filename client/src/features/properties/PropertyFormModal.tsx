@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UFS, parseNumeroPtBR, parsePercentual, type Uf } from "@shared/validation";
+import { useCepLookup } from "@/shared/hooks/useCepLookup";
 import {
   encumbranceTypeLabels,
   encumbranceTypeValues,
@@ -15,6 +16,7 @@ export type PropertyFormValues = {
   id?: string;
   description: string;
   kind: "URBANO" | "RURAL" | "";
+  cep: string;
   uf: string;
   hasRegistration: boolean;
   registrationNumber: string;
@@ -46,6 +48,7 @@ export type PropertyFormValues = {
 export const emptyPropertyValues: PropertyFormValues = {
   description: "",
   kind: "",
+  cep: "",
   uf: "",
   hasRegistration: true,
   registrationNumber: "",
@@ -85,6 +88,7 @@ export function toPropertyFormValues(property: Record<string, unknown>): Propert
     id: str(property.id) || undefined,
     description: str(property.description),
     kind: (str(property.kind) as PropertyFormValues["kind"]) || "",
+    cep: str(property.cep),
     uf: str(property.uf),
     hasRegistration: property.hasRegistration !== false,
     registrationNumber: str(property.registrationNumber),
@@ -132,6 +136,7 @@ export function buildPropertyPayload(values: PropertyFormValues, familyId: strin
     familyId,
     description: values.description.trim(),
     kind: values.kind || undefined,
+    cep: values.cep.replace(/\D/g, "").slice(0, 8) || undefined,
     uf: (values.uf || undefined) as Uf | undefined,
     hasRegistration: values.hasRegistration,
     registrationNumber: values.hasRegistration
@@ -232,6 +237,7 @@ export function PropertyFormFields({
   onChange: (next: Partial<PropertyFormValues>) => void;
 }) {
   const set = (patch: Partial<PropertyFormValues>) => onChange(patch);
+  const { lookupCep, loading: loadingCep } = useCepLookup();
   const market = parseNumeroPtBR(values.marketValue);
   const venal = parseNumeroPtBR(values.venalValue);
   const venalDiverges =
@@ -248,7 +254,35 @@ export function PropertyFormFields({
         onChange={e => set({ description: e.target.value })}
         placeholder="Descrição do imóvel (ex: Fazenda Boa Vista, Apto 101 Jardins...)"
       />
-      <div className="grid grid-cols-[90px_1fr] gap-2">
+      <div className="grid grid-cols-[105px_80px_1fr] gap-2">
+        <div className="relative">
+          <Input
+            className={inputClass}
+            value={values.cep}
+            onChange={e => {
+              const val = e.target.value.replace(/\D/g, "").slice(0, 8);
+              set({ cep: val });
+              if (val.length === 8) {
+                lookupCep(val, addr => {
+                  const patch: Partial<PropertyFormValues> = {};
+                  if (addr.uf && UFS.includes(addr.uf as Uf)) patch.uf = addr.uf;
+                  if (addr.city) patch.propertyCity = addr.city;
+                  if (!values.description && addr.street) {
+                    patch.description = [addr.street, addr.district, `${addr.city}/${addr.uf}`]
+                      .filter(Boolean)
+                      .join(", ");
+                  }
+                  set(patch);
+                });
+              }
+            }}
+            placeholder={loadingCep ? "..." : "CEP"}
+            inputMode="numeric"
+          />
+          {loadingCep ? (
+            <Loader2 className="absolute right-2 top-2.5 size-3.5 animate-spin text-muted-foreground" />
+          ) : null}
+        </div>
         <select
           value={values.uf}
           onChange={e => set({ uf: e.target.value })}

@@ -1,5 +1,5 @@
 {
-  "id": "ebe11318-3706-45f0-b07e-bd8996091a3b",
+  "id": "8ef73ddf-2b23-4e2f-8df0-598582e451e2",
   "prevId": "3a2c8a00-26f8-4861-aa42-83ed8199e62b",
   "version": "7",
   "dialect": "postgresql",
@@ -330,6 +330,42 @@
         "sede": {
           "name": "sede",
           "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cep": {
+          "name": "cep",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "street": {
+          "name": "street",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "number": {
+          "name": "number",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "complement": {
+          "name": "complement",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "district": {
+          "name": "district",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "varchar(120)",
           "primaryKey": false,
           "notNull": false
         },
@@ -2015,6 +2051,12 @@
         "uf": {
           "name": "uf",
           "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cep": {
+          "name": "cep",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": false
         },

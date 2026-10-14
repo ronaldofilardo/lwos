@@ -12,6 +12,12 @@ export type MappedCompanyData = {
   legalName: string | null;
   uf: Uf | null;
   sede: string | null;
+  cep: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  district: string | null;
+  city: string | null;
   societaryType: SocietaryType | null;
   taxRegime: TaxRegime | null;
   corporatePurpose: string | null;
@@ -84,6 +90,12 @@ export function mapBrasilApiToCompanyData(
     legalName: data.razao_social?.trim() ? data.razao_social.trim().slice(0, 180) : null,
     uf,
     sede: formatSede(data),
+    cep: data.cep ? String(data.cep).replace(/\D/g, "").slice(0, 8) || null : null,
+    street: data.logradouro ? [data.descricao_tipo_de_logradouro, data.logradouro].filter(Boolean).join(" ").trim().slice(0, 160) : null,
+    number: data.numero ? String(data.numero).trim().slice(0, 20) : null,
+    complement: data.complemento ? data.complemento.trim().slice(0, 80) : null,
+    district: data.bairro ? data.bairro.trim().slice(0, 80) : null,
+    city: data.municipio ? data.municipio.trim().slice(0, 120) : null,
     societaryType,
     taxRegime,
     corporatePurpose: data.cnae_fiscal_descricao?.trim() ? data.cnae_fiscal_descricao.trim().slice(0, 4000) : null,

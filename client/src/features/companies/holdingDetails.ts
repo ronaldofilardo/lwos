@@ -58,6 +58,12 @@ export type HoldingFormState = {
   nire: string;
   uf: string;
   sede: string;
+  cep: string;
+  street: string;
+  number: string;
+  complement: string;
+  district: string;
+  city: string;
   societaryType: string;
   taxRegime: string;
   corporatePurpose: string;
@@ -86,6 +92,12 @@ const HOLDING_FORM_KEYS: (keyof HoldingFormState)[] = [
   "nire",
   "uf",
   "sede",
+  "cep",
+  "street",
+  "number",
+  "complement",
+  "district",
+  "city",
   "societaryType",
   "taxRegime",
   "corporatePurpose",
@@ -166,6 +178,12 @@ export function holdingFormToFields(form: HoldingFormState) {
     nire: text(form.nire),
     uf: asEnumOrNull(form.uf.trim().toUpperCase(), ufValues),
     sede: text(form.sede),
+    cep: text(form.cep) ? form.cep.replace(/\D/g, "").slice(0, 8) : null,
+    street: text(form.street),
+    number: text(form.number),
+    complement: text(form.complement),
+    district: text(form.district),
+    city: text(form.city),
     societaryType: asEnumOrNull(form.societaryType, societaryTypeValues),
     taxRegime: asEnumOrNull(form.taxRegime, taxRegimeValues),
     corporatePurpose: text(form.corporatePurpose),

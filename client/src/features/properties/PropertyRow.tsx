@@ -34,6 +34,7 @@ type Property = {
   description: string;
   propertyCity: string;
   uf?: string | null;
+  cep?: string | null;
   kind?: string | null;
   hasRegistration?: boolean;
   registrationNumber: string | null;
@@ -154,7 +155,8 @@ export function PropertyRow({
 
           <p className="mt-0.5 text-xs text-lucathi-gray">
             {property.uf ? `${property.uf} · ` : ""}
-            {property.propertyCity} ·{" "}
+            {property.propertyCity}
+            {property.cep ? ` (CEP ${property.cep})` : ""} ·{" "}
             {property.hasRegistration !== false ? (
               <span>Matrícula: {property.registrationNumber || "Em análise"}</span>
             ) : (

@@ -37,6 +37,7 @@ function propertyValues(
     description: input.description,
     kind: input.kind ?? null,
     uf: input.uf ?? null,
+    cep: input.cep ? input.cep.replace(/\D/g, "").slice(0, 8) || null : null,
     hasRegistration: input.hasRegistration,
     registrationNumber: input.hasRegistration
       ? input.registrationNumber || null
