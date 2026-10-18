@@ -245,7 +245,7 @@ export function CertidaoPanel({
         ) : null}
 
         {scopes.map(scope => {
-          const scoped = rows.filter(row => row.scope === scope);
+          const scoped = (rows ?? []).filter(row => row.scope === scope);
           if (!scoped.length) return null;
           const resolved = scoped.filter(
             row =>
@@ -284,7 +284,7 @@ export function CertidaoPanel({
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray px-1 pb-1">
                       {subjectName}
                     </h4>
-                    {items.map(row => (
+                    {(items ?? []).map(row => (
                       <CertidaoRowItem
                         key={row.id}
                         row={row}
@@ -322,7 +322,7 @@ export function CertidaoPanel({
           );
         })}
 
-        {rows.length ? (
+        {(rows ?? []).length ? (
           <p className="text-xs text-lucathi-gray">
             Matriz: {certidaoTypeValues.length} tipos por membro/holding ·
             inclui CNAT, CNDT e certidão de protestos.

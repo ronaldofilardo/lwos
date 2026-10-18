@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { errorMessage } from "@/lib/trpcError";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { formatDateOnlyBR } from "@/lib/utils";
+import { formatDateOnlyBR } from "@shared/validation/datas";
 import { isAdmin } from "@shared/domain/permissions";
 
 const civilStatusOptions = [

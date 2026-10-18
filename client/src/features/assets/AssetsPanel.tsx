@@ -153,7 +153,7 @@ function AssetFormModal({
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
             >
               <option value="">Selecione…</option>
-              {people.map(person => (
+              {(people ?? []).map(person => (
                 <option key={person.id} value={person.id}>{person.fullName}</option>
               ))}
             </select>

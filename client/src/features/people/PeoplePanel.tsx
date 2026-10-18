@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatDateOnlyBR } from "@/lib/utils";
+import { formatDateOnlyBR } from "@shared/validation/datas";
 import {
   formatarIdadeDecimal,
   isNascimentoValido,

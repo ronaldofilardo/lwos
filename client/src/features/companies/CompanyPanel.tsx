@@ -73,7 +73,10 @@ function StakeholderManager({
   });
 
   const rows = stakeholders.data ?? [];
-  const total = rows.reduce((sum, row) => sum + Number(row.percentage), 0);
+  const total = (rows ?? []).reduce(
+    (sum, row) => sum + Number(row.percentage || 0),
+    0
+  );
   const remaining = Math.max(0, Math.round((100 - total) * 100) / 100);
   const capital = capitalSocial ? Number(capitalSocial) : null;
 
@@ -94,11 +97,11 @@ function StakeholderManager({
         </span>
       </div>
 
-      {rows.length ? (
+      {(rows ?? []).length > 0 ? (
         <div className="space-y-1.5">
-          {rows.map(row => {
+          {(rows ?? []).map(row => {
             const person = row.personId
-              ? people.find(item => item.id === row.personId)
+              ? (people ?? []).find(item => item.id === row.personId)
               : null;
             const label = person?.fullName ?? row.externalName ?? "—";
             const invested =
@@ -199,7 +202,7 @@ function StakeholderManager({
               aria-label="Membro da família"
             >
               <option value="">Membro da família…</option>
-              {people.map(item => (
+              {(people ?? []).map(item => (
                 <option key={item.id} value={item.id}>
                   {item.fullName}
                 </option>

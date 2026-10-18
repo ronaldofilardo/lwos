@@ -75,7 +75,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
       .filter(row => row.documentId)
       .map(row => [row.documentId as string, row])
   );
-  const matrixDocuments = documents.map(doc => {
+  const matrixDocuments = (documents ?? []).map(doc => {
     if (doc.entityType !== "CERTIDAO") return doc;
     const certidao = certidaoByDocumentId.get(doc.id);
     if (!certidao) return doc;
@@ -166,7 +166,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
         ) : null}
 
         {sections.map(section => {
-          const sectionDocs = section.groups.flatMap(group => group.documents);
+          const sectionDocs = section.groups.flatMap(group => group.documents ?? []);
           const sectionResolved = sectionDocs.filter(d =>
             isResolvedStatus(d.status)
           ).length;
@@ -206,7 +206,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
               {sectionOpen ? (
                 <div className="mt-3 space-y-4">
                   {section.groups.map(group => {
-                    const groupResolved = group.documents.filter(d =>
+                    const groupResolved = (group.documents ?? []).filter(d =>
                       isResolvedStatus(d.status)
                     ).length;
                     const groupOpen = Boolean(openGroups[group.key]);
@@ -239,13 +239,13 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                             </div>
                           </div>
                           <span className="rounded-full bg-lucathi-mist px-2.5 py-1 text-xs font-semibold text-lucathi-navy">
-                            {groupResolved}/{group.documents.length} resolvidos
+                            {groupResolved}/                            {(group.documents ?? []).length} resolvidos
                           </span>
                         </button>
 
                         {groupOpen ? (
                           <div className="mt-3 space-y-3">
-                            {group.documents.map(document => {
+                            {(group.documents ?? []).map(document => {
                               const person = people.data?.find(p => p.id === document.entityId);
                               const isSingleSon = person?.vinculo === "FILHO" && person?.civilStatus === "SOLTEIRO";
                               const isAddressDoc = document.category === "Comprovante de endereço";

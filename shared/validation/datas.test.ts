@@ -9,6 +9,7 @@ import {
   idadeDecimal,
   idadeEmAnosCompletos,
   formatarIdadeDecimal,
+  formatDateOnlyBR,
   IDADE_MAXIMA_ANOS,
   hoje,
 } from "./datas";
@@ -84,5 +85,23 @@ describe("isNascimentoValido", () => {
   it("rejeita calendário inválido", () => {
     expect(isNascimentoValido("1990-02-30", "2026-10-09")).toBe(false);
     expect(isNascimentoValido("não é data", "2026-10-09")).toBe(false);
+  });
+});
+
+describe("formatDateOnlyBR", () => {
+  it("formata YYYY-MM-DD em dd/mm/yyyy sem passar por Date", () => {
+    expect(formatDateOnlyBR("1985-02-08")).toBe("08/02/1985");
+    expect(formatDateOnlyBR("2026-12-31")).toBe("31/12/2026");
+  });
+
+  it("devolve string vazia para valores ausentes", () => {
+    expect(formatDateOnlyBR(null)).toBe("");
+    expect(formatDateOnlyBR(undefined)).toBe("");
+    expect(formatDateOnlyBR("")).toBe("");
+  });
+
+  it("devolve o valor original quando a data está incompleta", () => {
+    expect(formatDateOnlyBR("1985-02")).toBe("1985-02");
+    expect(formatDateOnlyBR("abc")).toBe("abc");
   });
 });

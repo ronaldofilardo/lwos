@@ -72,4 +72,75 @@ describe("lookupAddressByCep", () => {
     const result = await lookupAddressByCep("01001000");
     expect(result).toBeNull();
   });
+
+  it("cai para a BrasilAPI quando o ViaCEP responde com erro HTTP", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          state: "RJ",
+          city: "Rio de Janeiro",
+          neighborhood: "Centro",
+          street: "Av. Rio Branco",
+        }),
+      } as unknown as Response);
+
+    const result = await lookupAddressByCep("20010-000");
+    expect(result?.source).toBe("BRASILAPI");
+    expect(result?.street).toBe("Av. Rio Branco");
+  });
+
+  it("preenche campos ausentes do ViaCEP com string vazia", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ localidade: "Curitiba", uf: "pr" }),
+    } as unknown as Response);
+
+    const result = await lookupAddressByCep("80010-000");
+    expect(result).toEqual({
+      cep: "80010000",
+      street: "",
+      complement: "",
+      district: "",
+      city: "Curitiba",
+      uf: "PR",
+      source: "VIACEP",
+    });
+  });
+
+  it("retorna null quando a BrasilAPI responde com erro HTTP", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ erro: "true" }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) } as unknown as Response);
+
+    const result = await lookupAddressByCep("99999-999");
+    expect(result).toBeNull();
+  });
+
+  it("preenche campos ausentes da BrasilAPI com string vazia", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ erro: true }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ city: "Salvador", state: "ba" }),
+      } as unknown as Response);
+
+    const result = await lookupAddressByCep("40015-000");
+    expect(result).toEqual({
+      cep: "40015000",
+      street: "",
+      complement: "",
+      district: "",
+      city: "Salvador",
+      uf: "BA",
+      source: "BRASILAPI",
+    });
+  });
 });

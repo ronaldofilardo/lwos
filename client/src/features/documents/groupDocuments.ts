@@ -91,9 +91,9 @@ export function groupDocumentsByMember(
     assets?: AssetLite[];
   }
 ): DocumentGroup[] {
-  const personById = new Map(ctx.people.map(p => [p.id, p]));
-  const propertyById = new Map(ctx.properties.map(p => [p.id, p]));
-  const companyById = new Map(ctx.companies.map(c => [c.id, c]));
+  const personById = new Map((ctx.people ?? []).map(p => [p.id, p]));
+  const propertyById = new Map((ctx.properties ?? []).map(p => [p.id, p]));
+  const companyById = new Map((ctx.companies ?? []).map(c => [c.id, c]));
   const assetById = new Map((ctx.assets ?? []).map(a => [a.id, a]));
   const personName = (id: string) => personById.get(id)?.fullName ?? null;
 
