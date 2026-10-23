@@ -86,15 +86,17 @@ export function PropertyUrbanFields({
               placeholder="Cidade do Cartório"
             />
           </div>
-          <Input
-            className={inputClass}
-            inputMode="numeric"
-            value={values.registryOfficeNumber}
-            onChange={e =>
-              set({ registryOfficeNumber: e.target.value.replace(/\D/g, "") })
-            }
-            placeholder="Nº cartório (1–55)"
-          />
+            <select
+              className={selectClass}
+              value={values.registryOfficeNumber}
+              onChange={e => set({ registryOfficeNumber: e.target.value })}
+              aria-label="Número do cartório"
+            >
+              <option value="">Selecione (1 a 55)</option>
+              {Array.from({ length: 55 }, (_, i) => i + 1).map(n => (
+                <option key={n} value={String(n)}>{n}</option>
+              ))}
+            </select>
         </div>
       )}
       </div>

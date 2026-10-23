@@ -85,9 +85,6 @@ export function validatePropertyValues(
       return "Sem matrícula: informe o documento alternativo e a justificativa.";
     }
   }
-  if (values.kind === "RURAL" && (!values.ccir.trim() || !values.nirf.trim())) {
-    return "Imóvel rural exige CCIR e NIRF.";
-  }
   if (values.registryOfficeNumber) {
     const office = Number(values.registryOfficeNumber);
     if (!Number.isInteger(office) || office < 1 || office > 55) {

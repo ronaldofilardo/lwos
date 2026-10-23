@@ -17,13 +17,13 @@ export function PropertyRuralFields({
         className={inputClass}
         value={values.ccir}
         onChange={e => set({ ccir: e.target.value })}
-        placeholder="CCIR (obrigatório)"
+        placeholder="CCIR"
       />
       <Input
         className={inputClass}
         value={values.nirf}
         onChange={e => set({ nirf: e.target.value })}
-        placeholder="NIRF (obrigatório)"
+        placeholder="NIRF"
       />
     </div>
   );
