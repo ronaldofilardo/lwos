@@ -25,7 +25,7 @@ import {
 import { PersonForm, type PersonFormSubmit } from "./common/PersonForm";
 import { usePeople } from "./hooks/usePeople";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
-import { levelFor } from "@/features/alerts/alerts";
+import { levelFor, reasonsFor } from "@/features/alerts/alerts";
 import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
 import { canEdit } from "@shared/domain/permissions";
 
@@ -101,7 +101,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
     markPrimary,
     markingPrimary,
   } = usePeople(familyId);
-  const { bySubject } = useProjectAlerts(familyId);
+  const { bySubject, reasonsBySubject } = useProjectAlerts(familyId);
   const canEditFlag = canEdit(user?.role);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<PersonRow | null>(null);
@@ -159,6 +159,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                     <p className="text-sm font-medium">{person.fullName}</p>
                     <AlertIndicator
                       level={levelFor(bySubject, "PESSOA", person.id)}
+                      reasons={reasonsFor(reasonsBySubject, "PESSOA", person.id)}
                     />
                     <VinculoBadge vinculo={person.vinculo} />
                     {person.isDependent ? (
@@ -208,18 +209,36 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                     ) : null}
                   </div>
                 </div>
-                {!isConjuge ? (
+                <p className="mt-1 text-xs text-lucathi-gray">
+                  CPF {person.taxId || "não informado"}
+                </p>
+                {person.email ? (
+                  <p className="mt-1 text-xs text-lucathi-gray">
+                    E-mail – {person.email}
+                  </p>
+                ) : null}
+                {person.phone ? (
+                  <p className="mt-1 text-xs text-lucathi-gray">
+                    Tel – {person.phone}
+                  </p>
+                ) : null}
+                {person.birthDate ? (
+                  <p className="mt-1 text-xs text-lucathi-gray">
+                    Nascimento – {formatDateOnlyBR(person.birthDate)}
+                  </p>
+                ) : null}
+                {idade ? (
+                  <p className="mt-1 text-xs text-lucathi-gray">
+                    Idade – {idade}
+                  </p>
+                ) : null}
+                {!isConjuge && person.civilStatus ? (
                   <p className="mt-1 text-xs text-lucathi-gray">
                     {civilStatusLabels[person.civilStatus as never] ??
                       person.civilStatus}
                     {married ? ` · ${person.maritalRegime}` : ""}
-                    {` · ${person.taxId || "CPF não informado"}`}
                   </p>
-                ) : (
-                  <p className="mt-1 text-xs text-lucathi-gray">
-                    {person.taxId || "CPF não informado"}
-                  </p>
-                )}
+                ) : null}
                 {parent ? (
                   <p className="mt-1 text-xs text-lucathi-gray">
                     Filho(a) de: {parent}
@@ -230,14 +249,6 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                     Cônjuge: {person.spouseName}
                   </p>
                 ) : null}
-                <p className="mt-1 text-xs text-lucathi-gray">
-                  {person.email || "E-mail não informado"}
-                  {person.phone ? ` · ${person.phone}` : ""}
-                  {person.birthDate
-                    ? ` · Nascimento: ${formatDateOnlyBR(person.birthDate)}`
-                    : ""}
-                  {idade ? ` · ${idade}` : ""}
-                </p>
                 {person.exSpouseNote ? (
                   <p className="mt-2 text-xs italic text-lucathi-gray">
                     Observação: {person.exSpouseNote}
