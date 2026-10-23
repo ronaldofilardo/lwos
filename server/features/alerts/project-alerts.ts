@@ -74,7 +74,45 @@ export function computeSubjectAlerts(
   return bySubject;
 }
 
-/** Contagem de assuntos em alerta — usada no header e na lista de projetos. */
+export function computeSubjectReasons(
+  rows: CertidaoAlertRow[],
+  today = new Date()
+): Record<string, string[]> {
+  const grouped: Record<string, { level: AlertLevel; reason: string }[]> = {};
+  for (const row of rows) {
+    const level = certidaoAlertLevel(row.status, row.validUntil, today);
+    if (level === "NENHUM") continue;
+    const key = subjectAlertKey(row.scope, row.subjectId);
+    const typeLabel = row.type
+      ? (CERTIDAO_TYPE_LABELS[
+          row.type as keyof typeof CERTIDAO_TYPE_LABELS
+        ] ?? row.type)
+      : "Certidão";
+    let situation = "";
+    if (row.status === "POSITIVA") situation = "positiva";
+    else if (row.status === "SOMENTE_FISICA") situation = "somente física";
+    else if (row.status === "PENDENTE") situation = "pendente";
+    else if (row.validUntil) {
+      const iso = String(row.validUntil).slice(0, 10);
+      if (iso < todayIso(today)) {
+        const [y, m, d] = iso.split("-");
+        situation = `vencida em ${d}/${m}/${y}`;
+      }
+    }
+    if (!situation) continue;
+    const reason = `${typeLabel} — ${situation}`;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push({ level, reason });
+  }
+  const result: Record<string, string[]> = {};
+  for (const [key, items] of Object.entries(grouped)) {
+    items.sort((a, b) =>
+      a.level === "VERMELHO" && b.level !== "VERMELHO" ? -1 : b.level === "VERMELHO" && a.level !== "VERMELHO" ? 1 : 0
+    );
+    result[key] = items.map(i => i.reason);
+  }
+  return result;
+}
 export function computeAlertCounts(
   rows: CertidaoAlertRow[],
   today = new Date()

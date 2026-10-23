@@ -5,6 +5,7 @@ import {
   computeAlertCounts,
   computeConclusionBlockers,
   computeSubjectAlerts,
+  computeSubjectReasons,
   type AlertLevel,
   type CertidaoAlertRow,
 } from "./project-alerts";
@@ -82,6 +83,7 @@ export async function getProjectAlertSummary(familyId: string) {
     }));
   return {
     bySubject,
+    reasonsBySubject: computeSubjectReasons(rows.certidoes),
     counts: computeAlertCounts(rows.certidoes),
     pendenteGravames,
     redCertidoes,
