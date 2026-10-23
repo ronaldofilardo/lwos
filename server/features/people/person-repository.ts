@@ -47,7 +47,7 @@ async function assertCpfNotUsedByAnotherFamily(
   const familyLabel =
     conflictingFamily?.name ?? `família ${conflictingFamilyId}`;
   throw new Error(
-    `Este CPF já é o titular de outra família (${familyLabel}). Corrija o CPF ou defina outra pessoa como titular.`
+    `Este CPF já consta como titular de outro projeto («${familyLabel}»). Um CPF só pode ser titular de um projeto. Corrija o CPF ou ajuste o cadastro no outro projeto.`
   );
 }
 
@@ -170,7 +170,7 @@ async function assertTitularIrpfReceived(familyId: string) {
     )
     .limit(1);
   if (!titular) {
-    throw new Error("Defina o titular antes de marcar um dependente.");
+    throw new Error("Esta família ainda não tem titular marcado. Defina o titular antes de marcar um dependente.");
   }
   const [irpf] = await db
     .select({ status: documents.status })
@@ -250,7 +250,17 @@ export async function addPersonRecord(
   }
 
   await db.transaction(async tx => {
-    if (input.isPrimaryContact && input.taxId) {
+    const [existingPrimary] = await tx
+      .select({ id: people.id })
+      .from(people)
+      .where(
+        and(eq(people.familyId, input.familyId), eq(people.isPrimaryContact, true))
+      )
+      .limit(1);
+    const autoPrimary = input.vinculo === "TITULAR" && !existingPrimary;
+    const isPrimary = Boolean(input.isPrimaryContact) || autoPrimary;
+
+    if (isPrimary && input.taxId) {
       await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
       await tx
         .update(people)
@@ -270,7 +280,7 @@ export async function addPersonRecord(
       vinculo: input.vinculo,
       parentPersonId: input.parentPersonId || null,
       spouseName: input.spouseName?.trim() || null,
-      isPrimaryContact: input.isPrimaryContact ?? false,
+      isPrimaryContact: isPrimary,
       isDependent: input.isDependent ?? false,
       phone: input.phone || null,
       addressSameAsPrimary: input.addressSameAsPrimary ?? false,

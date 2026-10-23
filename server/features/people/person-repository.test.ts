@@ -849,7 +849,7 @@ describe("person-repository dependente (IRPF do titular)", () => {
     databaseMocks.requireDatabase.mockResolvedValue(db);
 
     await expect(addPersonRecord(dependenteInput)).rejects.toThrow(
-      "Defina o titular antes de marcar um dependente."
+      "Esta família ainda não tem titular marcado. Defina o titular antes de marcar um dependente."
     );
     expect(db.transaction).not.toHaveBeenCalled();
     expect(dependentIrpfMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
@@ -945,7 +945,7 @@ describe("person-repository dependente (IRPF do titular)", () => {
         uf: "SP",
         civilStatus: "SOLTEIRO",
       } as never)
-    ).rejects.toThrow("Defina o titular antes de marcar um dependente.");
+    ).rejects.toThrow("Esta família ainda não tem titular marcado. Defina o titular antes de marcar um dependente.");
     expect(dependentIrpfMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
   });
 });
