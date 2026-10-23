@@ -119,9 +119,6 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
           <UsersRound className="size-5 text-lucathi-navy" />
           <div>
             <h2 className="font-display text-2xl text-lucathi-navy">Pessoas</h2>
-            <p className="text-sm text-lucathi-gray">
-              Membros vinculados ao projeto e seus requisitos documentais.
-            </p>
           </div>
         </div>
         {canEditFlag ? (
@@ -166,7 +163,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                     <VinculoBadge vinculo={person.vinculo} />
                     {person.isDependent ? (
                       <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                        Dependente · IRPF do titular
+                        Dependente no IRPF do titular
                       </span>
                     ) : null}
                   </div>

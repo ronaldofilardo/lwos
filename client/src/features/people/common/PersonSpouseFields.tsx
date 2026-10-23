@@ -67,7 +67,7 @@ export function PersonSpouseFields({ state }: { state: PersonFormState }) {
             checked={state.isDependent}
             onChange={e => state.setIsDependent(e.target.checked)}
           />
-          Dependente — herda o IRPF do titular
+          Dependente no IRPF do Titular
         </label>
       ) : null}
       {state.parentTooClose ? (

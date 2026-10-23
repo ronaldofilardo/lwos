@@ -29,10 +29,6 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
         </div>
         <div>
           <h2 className="font-display text-2xl text-lucathi-navy">Imóveis</h2>
-          <p className="text-sm text-lucathi-gray">
-            Registro imobiliário, titularidade do imóvel, gravames e alertas
-            imediatos de ônus.
-          </p>
         </div>
       </div>
 
