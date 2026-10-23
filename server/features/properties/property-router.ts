@@ -10,8 +10,6 @@ import {
 } from "../documents/document-requirements";
 import {
   addPropertyOwnerRecord,
-  assertCompanyOwnershipAllowed,
-  assertPropertyMovementAllowed,
   createPropertyRecord,
   getPropertyRecord,
   listPropertyOwners,
@@ -109,8 +107,6 @@ export const propertyRouter = router({
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
-    if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
-    else await assertPropertyMovementAllowed(input.propertyId);
     const ownerId = await addPropertyOwnerRecord(input);
     await recordAudit({ action: "TITULARIDADE_REGISTRADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId, personId: input.personId ?? "", companyId: input.companyId ?? "", ownershipPercentage: input.ownershipPercentage } });
     return { ownerId };
@@ -120,8 +116,6 @@ export const propertyRouter = router({
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Imóvel não encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
-    if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
-    else await assertPropertyMovementAllowed(input.propertyId);
     await updatePropertyOwnerRecord(input);
     await recordAudit({ action: "TITULARIDADE_ATUALIZADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId: input.ownerId } });
     return { success: true };

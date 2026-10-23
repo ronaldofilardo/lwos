@@ -8,8 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const propertyRepoMocks = vi.hoisted(() => ({
   addPropertyOwnerRecord: vi.fn(),
-  assertCompanyOwnershipAllowed: vi.fn(),
-  assertPropertyMovementAllowed: vi.fn(),
+
   createPropertyRecord: vi.fn(),
   getPropertyRecord: vi.fn(),
   listPropertyOwners: vi.fn(),
@@ -105,8 +104,7 @@ describe("propertyRouter", () => {
     propertyRepoMocks.addPropertyOwnerRecord.mockResolvedValue("own-1");
     propertyRepoMocks.updatePropertyOwnerRecord.mockResolvedValue(undefined);
     propertyRepoMocks.removePropertyOwnerRecord.mockResolvedValue("own-1");
-    propertyRepoMocks.assertCompanyOwnershipAllowed.mockResolvedValue(undefined);
-    propertyRepoMocks.assertPropertyMovementAllowed.mockResolvedValue(undefined);
+
   });
 
   it("lista imóveis após verificar acesso à família", async () => {
@@ -215,9 +213,6 @@ describe("propertyRouter", () => {
         rightType: "PROPRIEDADE",
       })
     ).resolves.toEqual({ ownerId: "own-1" });
-    expect(
-      propertyRepoMocks.assertCompanyOwnershipAllowed
-    ).not.toHaveBeenCalled();
     expect(auditMocks.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "TITULARIDADE_REGISTRADA",
@@ -228,74 +223,6 @@ describe("propertyRouter", () => {
         }),
       })
     );
-  });
-
-  it("sociedade passa pela trava de gravame vermelho", async () => {
-    propertyRepoMocks.assertCompanyOwnershipAllowed.mockRejectedValue(
-      new Error("Este imóvel possui gravame ativo.")
-    );
-    await expect(
-      caller().addOwner({
-        propertyId: "imovel-1",
-        companyId: "hold-1",
-        ownershipPercentage: 100,
-        rightType: "PROPRIEDADE",
-      })
-    ).rejects.toThrow("gravame ativo");
-    expect(
-      propertyRepoMocks.assertCompanyOwnershipAllowed
-    ).toHaveBeenCalledWith("imovel-1");
-    expect(propertyRepoMocks.addPropertyOwnerRecord).not.toHaveBeenCalled();
-  });
-
-  it("gravame vermelho trava a movimentação de titularidade de pessoa", async () => {
-    propertyRepoMocks.assertPropertyMovementAllowed.mockRejectedValue(
-      new Error("Imóvel com gravame ativo: remova o gravame (ou marque como Não há) antes de alterar a titularidade.")
-    );
-
-    await expect(
-      caller().addOwner({
-        propertyId: "imovel-1",
-        personId: "p1",
-        ownershipPercentage: 100,
-        rightType: "PROPRIEDADE",
-      })
-    ).rejects.toThrow("gravame ativo");
-    expect(
-      propertyRepoMocks.assertPropertyMovementAllowed
-    ).toHaveBeenCalledWith("imovel-1");
-    expect(propertyRepoMocks.assertCompanyOwnershipAllowed).not.toHaveBeenCalled();
-    expect(propertyRepoMocks.addPropertyOwnerRecord).not.toHaveBeenCalled();
-  });
-
-  it("gravame vermelho trava a edição de titularidade de pessoa", async () => {
-    propertyRepoMocks.assertPropertyMovementAllowed.mockRejectedValue(
-      new Error("Imóvel com gravame ativo.")
-    );
-
-    await expect(
-      caller().updateOwner({
-        propertyId: "imovel-1",
-        ownerId: "own-1",
-        ownershipPercentage: 60,
-      })
-    ).rejects.toThrow("gravame ativo");
-    expect(propertyRepoMocks.updatePropertyOwnerRecord).not.toHaveBeenCalled();
-  });
-
-  it("titularidade de pessoa sem trava passa direto pela checagem", async () => {
-    await expect(
-      caller().addOwner({
-        propertyId: "imovel-1",
-        personId: "p1",
-        ownershipPercentage: 100,
-        rightType: "PROPRIEDADE",
-      })
-    ).resolves.toEqual({ ownerId: "own-1" });
-    expect(propertyRepoMocks.assertPropertyMovementAllowed).toHaveBeenCalledWith(
-      "imovel-1"
-    );
-    expect(propertyRepoMocks.addPropertyOwnerRecord).toHaveBeenCalled();
   });
 
   it("atualiza titularidade e audita TITULARIDADE_ATUALIZADA", async () => {
@@ -312,20 +239,6 @@ describe("propertyRouter", () => {
         metadata: { ownerId: "own-1" },
       })
     );
-  });
-
-  it("troca de dono para sociedade dispara a trava de gravame", async () => {
-    propertyRepoMocks.assertCompanyOwnershipAllowed.mockRejectedValue(
-      new Error("Este imóvel possui gravame ativo.")
-    );
-    await expect(
-      caller().updateOwner({
-        propertyId: "imovel-1",
-        ownerId: "own-1",
-        companyId: "hold-1",
-      })
-    ).rejects.toThrow("gravame ativo");
-    expect(propertyRepoMocks.updatePropertyOwnerRecord).not.toHaveBeenCalled();
   });
 
   it("remove titularidade e audita TITULARIDADE_REMOVIDA", async () => {

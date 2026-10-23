@@ -565,35 +565,3 @@ describe("property-repository — edição e exclusão do imóvel", () => {
   });
 });
 
-describe("property-repository — trava de sociedade por gravame vermelho", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("bloqueia quando o gravame é vermelho", async () => {
-    const { db } = propertyDb({
-      propertyLimitQueue: [[{ id: "imovel-1", encumbranceType: "HIPOTECA" }]],
-    });
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-    await expect(
-      assertCompanyOwnershipAllowed("imovel-1")
-    ).rejects.toThrow("gravame ativo");
-  });
-
-  it("permite quando o gravame é amarelo (Pendente) ou verde (Não há)", async () => {
-    const yellow = propertyDb({
-      propertyLimitQueue: [[{ id: "imovel-1", encumbranceType: "PENDENTE" }]],
-    });
-    databaseMocks.requireDatabase.mockResolvedValue(yellow.db);
-    await expect(
-      assertCompanyOwnershipAllowed("imovel-1")
-    ).resolves.toBeUndefined();
-
-    const green = propertyDb({
-      propertyLimitQueue: [[{ id: "imovel-1", encumbranceType: "NAO_HA" }]],
-    });
-    databaseMocks.requireDatabase.mockResolvedValue(green.db);
-    await expect(
-      assertCompanyOwnershipAllowed("imovel-1")
-    ).resolves.toBeUndefined();
-  });
-});
-
