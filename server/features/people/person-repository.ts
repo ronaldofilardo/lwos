@@ -20,6 +20,7 @@ import {
   collectPersonIssues,
   isMarriedStatus,
 } from "./person-types";
+import { normalizePersonName } from "./normalize-name";
 import { idadeEmAnosCompletos, isNascimentoValido } from "../../../shared/validation";
 import type { z } from "zod";
 import type {
@@ -241,6 +242,17 @@ export async function addPersonRecord(
   await assertCpfNotDuplicatedInFamily(input.familyId, input.taxId);
   if (input.vinculo === "CONJUGE") {
     await assertConjugeNotDuplicated(input.familyId);
+    const titular = await getPrimaryContact(input.familyId);
+    if (titular?.spouseName) {
+      if (
+        normalizePersonName(input.fullName) !==
+        normalizePersonName(titular.spouseName)
+      ) {
+        throw new Error(
+          `O cônjuge cadastrado deve ter o mesmo nome informado no cadastro do titular («${titular.spouseName}»).`
+        );
+      }
+    }
   }
 
   const { civilStatus, maritalRegime } = resolveCivilFields(input);
@@ -357,6 +369,19 @@ export async function updatePersonRecord(
     birthDate: input.birthDate,
   });
 
+  if (person.vinculo === "CONJUGE" && input.fullName) {
+    const titular = await getPrimaryContact(input.familyId);
+    if (titular?.spouseName) {
+      if (
+        normalizePersonName(input.fullName) !==
+        normalizePersonName(titular.spouseName)
+      ) {
+        throw new Error(
+          `O cônjuge cadastrado deve ter o mesmo nome informado no cadastro do titular («${titular.spouseName}»).`
+        );
+      }
+    }
+  }
   const isDependent = input.isDependent ?? person.isDependent ?? false;
   if (isDependent && person.vinculo !== "TITULAR") {
     await assertTitularIrpfReceived(input.familyId);
