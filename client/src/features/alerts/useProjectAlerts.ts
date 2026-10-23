@@ -8,6 +8,7 @@ export function useProjectAlerts(familyId: string) {
   );
   return {
     bySubject: summary.data?.bySubject,
+    reasonsBySubject: summary.data?.reasonsBySubject,
     counts: summary.data?.counts,
     blockers: summary.data?.blockers ?? [],
     hardBlockers: summary.data?.hardBlockers ?? [],

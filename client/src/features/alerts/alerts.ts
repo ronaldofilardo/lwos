@@ -16,7 +16,16 @@ export function levelFor(
   return bySubject?.[subjectKey(scope, id)] as AlertLevel | undefined;
 }
 
-/** Pior nível entre vários assuntos — usado no imóvel com vários titulares. */
+export type SubjectReasons = Record<string, string[] | undefined>;
+
+/** Motivos (certidão/tipo — situação) de um assunto no resumo. */
+export function reasonsFor(
+  reasonsBySubject: SubjectReasons | undefined,
+  scope: "PESSOA" | "SOCIEDADE",
+  id: string
+): string[] {
+  return reasonsBySubject?.[subjectKey(scope, id)] ?? [];
+}
 export function worstAlert(
   ...levels: (string | null | undefined)[]
 ): AlertLevel | undefined {

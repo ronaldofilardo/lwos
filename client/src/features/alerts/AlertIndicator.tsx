@@ -1,37 +1,45 @@
 import { CircleAlert, TriangleAlert } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-/**
- * Exclamação vermelha (certidão positiva ou somente física) ou indicador
- * amarelo (pendente/vencida) — Fase 9. Reutilizado em Pessoas, Imóveis,
- * Sociedades, Ativos e na lista de projetos.
- */
 export function AlertIndicator({
   level,
   title,
+  reasons,
 }: {
   level?: string | null;
   title?: string;
+  reasons?: string[];
 }) {
   if (level === "VERMELHO") {
     return (
-      <span
-        className="inline-flex items-center"
-        title={title ?? "Certidão positiva ou somente física"}
-        aria-label="Alerta vermelho de certidão"
-      >
-        <CircleAlert className="size-4 text-red-600" aria-hidden="true" />
-      </span>
+      <Tooltip delayDuration={100}>
+        <TooltipTrigger asChild tabIndex={0} aria-label="Alerta vermelho de certidão">
+          <span className="inline-flex items-center">
+            <CircleAlert className="size-4 text-red-600" aria-hidden="true" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {reasons && reasons.length
+            ? reasons.map((r, i) => <div key={i}>{r}</div>)
+            : title ?? "Certidão positiva ou somente física"}
+        </TooltipContent>
+      </Tooltip>
     );
   }
   if (level === "AMARELO") {
     return (
-      <span
-        className="inline-flex items-center"
-        title={title ?? "Certidão pendente ou vencida"}
-        aria-label="Alerta amarelo de certidão"
-      >
-        <TriangleAlert className="size-4 text-amber-500" aria-hidden="true" />
-      </span>
+      <Tooltip delayDuration={100}>
+        <TooltipTrigger asChild tabIndex={0} aria-label="Alerta amarelo de certidão">
+          <span className="inline-flex items-center">
+            <TriangleAlert className="size-4 text-amber-500" aria-hidden="true" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {reasons && reasons.length
+            ? reasons.map((r, i) => <div key={i}>{r}</div>)
+            : title ?? "Certidão pendente ou vencida"}
+        </TooltipContent>
+      </Tooltip>
     );
   }
   return null;
