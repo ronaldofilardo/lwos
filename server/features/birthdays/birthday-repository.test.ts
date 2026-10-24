@@ -4,7 +4,13 @@ const repositoryMocks = vi.hoisted(() => ({
   asc: vi.fn((column: unknown) => ({ order: column })),
   eq: vi.fn((left: unknown, right: unknown) => ({ left, right })),
   requireDatabase: vi.fn(),
-  people: { id: "people.id", fullName: "people.fullName", birthDate: "people.birthDate", familyId: "people.familyId" },
+  people: {
+    id: "people.id",
+    fullName: "people.fullName",
+    birthDate: "people.birthDate",
+    vinculo: "people.vinculo",
+    familyId: "people.familyId",
+  },
   families: { id: "families.id", name: "families.name" },
 }));
 
@@ -34,6 +40,7 @@ describe("birthday-repository", () => {
         id: "person-1",
         fullName: "Ana Silva",
         birthDate: "1990-10-19",
+        vinculo: "TITULAR",
         projectName: "Projeto A",
       },
     ];
@@ -48,6 +55,7 @@ describe("birthday-repository", () => {
       id: people.id,
       fullName: people.fullName,
       birthDate: people.birthDate,
+      vinculo: people.vinculo,
       projectName: families.name,
     });
     expect(from).toHaveBeenCalledWith(people);

@@ -6262,6 +6262,7 @@ async function listProjectBirthdays() {
       id: people.id,
       fullName: people.fullName,
       birthDate: people.birthDate,
+      vinculo: people.vinculo,
       projectName: families.name
     }).from(people).leftJoin(families, eq29(people.familyId, families.id)).orderBy(asc2(people.fullName));
   } catch (cause) {

@@ -10,6 +10,7 @@ export async function listProjectBirthdays() {
         id: people.id,
         fullName: people.fullName,
         birthDate: people.birthDate,
+        vinculo: people.vinculo,
         projectName: families.name,
       })
       .from(people)

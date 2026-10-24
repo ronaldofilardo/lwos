@@ -4,6 +4,10 @@ import {
   isDataIsoValida,
 } from "@shared/validation";
 import { formatDateOnlyBR } from "@shared/validation/datas";
+import {
+  vinculoLabels,
+  type Vinculo,
+} from "@/features/families/types";
 import type { BirthdayPerson } from "./types";
 
 export function formatBirthdayDate(birthDate: string | null): string {
@@ -11,6 +15,13 @@ export function formatBirthdayDate(birthDate: string | null): string {
   return isDataIsoValida(birthDate)
     ? formatDateOnlyBR(birthDate)
     : "Data inválida";
+}
+
+export function formatBirthdayVinculo(vinculo: Vinculo | null): string {
+  if (vinculo === "TITULAR" || vinculo === "CONJUGE") {
+    return vinculoLabels[vinculo];
+  }
+  return "Outros";
 }
 
 export function getBirthdayAge(

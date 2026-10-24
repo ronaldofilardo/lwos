@@ -1,5 +1,6 @@
 import {
   formatBirthdayDate,
+  formatBirthdayVinculo,
   getBirthdayAge,
   isBirthdayThisWeek,
 } from "./birthday-utils";
@@ -22,16 +23,17 @@ export function BirthdaysList({ people }: { people: BirthdayPerson[] }) {
 
   return (
     <div className="overflow-x-auto rounded-xl border border-lucathi-line bg-white">
-      <table className="w-full min-w-[40rem] text-left text-sm">
+      <table className="w-full min-w-[52rem] text-left text-sm">
         <caption className="sr-only">
-          Pessoas cadastradas, datas de nascimento e idades
+          Pessoas, data de nascimento, vínculo, idade e projeto
         </caption>
         <thead className="bg-lucathi-mist text-xs uppercase tracking-[0.12em] text-lucathi-gray">
           <tr>
             <th scope="col" className="px-4 py-3">Pessoa</th>
-            <th scope="col" className="px-4 py-3">Projeto</th>
             <th scope="col" className="px-4 py-3">Nascimento</th>
+            <th scope="col" className="px-4 py-3">Vínculo</th>
             <th scope="col" className="px-4 py-3">Idade</th>
+            <th scope="col" className="px-4 py-3">Projeto</th>
             <th scope="col" className="px-4 py-3">Aniversário</th>
           </tr>
         </thead>
@@ -48,14 +50,17 @@ export function BirthdaysList({ people }: { people: BirthdayPerson[] }) {
                 <td className="px-4 py-4 font-medium text-lucathi-navy">
                   {person.fullName}
                 </td>
-                <td className="px-4 py-4 text-lucathi-gray">
-                  {person.projectName ?? "Projeto não identificado"}
-                </td>
                 <td className="px-4 py-4 text-lucathi-ink">
                   {formatBirthdayDate(person.birthDate)}
                 </td>
                 <td className="px-4 py-4 text-lucathi-ink">
+                  {formatBirthdayVinculo(person.vinculo)}
+                </td>
+                <td className="px-4 py-4 text-lucathi-ink">
                   {formatAge(person.birthDate)}
+                </td>
+                <td className="px-4 py-4 text-lucathi-gray">
+                  {person.projectName ?? "Projeto não identificado"}
                 </td>
                 <td className="px-4 py-4">
                   {thisWeek ? (

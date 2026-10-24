@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatBirthdayDate,
+  formatBirthdayVinculo,
   getBirthdayAge,
   hasBirthdaysThisWeek,
   isBirthdayThisWeek,
@@ -21,6 +22,13 @@ describe("birthday-utils", () => {
     expect(getBirthdayAge(null, "2026-10-09")).toBeNull();
   });
 
+  it("formats titular, spouse, and other member links", () => {
+    expect(formatBirthdayVinculo("TITULAR")).toBe("Titular");
+    expect(formatBirthdayVinculo("CONJUGE")).toBe("Cônjuge");
+    expect(formatBirthdayVinculo("FILHO")).toBe("Outros");
+    expect(formatBirthdayVinculo(null)).toBe("Outros");
+  });
+
   it("marks birthdays from Monday through Sunday", () => {
     expect(isBirthdayThisWeek("1990-10-19", "2026-10-24")).toBe(true);
     expect(isBirthdayThisWeek("1990-10-25", "2026-10-24")).toBe(true);
@@ -34,8 +42,8 @@ describe("birthday-utils", () => {
 
   it("reports whether any person has a birthday this week", () => {
     const people: BirthdayPerson[] = [
-      { id: "1", fullName: "Ana", birthDate: null, projectName: "Projeto A" },
-      { id: "2", fullName: "Bia", birthDate: "1990-10-19", projectName: "Projeto B" },
+      { id: "1", fullName: "Ana", birthDate: null, vinculo: "TITULAR", projectName: "Projeto A" },
+      { id: "2", fullName: "Bia", birthDate: "1990-10-19", vinculo: "FILHO", projectName: "Projeto B" },
     ];
     expect(hasBirthdaysThisWeek(people, "2026-10-24")).toBe(true);
     expect(hasBirthdaysThisWeek(people, "2026-10-26")).toBe(false);
@@ -47,9 +55,9 @@ describe("birthday-utils", () => {
 
   it("sorts by birthday date and places missing dates last", () => {
     const people: BirthdayPerson[] = [
-      { id: "2", fullName: "Bia", birthDate: null, projectName: "Projeto B" },
-      { id: "1", fullName: "Ana", birthDate: "1990-03-10", projectName: "Projeto A" },
-      { id: "3", fullName: "Caio", birthDate: "1980-01-20", projectName: "Projeto C" },
+      { id: "2", fullName: "Bia", birthDate: null, vinculo: null, projectName: "Projeto B" },
+      { id: "1", fullName: "Ana", birthDate: "1990-03-10", vinculo: "TITULAR", projectName: "Projeto A" },
+      { id: "3", fullName: "Caio", birthDate: "1980-01-20", vinculo: "CONJUGE", projectName: "Projeto C" },
     ];
     expect(sortBirthdayPeople(people).map(person => person.id)).toEqual([
       "3",
