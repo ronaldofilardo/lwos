@@ -855,28 +855,24 @@ describe("person-repository dependente (IRPF do titular)", () => {
     expect(dependentIrpfMocks.syncDependentIrpfStatus).not.toHaveBeenCalled();
   });
 
-  it("recusa marcar dependente enquanto o IRPF do titular não existe", async () => {
-    const { db } = queuedDb([[], [{ id: "titular-1" }], []]);
-    databaseMocks.requireDatabase.mockResolvedValue(db);
-
-    await expect(addPersonRecord(dependenteInput)).rejects.toThrow(
-      "O IRPF do titular precisa estar recebido para marcar um dependente."
-    );
-    expect(db.transaction).not.toHaveBeenCalled();
-  });
-
-  it("recusa marcar dependente com o IRPF do titular ainda pendente", async () => {
-    const { db } = queuedDb([
+  it("permite marcar dependente com o titular existente mesmo com IRPF pendente", async () => {
+    const { db, insertValues } = queuedDb([
       [],
       [{ id: "titular-1" }],
-      [{ status: "PENDENTE" }],
+      [{ id: "titular-1" }],
     ]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
+    dependentIrpfMocks.syncDependentIrpfStatus.mockResolvedValue(1);
+    idMocks.createId.mockReturnValueOnce("pessoa-1").mockReturnValue("doc");
 
-    await expect(addPersonRecord(dependenteInput)).rejects.toThrow(
-      "O IRPF do titular precisa estar recebido para marcar um dependente."
+    await expect(addPersonRecord(dependenteInput)).resolves.toBe("pessoa-1");
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ isDependent: true, vinculo: "FILHO" })
     );
-    expect(db.transaction).not.toHaveBeenCalled();
+    expect(dependentIrpfMocks.syncDependentIrpfStatus).toHaveBeenCalledWith(
+      "familia-1"
+    );
   });
 
   it("cria dependente com IRPF do titular recebido e sincroniza o status", async () => {

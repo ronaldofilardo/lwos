@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   isCpfValido,
   isNascimentoValido,
@@ -20,16 +20,42 @@ import type { PersonFormSubmit, PersonSummary } from "./personFormTypes";
 
 export function usePersonFormState({
   initial,
-  people,
+  people = [],
 }: {
   initial?: Partial<PersonFormSubmit>;
-  people: PersonSummary[];
+  people?: PersonSummary[];
 }) {
-  const [vinculo, setVinculo] = useState<Vinculo>(initial?.vinculo ?? "TITULAR");
+  const titular = useMemo(
+    () => people.find(p => p.isPrimaryContact || p.vinculo === "TITULAR"),
+    [people]
+  );
+  const hasTitular = Boolean(titular);
+  const hasConjuge = useMemo(
+    () => people.some(p => p.vinculo === "CONJUGE"),
+    [people]
+  );
+  const defaultVinculo: Vinculo = useMemo(() => {
+    if (initial?.vinculo) return initial.vinculo;
+    if (!hasTitular) return "TITULAR";
+    if (!hasConjuge) return "CONJUGE";
+    return "FILHO";
+  }, [initial?.vinculo, hasTitular, hasConjuge]);
+
+  const [vinculo, setVinculoRaw] = useState<Vinculo>(defaultVinculo);
+
+  useEffect(() => {
+    if (!initial?.vinculo) {
+      setVinculoRaw(defaultVinculo);
+    }
+  }, [defaultVinculo, initial?.vinculo]);
+
   const [parentPersonId, setParentPersonId] = useState(
     initial?.parentPersonId ?? ""
   );
-  const [name, setName] = useState(initial?.fullName ?? "");
+  const [name, setName] = useState(
+    initial?.fullName ??
+      (defaultVinculo === "CONJUGE" ? titular?.spouseName?.trim() ?? "" : "")
+  );
   const [email, setEmail] = useState(initial?.email ?? "");
   const [taxId, setTaxId] = useState(mascaraCpf(initial?.taxId ?? ""));
   const [birthDate, setBirthDate] = useState(initial?.birthDate ?? "");
@@ -56,6 +82,20 @@ export function usePersonFormState({
   const [city, setCity] = useState(initial?.city ?? "");
   const [uf, setUf] = useState<Uf | "">(initial?.uf ?? "");
 
+  const setVinculo = (nextVinculo: Vinculo) => {
+    setVinculoRaw(nextVinculo);
+    setParentPersonId("");
+    if (nextVinculo === "CONJUGE" && titular?.spouseName) {
+      setName(titular.spouseName.trim());
+    }
+  };
+
+  useEffect(() => {
+    if (vinculo === "CONJUGE" && titular?.spouseName && !name.trim()) {
+      setName(titular.spouseName.trim());
+    }
+  }, [vinculo, titular?.spouseName, name]);
+
   const needsParent = vinculo === "NETO" || vinculo === "BISNETO";
   const showCivilStatus = vinculo !== "CONJUGE";
   const isTitular = vinculo === "TITULAR";
@@ -63,7 +103,11 @@ export function usePersonFormState({
     Boolean(birthDate) &&
     isNascimentoValido(birthDate) &&
     idadeEmAnosCompletos(birthDate) < 18;
-  const effectiveCivilStatus: CivilStatus = menor ? "SOLTEIRO" : civilStatus;
+  const effectiveCivilStatus: CivilStatus = menor
+    ? "SOLTEIRO"
+    : vinculo === "CONJUGE"
+      ? ((titular?.civilStatus as CivilStatus) || "CASADO")
+      : civilStatus;
   const married = showCivilStatus && !menor && isMarriedStatus(effectiveCivilStatus);
 
   const parentOptions = useMemo(() => {
@@ -112,8 +156,14 @@ export function usePersonFormState({
     vinculo,
     parentPersonId: needsParent ? parentPersonId : undefined,
     spouseName: married ? spouseName : undefined,
-    civilStatus: showCivilStatus ? effectiveCivilStatus : undefined,
-    maritalRegime: married ? maritalRegime : undefined,
+    civilStatus: showCivilStatus
+      ? effectiveCivilStatus
+      : ((titular?.civilStatus as CivilStatus) || "CASADO"),
+    maritalRegime: married
+      ? maritalRegime
+      : vinculo === "CONJUGE"
+        ? ((titular?.maritalRegime as MaritalRegime) || "CPB")
+        : undefined,
     isDependent: isTitular ? undefined : isDependent,
     addressSameAsPrimary: isTitular ? false : addressSameAsPrimary,
     cep,
@@ -126,7 +176,8 @@ export function usePersonFormState({
   };
 
   const reset = () => {
-    setName("");
+    setVinculoRaw(defaultVinculo);
+    setName(defaultVinculo === "CONJUGE" ? titular?.spouseName?.trim() ?? "" : "");
     setEmail("");
     setTaxId("");
     setBirthDate("");

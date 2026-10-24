@@ -11,6 +11,7 @@
 | TBD-07 | Relações sucessórias e procuradores | MVP2 | Não criar relações ou poderes automaticamente |
 | TBD-08 | LWR, proposta financeira e contratação | Resolvido na modelagem | LWR gerenciado como apresentação Taylor-made (Canva/slides); Proposta financeira separada com escopo, valor, aceite e fluxo de contraproposta com análise pelo Sócio |
 | TBD-09 | Cálculos tributários avançados | MVP2 | Exibir somente cálculos e parâmetros formalmente aprovados |
+| TBD-10 | Tela inicial: campo de clientes aniversariantes (baixa prioridade). | Backlog | Não implementar agora; registrar apenas como demanda futura |
 
 ## Decisões fechadas e padrões adotados (atualização Fases 1–10)
 

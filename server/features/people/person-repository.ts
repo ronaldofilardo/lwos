@@ -158,10 +158,10 @@ async function assertConjugeNotDuplicated(familyId: string) {
 }
 
 /**
- * Marcar isDependent exige que o IRPF do titular já esteja recebido
- * (RECEBIDO_EM_ANALISE ou VALIDADO) — o dependente herda o IRPF do titular.
+ * Marcar isDependent exige que a família tenha um titular marcado.
+ * O IRPF do dependente herdará o status do IRPF do titular (sincronizado automaticamente).
  */
-async function assertTitularIrpfReceived(familyId: string) {
+async function assertTitularExistsForDependent(familyId: string) {
   const db = await requireDatabase();
   const [titular] = await db
     .select({ id: people.id })
@@ -171,26 +171,8 @@ async function assertTitularIrpfReceived(familyId: string) {
     )
     .limit(1);
   if (!titular) {
-    throw new Error("Esta família ainda não tem titular marcado. Defina o titular antes de marcar um dependente.");
-  }
-  const [irpf] = await db
-    .select({ status: documents.status })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.familyId, familyId),
-        eq(documents.entityType, "PESSOA"),
-        eq(documents.entityId, titular.id),
-        eq(documents.category, "IRPF")
-      )
-    )
-    .limit(1);
-  if (
-    !irpf ||
-    (irpf.status !== "RECEBIDO_EM_ANALISE" && irpf.status !== "VALIDADO")
-  ) {
     throw new Error(
-      "O IRPF do titular precisa estar recebido para marcar um dependente."
+      "Esta família ainda não tem titular marcado. Defina o titular antes de marcar um dependente."
     );
   }
 }
@@ -240,6 +222,9 @@ export async function addPersonRecord(
   }
 
   await assertCpfNotDuplicatedInFamily(input.familyId, input.taxId);
+  let inheritedCivilStatus: string | null | undefined = input.civilStatus;
+  let inheritedMaritalRegime: string | null | undefined = input.maritalRegime;
+
   if (input.vinculo === "CONJUGE") {
     await assertConjugeNotDuplicated(input.familyId);
     const titular = await getPrimaryContact(input.familyId);
@@ -253,12 +238,26 @@ export async function addPersonRecord(
         );
       }
     }
+    if (titular) {
+      inheritedCivilStatus = inheritedCivilStatus ?? titular.civilStatus;
+      inheritedMaritalRegime = inheritedMaritalRegime ?? titular.maritalRegime;
+      if (!titular.spouseName && input.fullName) {
+        await db
+          .update(people)
+          .set({ spouseName: input.fullName.trim() })
+          .where(eq(people.id, titular.id));
+      }
+    }
   }
 
-  const { civilStatus, maritalRegime } = resolveCivilFields(input);
+  const { civilStatus, maritalRegime } = resolveCivilFields({
+    ...input,
+    civilStatus: inheritedCivilStatus,
+    maritalRegime: inheritedMaritalRegime,
+  });
 
   if (input.isDependent && input.vinculo !== "TITULAR") {
-    await assertTitularIrpfReceived(input.familyId);
+    await assertTitularExistsForDependent(input.familyId);
   }
 
   await db.transaction(async tx => {
@@ -384,7 +383,7 @@ export async function updatePersonRecord(
   }
   const isDependent = input.isDependent ?? person.isDependent ?? false;
   if (isDependent && person.vinculo !== "TITULAR") {
-    await assertTitularIrpfReceived(input.familyId);
+    await assertTitularExistsForDependent(input.familyId);
   }
 
   const taxChanged = Boolean(input.taxId) && input.taxId !== person.taxId;

@@ -1,6 +1,8 @@
 import { Input } from "@/components/ui/input";
+import { LabeledField } from "@/components/LabeledField";
 import { propertyUtilityLabels } from "./types";
 import { inputClass, selectClass } from "./propertyFormRules";
+import { propertyFieldCopy as copy } from "./propertyFieldCopy";
 import type { PropertyFormValues } from "./propertyFormValues";
 
 export function PropertyUtilityFields({
@@ -13,24 +15,36 @@ export function PropertyUtilityFields({
   const set = (patch: Partial<PropertyFormValues>) => onChange(patch);
   return (
     <>
-      <select
-        value={values.utility}
-        onChange={e => set({ utility: e.target.value })}
-        className={selectClass}
-        aria-label="Utilidade do imóvel"
-      >
-        {Object.entries(propertyUtilityLabels).map(([value, label]) => (
-          <option key={value} value={value}>{label}</option>
-        ))}
-      </select>
+      {/* O valor inicial é «Pendente» (enum sem vazio): não há opção «Selecione». */}
+      <LabeledField label={copy.utility.label}>
+        {id => (
+          <select
+            id={id}
+            value={values.utility}
+            onChange={e => set({ utility: e.target.value })}
+            className={selectClass}
+          >
+            {Object.entries(propertyUtilityLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        )}
+      </LabeledField>
       {values.utility === "LOCACAO_ARRENDAMENTO" ? (
-        <Input
-          className={inputClass}
-          inputMode="decimal"
-          value={values.rentValue}
-          onChange={e => set({ rentValue: e.target.value })}
-          placeholder="Valor de locação (R$) — obrigatório"
-        />
+        <LabeledField label={copy.rentValue.label}>
+          {id => (
+            <Input
+              id={id}
+              className={inputClass}
+              inputMode="decimal"
+              value={values.rentValue}
+              onChange={e => set({ rentValue: e.target.value })}
+              placeholder={copy.rentValue.placeholder}
+            />
+          )}
+        </LabeledField>
       ) : null}
     </>
   );

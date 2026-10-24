@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LabeledField } from "@/components/LabeledField";
 import { Textarea } from "@/components/ui/textarea";
 import {
   projectObjectiveLabels,
@@ -30,11 +31,16 @@ export function FamilyForm({ data, disabled, existingNames, onChange, onSubmit }
   };
   return (
     <div className="space-y-4">
-      <Input
-        value={data.name}
-        onChange={e => onChange({ ...data, name: e.target.value })}
-        placeholder="Projeto"
-      />
+      <LabeledField label="Projeto">
+        {id => (
+          <Input
+            id={id}
+            value={data.name}
+            onChange={e => onChange({ ...data, name: e.target.value })}
+            placeholder="Ex.: Família Silva"
+          />
+        )}
+      </LabeledField>
       {duplicateName ? (
         <p className="flex items-center gap-1.5 text-xs text-amber-700">
           <AlertTriangle className="size-3.5 shrink-0" />
@@ -62,11 +68,16 @@ export function FamilyForm({ data, disabled, existingNames, onChange, onSubmit }
           ))}
         </div>
       </fieldset>
-      <Textarea
-        value={data.notes}
-        onChange={e => onChange({ ...data, notes: e.target.value })}
-        placeholder="Observação (opcional)"
-      />
+      <LabeledField label="Observação (opcional)">
+        {id => (
+          <Textarea
+            id={id}
+            value={data.notes}
+            onChange={e => onChange({ ...data, notes: e.target.value })}
+            placeholder="Ex.: Informações adicionais"
+          />
+        )}
+      </LabeledField>
       <Button
         disabled={disabled || trimmedName.length < 3 || data.objectives.length === 0}
         onClick={onSubmit}

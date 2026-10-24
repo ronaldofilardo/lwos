@@ -3,6 +3,7 @@ import { Building2, Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LabeledField } from "@/components/LabeledField";
 import {
   Dialog,
   DialogContent,
@@ -192,41 +193,55 @@ function StakeholderManager({
       {remaining > 0 ? (
         <>
           <div className="grid gap-2 md:grid-cols-2">
-            <select
-              value={personId}
-              onChange={e => {
-                setPersonId(e.target.value);
-                if (e.target.value) setExternalName("");
-              }}
-              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-              aria-label="Membro da família"
-            >
-              <option value="">Membro da família…</option>
-              {(people ?? []).map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.fullName}
-                </option>
-              ))}
-            </select>
-            <Input
-              value={externalName}
-              onChange={e => {
-                setExternalName(e.target.value);
-                if (e.target.value) setPersonId("");
-              }}
-              placeholder="Não-membro (nome completo)"
-              className="h-9 text-xs"
-              disabled={Boolean(personId)}
-            />
+            <LabeledField label="Membro da família">
+              {id => (
+                <select
+                  id={id}
+                  value={personId}
+                  onChange={e => {
+                    setPersonId(e.target.value);
+                    if (e.target.value) setExternalName("");
+                  }}
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  <option value="">Selecione</option>
+                  {(people ?? []).map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.fullName}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </LabeledField>
+            <LabeledField label="Não-membro (nome completo)">
+              {id => (
+                <Input
+                  id={id}
+                  value={externalName}
+                  onChange={e => {
+                    setExternalName(e.target.value);
+                    if (e.target.value) setPersonId("");
+                  }}
+                  placeholder="Ex.: João da Silva"
+                  className="h-9 text-xs"
+                  disabled={Boolean(personId)}
+                />
+              )}
+            </LabeledField>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              value={percentage}
-              onChange={e => setPercentage(e.target.value)}
-              inputMode="decimal"
-              placeholder="Participação (%)"
-              className="h-9 w-40 text-xs"
-            />
+          <div className="flex flex-wrap items-end gap-2">
+            <LabeledField label="Participação (%)" className="w-40">
+              {id => (
+                <Input
+                  id={id}
+                  value={percentage}
+                  onChange={e => setPercentage(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="Ex.: 50"
+                  className="h-9 text-xs"
+                />
+              )}
+            </LabeledField>
             <Button
               size="sm"
               disabled={
@@ -325,18 +340,28 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
-        <Input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="Denominação social"
-        />
+      <div className="mt-4 grid items-end gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
+        <LabeledField label="Denominação social">
+          {id => (
+            <Input
+              id={id}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Ex.: Silva Participações Ltda."
+            />
+          )}
+        </LabeledField>
         {isOffshore ? null : (
-          <Input
-            value={taxNumber}
-            onChange={e => handleTaxNumberChange(e.target.value)}
-            placeholder="CNPJ"
-          />
+          <LabeledField label="CNPJ">
+            {id => (
+              <Input
+                id={id}
+                value={taxNumber}
+                onChange={e => handleTaxNumberChange(e.target.value)}
+                placeholder="Ex.: 12.345.678/0001-90"
+              />
+            )}
+          </LabeledField>
         )}
         <label className="flex h-10 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-sm">
           <input

@@ -2913,6 +2913,12 @@ function isMarriedStatus(status) {
   return Boolean(status && marriedStatuses.has(status));
 }
 
+// server/features/people/normalize-name.ts
+function normalizePersonName(value) {
+  if (!value) return "";
+  return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
 // server/features/people/person-repository.ts
 async function assertCpfNotUsedByAnotherFamily(taxId, familyId) {
   const conflictingFamilyId = await findFamilyIdByPrimaryContactCpf(
@@ -2923,7 +2929,7 @@ async function assertCpfNotUsedByAnotherFamily(taxId, familyId) {
   const conflictingFamily = await getFamilyRecord(conflictingFamilyId);
   const familyLabel = conflictingFamily?.name ?? `fam\xEDlia ${conflictingFamilyId}`;
   throw new Error(
-    `Este CPF j\xE1 \xE9 o titular de outra fam\xEDlia (${familyLabel}). Corrija o CPF ou defina outra pessoa como titular.`
+    `Este CPF j\xE1 consta como titular de outro projeto (\xAB${familyLabel}\xBB). Um CPF s\xF3 pode ser titular de um projeto. Corrija o CPF ou ajuste o cadastro no outro projeto.`
   );
 }
 async function assertParentMatches(familyId, parentPersonId, expectedVinculo) {
@@ -2986,25 +2992,14 @@ async function assertConjugeNotDuplicated(familyId) {
     );
   }
 }
-async function assertTitularIrpfReceived(familyId) {
+async function assertTitularExistsForDependent(familyId) {
   const db = await requireDatabase();
   const [titular] = await db.select({ id: people.id }).from(people).where(
     and9(eq12(people.familyId, familyId), eq12(people.isPrimaryContact, true))
   ).limit(1);
   if (!titular) {
-    throw new Error("Defina o titular antes de marcar um dependente.");
-  }
-  const [irpf] = await db.select({ status: documents.status }).from(documents).where(
-    and9(
-      eq12(documents.familyId, familyId),
-      eq12(documents.entityType, "PESSOA"),
-      eq12(documents.entityId, titular.id),
-      eq12(documents.category, "IRPF")
-    )
-  ).limit(1);
-  if (!irpf || irpf.status !== "RECEBIDO_EM_ANALISE" && irpf.status !== "VALIDADO") {
     throw new Error(
-      "O IRPF do titular precisa estar recebido para marcar um dependente."
+      "Esta fam\xEDlia ainda n\xE3o tem titular marcado. Defina o titular antes de marcar um dependente."
     );
   }
 }
@@ -3038,15 +3033,41 @@ async function addPersonRecord(input) {
     );
   }
   await assertCpfNotDuplicatedInFamily(input.familyId, input.taxId);
+  let inheritedCivilStatus = input.civilStatus;
+  let inheritedMaritalRegime = input.maritalRegime;
   if (input.vinculo === "CONJUGE") {
     await assertConjugeNotDuplicated(input.familyId);
+    const titular = await getPrimaryContact(input.familyId);
+    if (titular?.spouseName) {
+      if (normalizePersonName(input.fullName) !== normalizePersonName(titular.spouseName)) {
+        throw new Error(
+          `O c\xF4njuge cadastrado deve ter o mesmo nome informado no cadastro do titular (\xAB${titular.spouseName}\xBB).`
+        );
+      }
+    }
+    if (titular) {
+      inheritedCivilStatus = inheritedCivilStatus ?? titular.civilStatus;
+      inheritedMaritalRegime = inheritedMaritalRegime ?? titular.maritalRegime;
+      if (!titular.spouseName && input.fullName) {
+        await db.update(people).set({ spouseName: input.fullName.trim() }).where(eq12(people.id, titular.id));
+      }
+    }
   }
-  const { civilStatus, maritalRegime } = resolveCivilFields(input);
+  const { civilStatus, maritalRegime } = resolveCivilFields({
+    ...input,
+    civilStatus: inheritedCivilStatus,
+    maritalRegime: inheritedMaritalRegime
+  });
   if (input.isDependent && input.vinculo !== "TITULAR") {
-    await assertTitularIrpfReceived(input.familyId);
+    await assertTitularExistsForDependent(input.familyId);
   }
   await db.transaction(async (tx) => {
-    if (input.isPrimaryContact && input.taxId) {
+    const [existingPrimary] = await tx.select({ id: people.id }).from(people).where(
+      and9(eq12(people.familyId, input.familyId), eq12(people.isPrimaryContact, true))
+    ).limit(1);
+    const autoPrimary = input.vinculo === "TITULAR" && !existingPrimary;
+    const isPrimary = Boolean(input.isPrimaryContact) || autoPrimary;
+    if (isPrimary && input.taxId) {
       await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
       await tx.update(people).set({ isPrimaryContact: false }).where(eq12(people.familyId, input.familyId));
     }
@@ -3063,7 +3084,7 @@ async function addPersonRecord(input) {
       vinculo: input.vinculo,
       parentPersonId: input.parentPersonId || null,
       spouseName: input.spouseName?.trim() || null,
-      isPrimaryContact: input.isPrimaryContact ?? false,
+      isPrimaryContact: isPrimary,
       isDependent: input.isDependent ?? false,
       phone: input.phone || null,
       addressSameAsPrimary: input.addressSameAsPrimary ?? false,
@@ -3125,9 +3146,19 @@ async function updatePersonRecord(input) {
     maritalRegime: input.maritalRegime ?? person.maritalRegime,
     birthDate: input.birthDate
   });
+  if (person.vinculo === "CONJUGE" && input.fullName) {
+    const titular = await getPrimaryContact(input.familyId);
+    if (titular?.spouseName) {
+      if (normalizePersonName(input.fullName) !== normalizePersonName(titular.spouseName)) {
+        throw new Error(
+          `O c\xF4njuge cadastrado deve ter o mesmo nome informado no cadastro do titular (\xAB${titular.spouseName}\xBB).`
+        );
+      }
+    }
+  }
   const isDependent = input.isDependent ?? person.isDependent ?? false;
   if (isDependent && person.vinculo !== "TITULAR") {
-    await assertTitularIrpfReceived(input.familyId);
+    await assertTitularExistsForDependent(input.familyId);
   }
   const taxChanged = Boolean(input.taxId) && input.taxId !== person.taxId;
   const needsMigration = taxChanged && person.isPrimaryContact && Boolean(input.taxId);
@@ -4343,6 +4374,38 @@ function computeSubjectAlerts(rows, today = /* @__PURE__ */ new Date()) {
   }
   return bySubject;
 }
+function computeSubjectReasons(rows, today = /* @__PURE__ */ new Date()) {
+  const grouped = {};
+  for (const row of rows) {
+    const level = certidaoAlertLevel(row.status, row.validUntil, today);
+    if (level === "NENHUM") continue;
+    const key = subjectAlertKey(row.scope, row.subjectId);
+    const typeLabel = row.type ? CERTIDAO_TYPE_LABELS[row.type] ?? row.type : "Certid\xE3o";
+    let situation = "";
+    if (row.status === "POSITIVA") situation = "positiva";
+    else if (row.status === "SOMENTE_FISICA") situation = "somente f\xEDsica";
+    else if (row.status === "PENDENTE") situation = "pendente";
+    else if (row.validUntil) {
+      const iso2 = String(row.validUntil).slice(0, 10);
+      if (iso2 < todayIso(today)) {
+        const [y, m, d] = iso2.split("-");
+        situation = `vencida em ${d}/${m}/${y}`;
+      }
+    }
+    if (!situation) continue;
+    const reason = `${typeLabel} \u2014 ${situation}`;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push({ level, reason });
+  }
+  const result = {};
+  for (const [key, items] of Object.entries(grouped)) {
+    items.sort(
+      (a, b) => a.level === "VERMELHO" && b.level !== "VERMELHO" ? -1 : b.level === "VERMELHO" && a.level !== "VERMELHO" ? 1 : 0
+    );
+    result[key] = items.map((i) => i.reason);
+  }
+  return result;
+}
 function computeAlertCounts(rows, today = /* @__PURE__ */ new Date()) {
   let vermelho = 0;
   let amarelo = 0;
@@ -4420,6 +4483,7 @@ async function getProjectAlertSummary(familyId) {
   }));
   return {
     bySubject,
+    reasonsBySubject: computeSubjectReasons(rows.certidoes),
     counts: computeAlertCounts(rows.certidoes),
     pendenteGravames,
     redCertidoes,
@@ -4967,6 +5031,7 @@ var lwrRouter = router({
 
 // server/features/people/person-router.ts
 import { z as z17 } from "zod";
+import { TRPCError as TRPCError4 } from "@trpc/server";
 var personRouter = router({
   list: protectedProcedure.input(z17.object({ familyId: z17.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
@@ -4975,7 +5040,16 @@ var personRouter = router({
   create: protectedProcedure.input(personInputSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.PEOPLE_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
-    const personId = await addPersonRecord(input);
+    let personId;
+    try {
+      personId = await addPersonRecord(input);
+    } catch (err) {
+      if (err instanceof TRPCError4) throw err;
+      throw new TRPCError4({
+        code: "BAD_REQUEST",
+        message: err instanceof Error ? err.message : "Erro ao cadastrar pessoa."
+      });
+    }
     await ensureCertidoesForSubject({
       familyId: input.familyId,
       scope: "PESSOA",
@@ -4995,7 +5069,16 @@ var personRouter = router({
   update: protectedProcedure.input(personUpdateSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.PEOPLE_UPDATE);
     await assertFamilyAccess(ctx, input.familyId);
-    const result = await updatePersonRecord(input);
+    let result;
+    try {
+      result = await updatePersonRecord(input);
+    } catch (err) {
+      if (err instanceof TRPCError4) throw err;
+      throw new TRPCError4({
+        code: "BAD_REQUEST",
+        message: err instanceof Error ? err.message : "Erro ao atualizar pessoa."
+      });
+    }
     const person = await getPersonRecord(input.personId);
     let requirementsCreated = 0;
     let requirementsRemoved = 0;
@@ -5170,135 +5253,6 @@ import { z as z20 } from "zod";
 init_schema();
 init_database();
 import { desc as desc7, eq as eq23, and as and15 } from "drizzle-orm";
-
-// server/features/properties/property-types.ts
-import { z as z19 } from "zod";
-init_schema();
-var propertyKindSchema = z19.enum(propertyKindValues);
-var propertyUtilitySchema = z19.enum(propertyUtilityValues);
-var encumbranceTypeSchema = z19.enum(encumbranceTypeValues);
-var moneySchema = z19.number().nonnegative();
-var propertyInputSchema = z19.object({
-  familyId: z19.string().min(1, "Projeto obrigat\xF3rio."),
-  description: z19.string().min(3, "Informe a descri\xE7\xE3o (m\xEDnimo 3 caracteres).").max(240),
-  kind: propertyKindSchema.optional(),
-  uf: ufSchema.optional(),
-  cep: z19.string().max(8).optional().or(z19.literal("")),
-  hasRegistration: z19.boolean().default(true),
-  registrationNumber: z19.string().max(120).optional(),
-  alternativeDocType: z19.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
-  noRegistrationReason: z19.string().max(1e3).optional(),
-  registryOfficeNumber: z19.number().int().min(1).max(55).optional(),
-  registryUf: ufSchema.optional(),
-  registryCity: z19.string().max(120).optional(),
-  propertyCity: z19.string().min(2, "Informe a cidade do im\xF3vel.").max(120),
-  inscricaoImobiliaria: z19.string().max(120).optional(),
-  ccir: z19.string().max(40).optional(),
-  nirf: z19.string().max(40).optional(),
-  notes: z19.string().max(4e3).optional(),
-  acquisitionDate: isoDateSchema("Data de aquisi\xE7\xE3o inv\xE1lida (use AAAA-MM-DD).").optional(),
-  declaredValue: moneySchema.optional(),
-  marketValue: moneySchema.optional(),
-  venalValue: moneySchema.optional(),
-  irGcapValue: moneySchema.optional(),
-  emolumentsValue: moneySchema.optional(),
-  itbiRate: z19.number().min(0, "Al\xEDquota de ITBI n\xE3o pode ser negativa.").max(100, "Al\xEDquota de ITBI deve estar entre 0 e 100.").optional(),
-  hasLaudemio: z19.boolean().default(false),
-  laudemioRate: z19.number().min(0, "Al\xEDquota de laudemio n\xE3o pode ser negativa.").max(100, "Al\xEDquota de laudemio deve estar entre 0 e 100.").optional(),
-  utility: propertyUtilitySchema.default("PENDENTE"),
-  rentValue: moneySchema.optional(),
-  encumbranceType: encumbranceTypeSchema.default("PENDENTE"),
-  encumbranceNote: z19.string().max(1e3).optional()
-}).refine(
-  (data) => {
-    if (!data.hasRegistration) {
-      return Boolean(
-        data.alternativeDocType && data.noRegistrationReason && data.noRegistrationReason.trim().length >= 3
-      );
-    }
-    return true;
-  },
-  {
-    message: "Im\xF3veis sem matr\xEDcula exigem documento alternativo (Escritura P\xFAblica ou Contrato de Compra e Venda) e justificativa.",
-    path: ["alternativeDocType"]
-  }
-).refine(
-  (data) => {
-    if (data.kind === "RURAL") {
-      return Boolean(data.ccir?.trim() && data.nirf?.trim());
-    }
-    return true;
-  },
-  {
-    message: "Im\xF3vel rural exige CCIR e NIRF.",
-    path: ["ccir"]
-  }
-).refine(
-  (data) => {
-    if (data.hasLaudemio) {
-      return data.laudemioRate !== void 0 && data.laudemioRate > 0;
-    }
-    return true;
-  },
-  {
-    message: "Laud\xEAmio confirmado exige al\xEDquota maior que zero.",
-    path: ["laudemioRate"]
-  }
-).refine(
-  (data) => {
-    if (data.utility === "LOCACAO_ARRENDAMENTO") {
-      return data.rentValue !== void 0 && data.rentValue > 0;
-    }
-    return true;
-  },
-  {
-    message: "Loca\xE7\xE3o/Arrendamento exige valor de loca\xE7\xE3o maior que zero.",
-    path: ["rentValue"]
-  }
-);
-var propertyUpdateSchema = propertyInputSchema.omit({ familyId: true }).extend({ propertyId: z19.string().min(1) });
-var propertyOwnerInputSchema = z19.object({
-  propertyId: z19.string().min(1),
-  personId: z19.string().min(1).optional(),
-  companyId: z19.string().min(1).optional(),
-  ownershipPercentage: z19.number().positive("Percentual deve ser maior que zero.").max(100, "Percentual deve estar entre 0 e 100."),
-  rightType: z19.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
-}).refine((data) => Boolean(data.personId) !== Boolean(data.companyId), {
-  message: "A titularidade exige exatamente um dono: pessoa ou sociedade.",
-  path: ["personId"]
-});
-var propertyOwnerUpdateSchema = z19.object({
-  propertyId: z19.string().min(1),
-  ownerId: z19.string().min(1),
-  personId: z19.string().min(1).optional(),
-  companyId: z19.string().min(1).optional(),
-  ownershipPercentage: z19.number().positive().max(100).optional(),
-  rightType: z19.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
-}).refine(
-  (data) => {
-    if (data.personId === void 0 && data.companyId === void 0) {
-      return true;
-    }
-    return Boolean(data.personId) !== Boolean(data.companyId);
-  },
-  {
-    message: "A titularidade exige exatamente um dono: pessoa ou sociedade.",
-    path: ["personId"]
-  }
-);
-var propertyOwnerDeleteSchema = z19.object({
-  propertyId: z19.string().min(1),
-  ownerId: z19.string().min(1)
-});
-var removePropertySchema = z19.object({
-  familyId: z19.string().min(1),
-  propertyId: z19.string().min(1)
-});
-function isEncumbranceRed(value) {
-  return Boolean(value) && value !== "PENDENTE" && value !== "NA" && value !== "NAO_HA";
-}
-
-// server/features/properties/property-repository.ts
 var PCT_EPSILON2 = 1e-3;
 function totalOwnership(rows) {
   return rows.reduce((sum, row) => sum + Number(row.ownershipPercentage ?? 0), 0);
@@ -5424,22 +5378,6 @@ async function addPropertyOwnerRecord(input) {
   });
   return id;
 }
-async function assertCompanyOwnershipAllowed(propertyId) {
-  const property = await getPropertyRecord(propertyId);
-  if (property && isEncumbranceRed(property.encumbranceType)) {
-    throw new Error(
-      "Im\xF3vel com gravame ativo: remova o gravame (ou marque como N\xE3o h\xE1) antes de vincular a uma sociedade."
-    );
-  }
-}
-async function assertPropertyMovementAllowed(propertyId) {
-  const property = await getPropertyRecord(propertyId);
-  if (property && isEncumbranceRed(property.encumbranceType)) {
-    throw new Error(
-      "Im\xF3vel com gravame ativo: remova o gravame (ou marque como N\xE3o h\xE1) antes de alterar a titularidade."
-    );
-  }
-}
 async function updatePropertyOwnerRecord(input) {
   const db = await requireDatabase();
   await db.transaction(async (tx) => {
@@ -5489,6 +5427,130 @@ async function listPropertyOwners(propertyId) {
   const db = await requireDatabase();
   return db.select().from(propertyOwners).where(eq23(propertyOwners.propertyId, propertyId));
 }
+
+// server/features/properties/property-types.ts
+import { z as z19 } from "zod";
+init_schema();
+var propertyKindSchema = z19.enum(propertyKindValues);
+var propertyUtilitySchema = z19.enum(propertyUtilityValues);
+var encumbranceTypeSchema = z19.enum(encumbranceTypeValues);
+var moneySchema = z19.number().nonnegative();
+var propertyInputSchema = z19.object({
+  familyId: z19.string().min(1, "Projeto obrigat\xF3rio."),
+  description: z19.string().min(3, "Informe a descri\xE7\xE3o (m\xEDnimo 3 caracteres).").max(240),
+  kind: propertyKindSchema.optional(),
+  uf: ufSchema.optional(),
+  cep: z19.string().max(8).optional().or(z19.literal("")),
+  hasRegistration: z19.boolean().default(true),
+  registrationNumber: z19.string().max(120).optional(),
+  alternativeDocType: z19.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
+  noRegistrationReason: z19.string().max(1e3).optional(),
+  registryOfficeNumber: z19.number().int().min(1).max(55).optional(),
+  registryUf: ufSchema.optional(),
+  registryCity: z19.string().max(120).optional(),
+  propertyCity: z19.string().min(2, "Informe a cidade do im\xF3vel.").max(120),
+  inscricaoImobiliaria: z19.string().max(120).optional(),
+  ccir: z19.string().max(40).optional(),
+  nirf: z19.string().max(40).optional(),
+  notes: z19.string().max(4e3).optional(),
+  acquisitionDate: isoDateSchema("Data de aquisi\xE7\xE3o inv\xE1lida (use AAAA-MM-DD).").optional(),
+  declaredValue: moneySchema.optional(),
+  marketValue: moneySchema.optional(),
+  venalValue: moneySchema.optional(),
+  irGcapValue: moneySchema.optional(),
+  emolumentsValue: moneySchema.optional(),
+  itbiRate: z19.number().min(0, "Al\xEDquota de ITBI n\xE3o pode ser negativa.").max(100, "Al\xEDquota de ITBI deve estar entre 0 e 100.").optional(),
+  hasLaudemio: z19.boolean().default(false),
+  laudemioRate: z19.number().min(0, "Al\xEDquota de laudemio n\xE3o pode ser negativa.").max(100, "Al\xEDquota de laudemio deve estar entre 0 e 100.").optional(),
+  utility: propertyUtilitySchema.default("PENDENTE"),
+  rentValue: moneySchema.optional(),
+  encumbranceType: encumbranceTypeSchema.default("PENDENTE"),
+  encumbranceNote: z19.string().max(1e3).optional()
+}).refine(
+  (data) => {
+    if (!data.hasRegistration) {
+      return Boolean(
+        data.alternativeDocType && data.noRegistrationReason && data.noRegistrationReason.trim().length >= 3
+      );
+    }
+    return true;
+  },
+  {
+    message: "Im\xF3veis sem matr\xEDcula exigem documento alternativo (Escritura P\xFAblica ou Contrato de Compra e Venda) e justificativa.",
+    path: ["alternativeDocType"]
+  }
+).refine(
+  (data) => {
+    if (data.kind === "RURAL") {
+      return Boolean(data.ccir?.trim() && data.nirf?.trim());
+    }
+    return true;
+  },
+  {
+    message: "Im\xF3vel rural exige CCIR e NIRF.",
+    path: ["ccir"]
+  }
+).refine(
+  (data) => {
+    if (data.hasLaudemio) {
+      return data.laudemioRate !== void 0 && data.laudemioRate > 0;
+    }
+    return true;
+  },
+  {
+    message: "Laud\xEAmio confirmado exige al\xEDquota maior que zero.",
+    path: ["laudemioRate"]
+  }
+).refine(
+  (data) => {
+    if (data.utility === "LOCACAO_ARRENDAMENTO") {
+      return data.rentValue !== void 0 && data.rentValue > 0;
+    }
+    return true;
+  },
+  {
+    message: "Loca\xE7\xE3o/Arrendamento exige valor de loca\xE7\xE3o maior que zero.",
+    path: ["rentValue"]
+  }
+);
+var propertyUpdateSchema = propertyInputSchema.omit({ familyId: true }).extend({ propertyId: z19.string().min(1) });
+var propertyOwnerInputSchema = z19.object({
+  propertyId: z19.string().min(1),
+  personId: z19.string().min(1).optional(),
+  companyId: z19.string().min(1).optional(),
+  ownershipPercentage: z19.number().positive("Percentual deve ser maior que zero.").max(100, "Percentual deve estar entre 0 e 100."),
+  rightType: z19.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
+}).refine((data) => Boolean(data.personId) !== Boolean(data.companyId), {
+  message: "A titularidade exige exatamente um dono: pessoa ou sociedade.",
+  path: ["personId"]
+});
+var propertyOwnerUpdateSchema = z19.object({
+  propertyId: z19.string().min(1),
+  ownerId: z19.string().min(1),
+  personId: z19.string().min(1).optional(),
+  companyId: z19.string().min(1).optional(),
+  ownershipPercentage: z19.number().positive().max(100).optional(),
+  rightType: z19.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
+}).refine(
+  (data) => {
+    if (data.personId === void 0 && data.companyId === void 0) {
+      return true;
+    }
+    return Boolean(data.personId) !== Boolean(data.companyId);
+  },
+  {
+    message: "A titularidade exige exatamente um dono: pessoa ou sociedade.",
+    path: ["personId"]
+  }
+);
+var propertyOwnerDeleteSchema = z19.object({
+  propertyId: z19.string().min(1),
+  ownerId: z19.string().min(1)
+});
+var removePropertySchema = z19.object({
+  familyId: z19.string().min(1),
+  propertyId: z19.string().min(1)
+});
 
 // server/features/properties/property-router.ts
 var propertyRouter = router({
@@ -5570,8 +5632,6 @@ var propertyRouter = router({
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
-    if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
-    else await assertPropertyMovementAllowed(input.propertyId);
     const ownerId = await addPropertyOwnerRecord(input);
     await recordAudit({ action: "TITULARIDADE_REGISTRADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId, personId: input.personId ?? "", companyId: input.companyId ?? "", ownershipPercentage: input.ownershipPercentage } });
     return { ownerId };
@@ -5581,8 +5641,6 @@ var propertyRouter = router({
     const property = await getPropertyRecord(input.propertyId);
     if (!property) throw new Error("Im\xF3vel n\xE3o encontrado.");
     await assertFamilyAccess(ctx, property.familyId);
-    if (input.companyId) await assertCompanyOwnershipAllowed(input.propertyId);
-    else await assertPropertyMovementAllowed(input.propertyId);
     await updatePropertyOwnerRecord(input);
     await recordAudit({ action: "TITULARIDADE_ATUALIZADA", entityType: "IMOVEL", entityId: input.propertyId, actorUserId: user.id, familyId: property.familyId, metadata: { ownerId: input.ownerId } });
     return { success: true };
@@ -6190,11 +6248,48 @@ var addressRouter = router({
   })
 });
 
+// server/features/birthdays/birthday-router.ts
+import { TRPCError as TRPCError5 } from "@trpc/server";
+
+// server/features/birthdays/birthday-repository.ts
+init_schema();
+init_database();
+import { asc as asc2, eq as eq29 } from "drizzle-orm";
+async function listProjectBirthdays() {
+  try {
+    const db = await requireDatabase();
+    return await db.select({
+      id: people.id,
+      fullName: people.fullName,
+      birthDate: people.birthDate,
+      projectName: families.name
+    }).from(people).leftJoin(families, eq29(people.familyId, families.id)).orderBy(asc2(people.fullName));
+  } catch (cause) {
+    throw new Error("N\xE3o foi poss\xEDvel consultar os anivers\xE1rios dos projetos.", {
+      cause
+    });
+  }
+}
+
+// server/features/birthdays/birthday-router.ts
+var birthdayRouter = router({
+  list: protectedProcedure.query(({ ctx }) => {
+    if (ctx.user?.role !== "SOCIO") {
+      throw new TRPCError5({
+        code: "FORBIDDEN",
+        message: "Acesso restrito ao perfil S\xF3cio."
+      });
+    }
+    return listProjectBirthdays();
+  })
+});
+
 // server/routers.ts
 var appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   address: addressRouter,
+  birthdays: birthdayRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(async ({ ctx }) => {

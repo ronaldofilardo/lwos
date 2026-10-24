@@ -1,4 +1,12 @@
-import { LogOut, Menu, Shield, UsersRound, LayoutDashboard, UserPlus } from "lucide-react";
+import {
+  BellRing,
+  LogOut,
+  Menu,
+  Shield,
+  UsersRound,
+  LayoutDashboard,
+  UserPlus,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useRoute } from "wouter";
 import { useLocation } from "wouter";
@@ -7,9 +15,15 @@ import { Button } from "@/components/ui/button";
 import { BrandMark } from "./BrandMark";
 import { navigationItems, clientNavigationItems } from "./navigation";
 import { isClient, isAdmin } from "@shared/domain/permissions";
+import { hasBirthdaysThisWeek } from "@/features/birthdays/birthday-utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [, navigate] = useLocation(); const { user, logout } = useAuth();
+  const birthdays = trpc.birthdays.list.useQuery(undefined, {
+    enabled: user?.role === "SOCIO",
+    refetchInterval: 60 * 60 * 1000,
+  });
+  const hasWeeklyBirthdays = hasBirthdaysThisWeek(birthdays.data ?? []);
   const [matchFamily, paramsFamily] = useRoute("/familias/:familyId");
   const [matchClientFamily, paramsClientFamily] = useRoute("/minha-familia/:familyId");
   const familyId = matchFamily
@@ -19,7 +33,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       : "";
   const family = trpc.families.get.useQuery({ familyId }, { enabled: Boolean(familyId) });
   const projectTitle = family.data?.name;
-  const navItems = isClient(user?.role) ? clientNavigationItems : navigationItems;
+  const navItems = isClient(user?.role)
+    ? clientNavigationItems
+    : navigationItems.filter(
+        item => item.path !== "/aniversarios" || user?.role === "SOCIO"
+      );
   return (
     <div className="min-h-screen bg-lucathi-canvas text-lucathi-ink">
       {!isClient(user?.role) && (
@@ -31,7 +49,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {isAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/interessados")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><UserPlus className="size-4" />Interessados</Button> : null}
             {navItems.map(item => (
               <Button key={item.path} variant="ghost" onClick={() => navigate(item.path)} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy">
-                <item.icon className="size-4" />{item.label}
+                <item.icon className="size-4" />
+                {item.label}
+                {item.path === "/aniversarios" &&
+                user?.role === "SOCIO" &&
+                hasWeeklyBirthdays ? (
+                  <span
+                    className="ml-auto text-amber-700"
+                    aria-label="Há aniversariantes esta semana"
+                    role="img"
+                    title="Há aniversariantes esta semana"
+                  >
+                    <BellRing className="size-4" aria-hidden="true" />
+                  </span>
+                ) : null}
               </Button>
             ))}
           </nav>

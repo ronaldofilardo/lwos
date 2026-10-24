@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { PropertyFormFields } from "./PropertyFormFields";
 import {
@@ -53,9 +54,21 @@ export function PropertyFormModal({
     onSubmit(buildPropertyPayload(values, familyId));
   };
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const handleBackdropClick = () => {
+    setConfirmOpen(true);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-lucathi-line bg-white p-6 shadow-xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={handleBackdropClick}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-lucathi-line bg-white p-6 shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
         <h3 className="font-display text-xl text-lucathi-navy">{title}</h3>
         <div className="mt-3">
           <PropertyFormFields
@@ -73,6 +86,20 @@ export function PropertyFormModal({
           </Button>
         </div>
       </div>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encerrar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja encerrar e descartar as alterações?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={onClose}>Encerrar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

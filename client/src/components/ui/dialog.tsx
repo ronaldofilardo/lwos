@@ -1,4 +1,5 @@
 import { cn } from "@/lib/formatClasses";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./alert-dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
 import * as React from "react";
@@ -9,19 +10,20 @@ const DialogCompositionContext = React.createContext<{
   setComposing: (composing: boolean) => void;
   justEndedComposing: () => boolean;
   markCompositionEnd: () => void;
+  requestCloseConfirm: () => void;
 }>({
   isComposing: () => false,
   setComposing: () => {},
   justEndedComposing: () => false,
   markCompositionEnd: () => {},
+  requestCloseConfirm: () => {},
 });
 
 export const useDialogComposition = () =>
   React.useContext(DialogCompositionContext);
 
-function Dialog({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+function Dialog({ onOpenChange, ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const composingRef = React.useRef(false);
   const justEndedRef = React.useRef(false);
   const endTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,13 +44,35 @@ function Dialog({
           justEndedRef.current = false;
         }, 150);
       },
+      requestCloseConfirm: () => setConfirmOpen(true),
     }),
     []
   );
 
   return (
     <DialogCompositionContext.Provider value={contextValue}>
-      <DialogPrimitive.Root data-slot="dialog" {...props} />
+      <DialogPrimitive.Root data-slot="dialog" onOpenChange={onOpenChange} {...props} />
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encerrar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja encerrar e descartar as alterações?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmOpen(false);
+                onOpenChange?.(false);
+              }}
+            >
+              Encerrar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DialogCompositionContext.Provider>
   );
 }
@@ -94,11 +118,21 @@ function DialogContent({
   children,
   showCloseButton = true,
   onEscapeKeyDown,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
 }) {
-  const { isComposing } = useDialogComposition();
+  const { isComposing, requestCloseConfirm } = useDialogComposition();
+
+  const handleInteractOutside = React.useCallback(
+    (e: Event) => {
+      e.preventDefault();
+      requestCloseConfirm();
+      onInteractOutside?.(e as any);
+    },
+    [onInteractOutside, requestCloseConfirm]
+  );
 
   const handleEscapeKeyDown = React.useCallback(
     (e: KeyboardEvent) => {
@@ -128,6 +162,7 @@ function DialogContent({
           className
         )}
         onEscapeKeyDown={handleEscapeKeyDown}
+        onInteractOutside={handleInteractOutside}
         {...props}
       >
         {children}

@@ -1,8 +1,17 @@
 import { AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { LabeledField } from "@/components/LabeledField";
 import { parseNumeroPtBR, parsePercentual } from "@shared/validation";
 import { inputClass } from "./propertyFormRules";
+import { propertyFieldCopy as copy } from "./propertyFieldCopy";
 import type { PropertyFormValues } from "./propertyFormValues";
+
+type MoneyKey =
+  | "declaredValue"
+  | "marketValue"
+  | "venalValue"
+  | "irGcapValue"
+  | "emolumentsValue";
 
 export function PropertyValuesFields({
   values,
@@ -15,70 +24,69 @@ export function PropertyValuesFields({
   const market = parseNumeroPtBR(values.marketValue);
   const venal = parseNumeroPtBR(values.venalValue);
   const venalDiverges =
-    market !== null && venal !== null && market > 0 &&
+    market !== null &&
+    venal !== null &&
+    market > 0 &&
     Math.abs(venal - market) / market > 0.3;
   const itbi = parsePercentual(values.itbiRate);
   const itbiAtypical = itbi !== null && itbi > 0 && (itbi < 1 || itbi > 6);
 
+  const moneyField = (key: MoneyKey) => (
+    <LabeledField label={copy[key].label}>
+      {id => (
+        <Input
+          id={id}
+          className={inputClass}
+          inputMode="decimal"
+          value={values[key]}
+          onChange={e =>
+            set({ [key]: e.target.value } as Partial<PropertyFormValues>)
+          }
+          placeholder={copy[key].placeholder}
+        />
+      )}
+    </LabeledField>
+  );
+
   return (
     <>
-      <Input
-        type="date"
-        className={inputClass}
-        value={values.acquisitionDate}
-        onChange={e => set({ acquisitionDate: e.target.value })}
-        placeholder="Data de aquisição"
-      />
-      <Input
-        className={inputClass}
-        inputMode="decimal"
-        value={values.declaredValue}
-        onChange={e => set({ declaredValue: e.target.value })}
-        placeholder="Valor IRPF / Balanço (R$)"
-      />
-      <Input
-        className={inputClass}
-        inputMode="decimal"
-        value={values.marketValue}
-        onChange={e => set({ marketValue: e.target.value })}
-        placeholder="Valor estimado de mercado (R$)"
-      />
-      <Input
-        className={inputClass}
-        inputMode="decimal"
-        value={values.venalValue}
-        onChange={e => set({ venalValue: e.target.value })}
-        placeholder="Valor venal (R$)"
-      />
+      <LabeledField label={copy.acquisitionDate.label}>
+        {id => (
+          <Input
+            id={id}
+            type="date"
+            className={inputClass}
+            value={values.acquisitionDate}
+            onChange={e => set({ acquisitionDate: e.target.value })}
+            placeholder={copy.acquisitionDate.placeholder}
+          />
+        )}
+      </LabeledField>
+      {moneyField("declaredValue")}
+      {moneyField("marketValue")}
+      {moneyField("venalValue")}
       {venalDiverges ? (
         <p className="col-span-full flex items-center gap-1 text-xs text-amber-700">
           <AlertTriangle className="size-3.5" /> Valor venal diverge bastante do
           mercado — confira os valores.
         </p>
       ) : null}
-      <Input
-        className={inputClass}
-        inputMode="decimal"
-        value={values.irGcapValue}
-        onChange={e => set({ irGcapValue: e.target.value })}
-        placeholder="Valor de IR sobre GCAP (R$)"
-      />
-      <Input
-        className={inputClass}
-        inputMode="decimal"
-        value={values.emolumentsValue}
-        onChange={e => set({ emolumentsValue: e.target.value })}
-        placeholder="Emolumentos (R$)"
-      />
-      <div className="grid grid-cols-[1fr_1fr] gap-2">
-        <Input
-          className={inputClass}
-          inputMode="decimal"
-          value={values.itbiRate}
-          onChange={e => set({ itbiRate: e.target.value })}
-          placeholder="ITBI (%)"
-        />
-        <label className="flex items-center gap-2 text-xs text-lucathi-navy">
+      {moneyField("irGcapValue")}
+      {moneyField("emolumentsValue")}
+      <div className="grid grid-cols-[1fr_1fr] items-end gap-2">
+        <LabeledField label={copy.itbiRate.label}>
+          {id => (
+            <Input
+              id={id}
+              className={inputClass}
+              inputMode="decimal"
+              value={values.itbiRate}
+              onChange={e => set({ itbiRate: e.target.value })}
+              placeholder={copy.itbiRate.placeholder}
+            />
+          )}
+        </LabeledField>
+        <label className="flex h-9 items-center gap-2 text-xs text-lucathi-navy">
           <input
             type="checkbox"
             checked={values.hasLaudemio}
@@ -95,13 +103,18 @@ export function PropertyValuesFields({
         </p>
       ) : null}
       {values.hasLaudemio ? (
-        <Input
-          className={inputClass}
-          inputMode="decimal"
-          value={values.laudemioRate}
-          onChange={e => set({ laudemioRate: e.target.value })}
-          placeholder="Alíquota de laudêmio (%) — obrigatória"
-        />
+        <LabeledField label={copy.laudemioRate.label}>
+          {id => (
+            <Input
+              id={id}
+              className={inputClass}
+              inputMode="decimal"
+              value={values.laudemioRate}
+              onChange={e => set({ laudemioRate: e.target.value })}
+              placeholder={copy.laudemioRate.placeholder}
+            />
+          )}
+        </LabeledField>
       ) : null}
     </>
   );

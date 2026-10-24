@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { LabeledField } from "@/components/LabeledField";
 import {
   civilStatusLabels,
   maritalRegimeLabels,
@@ -14,45 +15,58 @@ export function PersonSpouseFields({ state }: { state: PersonFormState }) {
     <>
       {state.showCivilStatus ? (
         <div className="grid gap-2 md:grid-cols-2">
-          <select
-            value={state.effectiveCivilStatus}
-            disabled={state.menor}
-            onChange={e =>
-              state.setCivilStatus(e.target.value as CivilStatus)
-            }
-            className={selectClass}
-            aria-label="Estado civil"
-          >
-            {Object.entries(civilStatusLabels).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
+          <LabeledField label="Estado civil">
+            {id => (
+              <select
+                id={id}
+                value={state.effectiveCivilStatus}
+                disabled={state.menor}
+                onChange={e =>
+                  state.setCivilStatus(e.target.value as CivilStatus)
+                }
+                className={selectClass}
+              >
+                {Object.entries(civilStatusLabels).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            )}
+          </LabeledField>
           {state.married ? (
-            <select
-              value={state.maritalRegime}
-              onChange={e =>
-                state.setMaritalRegime(e.target.value as MaritalRegime)
-              }
-              className={selectClass}
-              aria-label="Regime de bens"
-            >
-              {Object.entries(maritalRegimeLabels).map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
+            <LabeledField label="Regime de bens">
+              {id => (
+                <select
+                  id={id}
+                  value={state.maritalRegime}
+                  onChange={e =>
+                    state.setMaritalRegime(e.target.value as MaritalRegime)
+                  }
+                  className={selectClass}
+                >
+                  {Object.entries(maritalRegimeLabels).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </LabeledField>
           ) : null}
         </div>
       ) : null}
       {state.married ? (
-        <Input
-          value={state.spouseName}
-          onChange={e => state.setSpouseName(e.target.value)}
-          placeholder="Nome do cônjuge"
-        />
+        <LabeledField label="Nome do cônjuge">
+          {id => (
+            <Input
+              id={id}
+              value={state.spouseName}
+              onChange={e => state.setSpouseName(e.target.value)}
+              placeholder="Ex.: João da Silva"
+            />
+          )}
+        </LabeledField>
       ) : null}
       {state.menor ? (
         <p className="text-xs text-lucathi-gray">
@@ -60,10 +74,10 @@ export function PersonSpouseFields({ state }: { state: PersonFormState }) {
         </p>
       ) : null}
       {!state.isTitular ? (
-        <label className="flex items-center gap-2 text-sm text-lucathi-navy">
+        <label className="flex items-center gap-2 text-sm text-lucathi-navy cursor-pointer">
           <input
             type="checkbox"
-            className="size-4 accent-lucathi-deep"
+            className="size-4 accent-lucathi-deep rounded"
             checked={state.isDependent}
             onChange={e => state.setIsDependent(e.target.checked)}
           />

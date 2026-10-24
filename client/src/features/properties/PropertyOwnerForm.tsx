@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { LabeledField } from "@/components/LabeledField";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/trpcError";
 import { parsePercentual } from "@shared/validation";
 import type { EncumbranceSeverity } from "./types";
+import { propertyOwnerFieldCopy as copy } from "./propertyFieldCopy";
 
 type RightType = "PROPRIEDADE" | "USUFRUTO" | "NUA_PROPRIEDADE";
 
@@ -92,7 +95,7 @@ export function PropertyOwnerForm({
   };
 
   const selectClass =
-    "h-9 rounded-md border border-input bg-background px-2 text-xs";
+    "h-9 w-full rounded-md border border-input bg-background px-2 text-xs";
 
   const canAdd =
     !isFull &&
@@ -131,34 +134,50 @@ export function PropertyOwnerForm({
             return (
               <div
                 key={row.id}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-lucathi-line/60 bg-white px-2.5 py-1.5 text-xs"
+                className={`flex flex-wrap gap-2 rounded-lg border border-lucathi-line/60 bg-white px-2.5 py-1.5 text-xs ${
+                  isEditing ? "items-end" : "items-center"
+                }`}
               >
                 <span className="font-medium text-lucathi-navy">
                   {ownerLabel(row)}
                 </span>
                 {isEditing ? (
                   <>
-                    <input
-                      value={editPercentage}
-                      onChange={e => setEditPercentage(e.target.value)}
-                      inputMode="decimal"
-                      className="h-7 w-20 rounded-md border border-input px-2 text-xs"
-                      placeholder="%"
-                    />
-                    <select
-                      value={editRightType}
-                      onChange={e =>
-                        setEditRightType(e.target.value as RightType)
-                      }
-                      className={selectClass}
-                      aria-label="Direito"
+                    <LabeledField
+                      label={copy.percentage.label}
+                      className="w-28"
                     >
-                      {Object.entries(rightTypeLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                      {id => (
+                        <Input
+                          id={id}
+                          value={editPercentage}
+                          onChange={e => setEditPercentage(e.target.value)}
+                          inputMode="decimal"
+                          className="h-9 text-xs"
+                          placeholder={copy.percentage.placeholder}
+                        />
+                      )}
+                    </LabeledField>
+                    <LabeledField label={copy.rightType.label}>
+                      {id => (
+                        <select
+                          id={id}
+                          value={editRightType}
+                          onChange={e =>
+                            setEditRightType(e.target.value as RightType)
+                          }
+                          className={selectClass}
+                        >
+                          {Object.entries(rightTypeLabels).map(
+                            ([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      )}
+                    </LabeledField>
                     <Button
                       size="sm"
                       className="h-7 px-2 text-xs"
@@ -233,71 +252,92 @@ export function PropertyOwnerForm({
           Titularidade completa (100%) — não é possível adicionar novas linhas.
         </p>
       ) : (
-        <div className="grid gap-2 md:grid-cols-5">
-          <select
-            value={ownerKind}
-            onChange={e => {
-              setOwnerKind(e.target.value as "PESSOA" | "SOCIEDADE");
-              setPersonId("");
-              setCompanyId("");
-            }}
-            className={selectClass}
-            aria-label="Tipo de titular"
-          >
-            <option value="PESSOA">Pessoa</option>
-            <option value="SOCIEDADE" disabled={companyBlocked}>
-              Sociedade
-            </option>
-          </select>
+        <div className="grid items-end gap-2 md:grid-cols-5">
+          <LabeledField label={copy.ownerKind.label}>
+            {id => (
+              <select
+                id={id}
+                value={ownerKind}
+                onChange={e => {
+                  setOwnerKind(e.target.value as "PESSOA" | "SOCIEDADE");
+                  setPersonId("");
+                  setCompanyId("");
+                }}
+                className={selectClass}
+              >
+                <option value="PESSOA">Pessoa</option>
+                <option value="SOCIEDADE" disabled={companyBlocked}>
+                  Sociedade
+                </option>
+              </select>
+            )}
+          </LabeledField>
           {ownerKind === "PESSOA" ? (
-            <select
-              value={personId}
-              onChange={e => setPersonId(e.target.value)}
-              className={selectClass}
-              aria-label="Membro da família"
-            >
-              <option value="">Selecionar membro…</option>
-              {people.data?.map(person => (
-                <option key={person.id} value={person.id}>
-                  {person.fullName}
-                </option>
-              ))}
-            </select>
+            <LabeledField label={copy.person.label}>
+              {id => (
+                <select
+                  id={id}
+                  value={personId}
+                  onChange={e => setPersonId(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">{copy.person.placeholder}</option>
+                  {people.data?.map(person => (
+                    <option key={person.id} value={person.id}>
+                      {person.fullName}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </LabeledField>
           ) : (
-            <select
-              value={companyId}
-              onChange={e => setCompanyId(e.target.value)}
-              className={selectClass}
-              aria-label="Sociedade"
-              disabled={companyBlocked}
-            >
-              <option value="">Selecionar sociedade…</option>
-              {companies.data?.map(company => (
-                <option key={company.id} value={company.id}>
-                  {company.legalName}
-                </option>
-              ))}
-            </select>
+            <LabeledField label={copy.company.label}>
+              {id => (
+                <select
+                  id={id}
+                  value={companyId}
+                  onChange={e => setCompanyId(e.target.value)}
+                  className={selectClass}
+                  disabled={companyBlocked}
+                >
+                  <option value="">{copy.company.placeholder}</option>
+                  {companies.data?.map(company => (
+                    <option key={company.id} value={company.id}>
+                      {company.legalName}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </LabeledField>
           )}
-          <input
-            value={percentage}
-            onChange={e => setPercentage(e.target.value)}
-            inputMode="decimal"
-            className="h-9 rounded-md border border-input px-2 text-xs"
-            placeholder="Percentual (%)"
-          />
-          <select
-            value={rightType}
-            onChange={e => setRightType(e.target.value as RightType)}
-            className={selectClass}
-            aria-label="Direito"
-          >
-            {Object.entries(rightTypeLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <LabeledField label={copy.percentage.label}>
+            {id => (
+              <Input
+                id={id}
+                value={percentage}
+                onChange={e => setPercentage(e.target.value)}
+                inputMode="decimal"
+                className="h-9 text-xs"
+                placeholder={copy.percentage.placeholder}
+              />
+            )}
+          </LabeledField>
+          <LabeledField label={copy.rightType.label}>
+            {id => (
+              <select
+                id={id}
+                value={rightType}
+                onChange={e => setRightType(e.target.value as RightType)}
+                className={selectClass}
+              >
+                {Object.entries(rightTypeLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </LabeledField>
           <Button
             size="sm"
             disabled={!canAdd || addOwner.isPending}

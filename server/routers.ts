@@ -19,11 +19,13 @@ import { proposalRouter } from "./features/proposals/proposal-router";
 import { leadRouter } from "./features/leads/lead-router";
 import { certidaoRouter } from "./features/certidoes/certidao-router";
 import { addressRouter } from "./features/address/address-router";
+import { birthdayRouter } from "./features/birthdays/birthday-router";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   address: addressRouter,
+  birthdays: birthdayRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(async ({ ctx }) => {
@@ -55,4 +57,3 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
-

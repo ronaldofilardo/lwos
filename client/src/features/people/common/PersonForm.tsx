@@ -31,7 +31,7 @@ export function PersonForm({
 
   return (
     <div className="space-y-3">
-      <PersonIdentityFields state={state} isEdit={isEdit} />
+      <PersonIdentityFields state={state} isEdit={isEdit} people={people} />
       <PersonSpouseFields state={state} />
       <PersonContactFields state={state} />
       <div className="flex justify-end">

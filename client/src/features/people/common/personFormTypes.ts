@@ -30,4 +30,14 @@ export type PersonSummary = {
   vinculo: Vinculo | null;
   birthDate?: string | null;
   isPrimaryContact?: boolean;
+  spouseName?: string | null;
+  civilStatus?: string | null;
+  maritalRegime?: string | null;
+  cep?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  district?: string | null;
+  city?: string | null;
+  uf?: string | null;
 };

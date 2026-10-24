@@ -18,6 +18,7 @@ import Leads from "./pages/Leads";
 import ClientFamilyPage, {
   ClientFamilyIndex,
 } from "./pages/ClientFamilyPage";
+import { BirthdaysPage } from "@/features/birthdays/BirthdaysPage";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -34,7 +35,7 @@ function Router() {
       <Route path={"/familias/:familyId"}>{() => <AuthGate><AppShell><FamilyWorkspacePage /></AppShell></AuthGate>}</Route>
       <Route path={"/familias"}>{() => <AuthGate><AppShell><FamilyPage /></AppShell></AuthGate>}</Route>
       <Route path={"/patrimonio"}>{() => <AppShell><PlaceholderPage title="Patrimônio" description="Imóveis, gravames, sociedades e integralizações já possuem contratos de servidor e receberão a camada operacional nesta rota." /></AppShell>}</Route>
-      <Route path={"/relatorios"}>{() => <AppShell><PlaceholderPage title="Relatórios Lucathi" description="O LWR eletrônico manterá a estrutura proposta e a proposta financeira em seções distintas." /></AppShell>}</Route>
+      <Route path={"/aniversarios"}>{() => <AuthGate><AppShell><BirthdaysPage /></AppShell></AuthGate>}</Route>
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

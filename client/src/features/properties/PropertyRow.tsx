@@ -22,12 +22,11 @@ import {
   PropertyFormModal,
   toPropertyFormValues,
 } from "./PropertyFormModal";
+import { encumbranceSeverity, type EncumbranceSeverity } from "./types";
 import {
-  encumbranceSeverity,
-  encumbranceTypeLabels,
-  type EncumbranceType,
-  type EncumbranceSeverity,
-} from "./types";
+  buildEncumbranceView,
+  buildPropertyValueLines,
+} from "./propertyCardView";
 
 type Property = {
   id: string;
@@ -42,6 +41,7 @@ type Property = {
   noRegistrationReason?: string | null;
   irpfBalanceValue?: string | null;
   marketValue?: string | null;
+  venalValue?: string | null;
   acquisitionDate?: string | null;
   encumbranceType?: string | null;
   encumbranceNote?: string | null;
@@ -56,16 +56,11 @@ const severityStyles: Record<
   vermelho: { badge: "bg-red-100 text-red-800 border-red-200", Icon: OctagonAlert },
 };
 
-function EncumbranceBadge({
-  value,
-  note,
-}: {
-  value: string | null | undefined;
-  note?: string | null;
-}) {
-  const severity = encumbranceSeverity(value);
+/** Badge só com o status; a observação do gravame vai em texto próprio. */
+function EncumbranceBadge({ value }: { value: string | null | undefined }) {
+  const { severity, statusLabel } = buildEncumbranceView(value, null);
   if (!severity) {
-    return <span className="text-xs text-lucathi-gray">Sem gravame informado</span>;
+    return <span className="text-xs text-lucathi-gray">{statusLabel}</span>;
   }
   const { badge, Icon } = severityStyles[severity];
   return (
@@ -73,8 +68,7 @@ function EncumbranceBadge({
       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm ${badge}`}
     >
       <Icon className="size-3.5" />
-      {encumbranceTypeLabels[value as EncumbranceType] ?? value}
-      {note ? ` · ${note}` : ""}
+      {statusLabel}
     </span>
   );
 }
@@ -111,6 +105,11 @@ export function PropertyRow({
   });
 
   const severity = encumbranceSeverity(property.encumbranceType);
+  const encumbrance = buildEncumbranceView(
+    property.encumbranceType,
+    property.encumbranceNote
+  );
+  const valueLines = buildPropertyValueLines(property);
   const hasUsufruto = owners.data?.some(o => o.rightType === "USUFRUTO");
   const hasNuaPropriedade = owners.data?.some(
     o => o.rightType === "NUA_PROPRIEDADE"
@@ -156,55 +155,39 @@ export function PropertyRow({
           <p className="mt-0.5 text-xs text-lucathi-gray">
             {property.uf ? `${property.uf} · ` : ""}
             {property.propertyCity}
-            {property.cep ? ` (CEP ${property.cep})` : ""} ·{" "}
-            {property.hasRegistration !== false ? (
-              <span>Matrícula: {property.registrationNumber || "Em análise"}</span>
-            ) : (
-              <span className="font-medium text-amber-800">
-                Sem Matrícula (Doc:{" "}
-                {property.alternativeDocType
-                  ? docTypeLabels[property.alternativeDocType] ||
-                    property.alternativeDocType
-                  : "Doc Alternativo"}
-                {property.noRegistrationReason
-                  ? ` · Motivo: ${property.noRegistrationReason}`
-                  : ""}
-                )
-              </span>
-            )}
+            {property.cep ? ` (CEP ${property.cep})` : ""}
           </p>
 
-          <div className="mt-1 flex flex-wrap gap-3 text-xs text-lucathi-gray">
-            {property.acquisitionDate ? (
-              <span>
-                Aquisição:{" "}
-                {new Date(property.acquisitionDate).toLocaleDateString("pt-BR")}
-              </span>
-            ) : null}
-            {property.marketValue ? (
-              <span>
-                Mercado: R${" "}
-                {Number(property.marketValue).toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-              </span>
-            ) : null}
-            {property.irpfBalanceValue ? (
-              <span>
-                IRPF: R${" "}
-                {Number(property.irpfBalanceValue).toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
-              </span>
-            ) : null}
-          </div>
+          {property.hasRegistration !== false ? (
+            <p className="mt-0.5 text-xs text-lucathi-gray">
+              Matrícula: {property.registrationNumber || "Em análise"}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs font-medium text-amber-800">
+              Sem Matrícula (Doc:{" "}
+              {property.alternativeDocType
+                ? docTypeLabels[property.alternativeDocType] ||
+                  property.alternativeDocType
+                : "Doc Alternativo"}
+              {property.noRegistrationReason
+                ? ` · Motivo: ${property.noRegistrationReason}`
+                : ""}
+              )
+            </p>
+          )}
+
+          {valueLines.length ? (
+            <div className="mt-1 space-y-0.5 text-xs text-lucathi-gray">
+              {valueLines.map(line => (
+                <p key={line.key}>
+                  {line.label}: {line.value}
+                </p>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
-          <EncumbranceBadge
-            value={property.encumbranceType}
-            note={property.encumbranceNote}
-          />
           <Button
             variant="outline"
             size="sm"
@@ -328,10 +311,7 @@ export function PropertyRow({
           Gravames
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <EncumbranceBadge
-            value={property.encumbranceType}
-            note={property.encumbranceNote}
-          />
+          <EncumbranceBadge value={property.encumbranceType} />
           {severity === "amarelo" ? (
             <span className="text-amber-800">
               Em verificação — não trava a movimentação.
@@ -343,6 +323,14 @@ export function PropertyRow({
             </span>
           ) : null}
         </div>
+        {encumbrance.note ? (
+          <p className="mt-1.5 text-lucathi-gray">
+            <span className="font-medium text-lucathi-navy">
+              Observação do gravame:
+            </span>{" "}
+            {encumbrance.note}
+          </p>
+        ) : null}
       </div>
     </div>
   );

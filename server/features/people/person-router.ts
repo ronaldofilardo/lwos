@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../../_core/trpc";
 import { requirePermission } from "../access/authorization";
 import { Permission } from "../../../shared/domain/permissions";
@@ -41,7 +42,16 @@ export const personRouter = router({
     .mutation(async ({ ctx, input }) => {
       const user = requirePermission(ctx, Permission.PEOPLE_CREATE);
       await assertFamilyAccess(ctx, input.familyId);
-      const personId = await addPersonRecord(input);
+      let personId: string;
+      try {
+        personId = await addPersonRecord(input);
+      } catch (err) {
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err instanceof Error ? err.message : "Erro ao cadastrar pessoa.",
+        });
+      }
       await ensureCertidoesForSubject({
         familyId: input.familyId,
         scope: "PESSOA",
@@ -63,7 +73,16 @@ export const personRouter = router({
     .mutation(async ({ ctx, input }) => {
       const user = requirePermission(ctx, Permission.PEOPLE_UPDATE);
       await assertFamilyAccess(ctx, input.familyId);
-      const result = await updatePersonRecord(input);
+      let result: { personId: string; migratedFiles: number };
+      try {
+        result = await updatePersonRecord(input);
+      } catch (err) {
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err instanceof Error ? err.message : "Erro ao atualizar pessoa.",
+        });
+      }
       const person = await getPersonRecord(input.personId);
       let requirementsCreated = 0;
       let requirementsRemoved = 0;

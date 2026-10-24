@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { LabeledField } from "@/components/LabeledField";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/trpcError";
@@ -244,48 +245,71 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-2">
-        <Input
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descrição do ativo (ex: Conta XP Investimentos, BMW X5...)"
-        />
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className={selectClass}
-          aria-label="Categoria"
-        >
-          <option value="">Categoria *</option>
-          {categoryValues.map((value) => (
-            <option key={value} value={value}>
-              {categoryLabels[value]}
-            </option>
-          ))}
-        </select>
-        <Input
-          inputMode="decimal"
-          value={declaredValue}
-          onChange={(e) => setDeclaredValue(e.target.value)}
-          placeholder="Valor declarado (IRPF/Balanço) *"
-        />
-        <select
-          value={ownerPersonId}
-          onChange={(e) => setOwnerPersonId(e.target.value)}
-          className={selectClass}
-          aria-label="Responsável"
-        >
-          <option value="">Responsável *</option>
-          {people.data?.map((person) => (
-            <option key={person.id} value={person.id}>
-              {person.fullName}
-            </option>
-          ))}
-        </select>
-        <Input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Observações / Instituição financeira"
-        />
+        <LabeledField label="Descrição do ativo *">
+          {(id) => (
+            <Input
+              id={id}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Ex.: Conta XP Investimentos, BMW X5"
+            />
+          )}
+        </LabeledField>
+        <LabeledField label="Categoria *">
+          {(id) => (
+            <select
+              id={id}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className={selectClass}
+            >
+              <option value="">Selecione</option>
+              {categoryValues.map((value) => (
+                <option key={value} value={value}>
+                  {categoryLabels[value]}
+                </option>
+              ))}
+            </select>
+          )}
+        </LabeledField>
+        <LabeledField label="Valor declarado (IRPF/Balanço) *">
+          {(id) => (
+            <Input
+              id={id}
+              inputMode="decimal"
+              value={declaredValue}
+              onChange={(e) => setDeclaredValue(e.target.value)}
+              placeholder="Ex.: 100.000,00"
+            />
+          )}
+        </LabeledField>
+        <LabeledField label="Responsável *">
+          {(id) => (
+            <select
+              id={id}
+              value={ownerPersonId}
+              onChange={(e) => setOwnerPersonId(e.target.value)}
+              className={selectClass}
+            >
+              <option value="">Selecione</option>
+              {people.data?.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.fullName}
+                </option>
+              ))}
+            </select>
+          )}
+        </LabeledField>
+        <LabeledField label="Observações / Instituição financeira">
+          {(id) => (
+            <Input
+              id={id}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ex.: Banco XP, conta corrente"
+            />
+          )}
+        </LabeledField>
       </div>
 
       <Button
