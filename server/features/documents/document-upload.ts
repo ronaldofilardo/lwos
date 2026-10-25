@@ -5,6 +5,7 @@ import { resolveFamilyStorageFolder } from "../../lib/family-storage-path";
 import { storagePut } from "../../storage";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
+import { badRequest, notFound } from "../_shared/errors";
 import { releaseSpouseCoupleDocs } from "./couple-docs";
 import {
   assertIrpfUploadAllowed,
@@ -30,12 +31,19 @@ export async function storeDocumentVersion(input: {
   userId: number;
 }) {
   if (!ALLOWED_MIME_TYPES.has(input.mimeType))
-    throw new Error("Tipo de arquivo não permitido.");
+    throw badRequest("Tipo de arquivo não permitido.");
   const document = await getDocumentRecord(input.documentId);
-  if (!document) throw new Error("Documento não encontrado.");
+  if (!document) throw notFound("Documento não encontrado.");
   await assertIrpfUploadAllowed(document);
   const bytes = Buffer.from(input.base64Data, "base64");
-  assertStorageSize(bytes);
+  try {
+    assertStorageSize(bytes);
+  } catch (error) {
+    // Erro tipado: a mensagem chega ao usuário (um Error comum vira "Erro interno").
+    throw badRequest(
+      error instanceof Error ? error.message : "Arquivo inválido ou maior que 5 MB."
+    );
+  }
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const nextVersion = document.currentVersion + 1;
 
@@ -60,7 +68,7 @@ export async function storeDocumentVersion(input: {
         .from(documents)
         .where(eq(documents.id, document.id))
         .limit(1);
-      if (!currentDoc) throw new Error("Documento não encontrado.");
+      if (!currentDoc) throw notFound("Documento não encontrado.");
 
       const versionNumber = currentDoc.currentVersion + 1;
 

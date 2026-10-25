@@ -1,5 +1,11 @@
 import { eq, inArray } from "drizzle-orm";
-import { certidoes, companies, people, properties } from "../../../drizzle/schema";
+import {
+  certidoes,
+  companies,
+  documents,
+  people,
+  properties,
+} from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import {
   computeAlertCounts,
@@ -10,6 +16,18 @@ import {
   type CertidaoAlertRow,
 } from "./project-alerts";
 
+/**
+ * Certidão cujo documento foi dispensado ou marcado "Não possui" não gera
+ * alerta (decisão de 25/10/2026): o requisito foi resolvido pelo Sócio.
+ */
+const EXEMPT_DOCUMENT_STATUSES = new Set(["DISPENSADO", "NAO_POSSUI"]);
+
+function exemptDocumentIds(rows: { id: string; status: string }[]): Set<string> {
+  return new Set(
+    rows.filter(row => EXEMPT_DOCUMENT_STATUSES.has(row.status)).map(row => row.id)
+  );
+}
+
 type AlertRows = {
   certidoes: CertidaoAlertRow[];
   properties: { id: string; description: string; encumbranceType: string | null }[];
@@ -17,10 +35,11 @@ type AlertRows = {
 
 async function loadAlertRows(familyId: string): Promise<AlertRows> {
   const db = await requireDatabase();
-  const [certidaoRows, propertyRows, peopleRows, companyRows] =
+  const [certidaoRows, propertyRows, peopleRows, companyRows, documentRows] =
     await Promise.all([
       db
         .select({
+          documentId: certidoes.documentId,
           scope: certidoes.scope,
           subjectId: certidoes.subjectId,
           type: certidoes.type,
@@ -45,7 +64,12 @@ async function loadAlertRows(familyId: string): Promise<AlertRows> {
         .select({ id: companies.id, legalName: companies.legalName })
         .from(companies)
         .where(eq(companies.familyId, familyId)),
+      db
+        .select({ id: documents.id, status: documents.status })
+        .from(documents)
+        .where(eq(documents.familyId, familyId)),
     ]);
+  const exempt = exemptDocumentIds(documentRows ?? []);
   const nameByKey = new Map<string, string>();
   for (const row of peopleRows) {
     nameByKey.set(`PESSOA:${row.id}`, row.fullName);
@@ -54,11 +78,13 @@ async function loadAlertRows(familyId: string): Promise<AlertRows> {
     nameByKey.set(`SOCIEDADE:${row.id}`, row.legalName);
   }
   return {
-    certidoes: certidaoRows.map(row => ({
-      ...row,
-      subjectName:
-        nameByKey.get(`${row.scope}:${row.subjectId}`) ?? null,
-    })),
+    certidoes: certidaoRows
+      .filter(row => !(row.documentId && exempt.has(row.documentId)))
+      .map(row => ({
+        ...row,
+        subjectName:
+          nameByKey.get(`${row.scope}:${row.subjectId}`) ?? null,
+      })),
     properties: propertyRows,
   };
 }
@@ -112,16 +138,25 @@ export async function listProjectAlertLevels(
 ): Promise<Record<string, AlertLevel>> {
   if (!familyIds.length) return {};
   const db = await requireDatabase();
-  const rows = await db
-    .select({
-      familyId: certidoes.familyId,
-      scope: certidoes.scope,
-      subjectId: certidoes.subjectId,
-      status: certidoes.status,
-      validUntil: certidoes.validUntil,
-    })
-    .from(certidoes)
-    .where(inArray(certidoes.familyId, familyIds));
+  const [allRows, documentRows] = await Promise.all([
+    db
+      .select({
+        familyId: certidoes.familyId,
+        documentId: certidoes.documentId,
+        scope: certidoes.scope,
+        subjectId: certidoes.subjectId,
+        status: certidoes.status,
+        validUntil: certidoes.validUntil,
+      })
+      .from(certidoes)
+      .where(inArray(certidoes.familyId, familyIds)),
+    db
+      .select({ id: documents.id, status: documents.status })
+      .from(documents)
+      .where(inArray(documents.familyId, familyIds)),
+  ]);
+  const exempt = exemptDocumentIds(documentRows ?? []);
+  const rows = allRows.filter(row => !(row.documentId && exempt.has(row.documentId)));
   const byFamily = new Map<string, CertidaoAlertRow[]>();
   for (const row of rows) {
     const list = byFamily.get(row.familyId) ?? [];

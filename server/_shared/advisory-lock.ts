@@ -60,7 +60,11 @@ export async function withAdvisoryLock<T>(
     const lockResult = await tx.execute(sql`
       SELECT pg_try_advisory_xact_lock(${key}, ${disc}) as acquired
     `);
-    const acquired = (lockResult as unknown as { acquired: boolean }[])?.[0]?.acquired ?? false;
+    // node-postgres devolve um QueryResult ({ rows }); outros drivers devolvem o array direto.
+    const lockRows = Array.isArray(lockResult)
+      ? (lockResult as { acquired: boolean }[])
+      : ((lockResult as unknown as { rows?: { acquired: boolean }[] })?.rows ?? []);
+    const acquired = Boolean(lockRows[0]?.acquired);
     if (!acquired) {
       throw new Error("Operação concorrente em andamento. Tente novamente.");
     }

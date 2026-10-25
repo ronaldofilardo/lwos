@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../../_core/trpc";
 import { assertFamilyAccess } from "../access/family-access";
+import { assertPersonInFamily } from "../access/entity-guards";
+import { notFound } from "../_shared/errors";
 import { requirePermission } from "../access/authorization";
 import { Permission } from "../../../shared/domain/permissions";
 import { recordAudit } from "../audit/audit-repository";
@@ -22,6 +24,7 @@ export const assetRouter = router({
   create: protectedProcedure.input(createAssetSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.ASSET_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
+    await assertPersonInFamily(input.ownerPersonId, input.familyId);
     const assetId = await createAssetRecord(input);
     const { created, removed } = await reconcileEntityDocuments({
       familyId: input.familyId,
@@ -42,8 +45,9 @@ export const assetRouter = router({
   update: protectedProcedure.input(updateAssetSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.ASSET_UPDATE);
     const asset = await getAssetRecord(input.assetId);
-    if (!asset) throw new Error("Ativo não encontrado.");
+    if (!asset) throw notFound("Ativo não encontrado.");
     await assertFamilyAccess(ctx, asset.familyId);
+    await assertPersonInFamily(input.ownerPersonId, asset.familyId);
     const result = await updateAssetRecord(input);
     const { created, removed } = await reconcileEntityDocuments({
       familyId: asset.familyId,

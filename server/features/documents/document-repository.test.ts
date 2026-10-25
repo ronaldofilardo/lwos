@@ -20,6 +20,7 @@ import {
   getDocumentVersionByStorageKey,
   listDocumentRecords,
   listVersions,
+  setDocumentReferenceDate,
 } from "./document-repository";
 
 type Config = {
@@ -57,7 +58,10 @@ function documentDb(config: Config) {
   }));
 
   const insert = vi.fn(() => ({ values: insertValues }));
-  return { db: { select, insert }, insertValues };
+  const updateWhere = vi.fn(async (_condition: unknown) => undefined);
+  const setValues = vi.fn((_values: Record<string, unknown>) => ({ where: updateWhere }));
+  const update = vi.fn(() => ({ set: setValues }));
+  return { db: { select, insert, update }, insertValues, setValues, updateWhere };
 }
 
 describe("createDocumentRecord", () => {
@@ -183,5 +187,21 @@ describe("consultas de documentos", () => {
     const missing = documentDb({ storageRows: [] });
     databaseMocks.requireDatabase.mockResolvedValue(missing.db);
     await expect(getDocumentVersionByStorageKey("sumida")).resolves.toBeNull();
+  });
+});
+
+describe("setDocumentReferenceDate", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("grava a data-base e atualiza o updatedAt do documento", async () => {
+    const { db, setValues, updateWhere } = documentDb({});
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await setDocumentReferenceDate("doc-bal-1", "2025-12-31");
+
+    expect(setValues).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceDate: "2025-12-31", updatedAt: expect.any(Date) })
+    );
+    expect(updateWhere).toHaveBeenCalledTimes(1);
   });
 });

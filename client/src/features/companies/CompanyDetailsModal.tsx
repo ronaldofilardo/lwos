@@ -5,11 +5,14 @@ import { trpc } from "@/lib/trpc";
 import { errorMessage } from "@/lib/trpcError";
 import { useCepLookup } from "@/shared/hooks/useCepLookup";
 import {
+  computePerShare,
   emptyHoldingForm,
   holdingFormFromDetails,
   holdingFormToFields,
+  holdingTotalsFromForm,
   type HoldingFormState,
 } from "./holdingDetails";
+import { CompanyPerShareBox } from "./CompanyPerShareBox";
 import { CompanyModalHeader } from "./CompanyModalHeader";
 import { CompanyBasicInfoForm } from "./CompanyBasicInfoForm";
 import { CompanyAddressFields } from "./CompanyAddressFields";
@@ -43,6 +46,8 @@ export function CompanyDetailsModal({
   const company = data?.company;
   const international = company?.isOffshore === true;
   const currency = international ? "$" : "R$";
+  const totals = holdingTotalsFromForm(form);
+  const perShare = computePerShare(form);
 
   useEffect(() => {
     if (!data) return;
@@ -112,20 +117,26 @@ export function CompanyDetailsModal({
           <Section title="Capital e administração">
             <CompanyCapitalFields
               currency={currency}
+              international={international}
               form={form}
               update={update}
+              people={data?.people ?? []}
             />
-            <CompanyShareholdersTable stakeholders={data?.stakeholders ?? []} />
+            <CompanyShareholdersTable
+              stakeholders={data?.stakeholders ?? []}
+              totals={totals}
+              international={international}
+            />
           </Section>
           <Section title={`Balanço (${currency})`}>
             <CompanyBalanceSection
               currency={currency}
+              estimatedValue={totals.estimatedValue}
               form={form}
               update={update}
-              familyId={familyId}
-              companyId={companyId}
             />
           </Section>
+          <CompanyPerShareBox values={perShare} international={international} />
           {!international ? (
             <CompanyCertidaoList certidoes={data?.certidoes ?? []} />
           ) : null}

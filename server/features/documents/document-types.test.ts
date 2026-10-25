@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reviewDocumentSchema } from "./document-types";
+import { reviewDocumentSchema, uploadVersionSchema } from "./document-types";
 
 describe("reviewDocumentSchema", () => {
   it("permite somente os estados finais de revisão", () => {
@@ -23,5 +23,21 @@ describe("reviewDocumentSchema", () => {
         status: "RECEBIDO_EM_ANALISE",
       })
     ).toThrow();
+  });
+});
+
+describe("uploadVersionSchema — data-base", () => {
+  const base = {
+    documentId: "doc-1",
+    fileName: "balanco.pdf",
+    mimeType: "application/pdf",
+    base64Data: "aGVsbG8td29ybGQ=",
+  };
+
+  it("data-base é opcional e, quando enviada, precisa ser uma data ISO válida", () => {
+    expect(uploadVersionSchema.safeParse(base).success).toBe(true);
+    expect(uploadVersionSchema.safeParse({ ...base, referenceDate: "2025-12-31" }).success).toBe(true);
+    expect(uploadVersionSchema.safeParse({ ...base, referenceDate: "31/12/2025" }).success).toBe(false);
+    expect(uploadVersionSchema.safeParse({ ...base, referenceDate: "2025-02-30" }).success).toBe(false);
   });
 });

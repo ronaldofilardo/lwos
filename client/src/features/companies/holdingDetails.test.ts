@@ -5,8 +5,10 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  administratorLabel,
   computePerShare,
   emptyHoldingForm,
+  estimatedValueFromForm,
   formatAmount,
   holdingFormFromDetails,
   holdingFormToFields,
@@ -19,6 +21,11 @@ describe("parseAmount", () => {
     expect(parseAmount("1234.56")).toBe(1234.56);
     expect(parseAmount("1234,56")).toBe(1234.56);
     expect(parseAmount("1.000")).toBe(1000);
+  });
+
+  it("rejeita valor negativo (dinheiro nunca é negativo)", () => {
+    expect(parseAmount("-5,00")).toBeNull();
+    expect(parseAmount("R$ -10")).toBeNull();
   });
 
   it("descarta símbolos, vazio e lixo", () => {
@@ -67,8 +74,24 @@ describe("computePerShare", () => {
     capitalSocial: "100.000,00",
     shareQuantity: "1.000",
     equity: "50000",
-    estimatedMarketValue: "250000",
+    // Valor estimado derivado: 300.000 + 20.000 − 40.000 − 20.000 − 10.000 = 250.000
+    cashAndEquivalents: "300.000,00",
+    retainedEarnings: "20.000,00",
+    laborLiabilities: "40.000,00",
+    taxLiabilities: "20.000,00",
+    financing: "10.000,00",
   };
+
+  it("ignora um valor estimado digitado e usa o derivado do balanço", () => {
+    expect(computePerShare({ ...form, estimatedMarketValue: "999999" }).mercado).toBe(250);
+    expect(estimatedValueFromForm(form)).toBe(250000);
+  });
+
+  it("não envia o valor estimado no payload (o servidor deriva)", () => {
+    expect(holdingFormToFields({ ...form, estimatedMarketValue: "999999" })).not.toHaveProperty(
+      "estimatedMarketValue"
+    );
+  });
 
   it("calcula os três valores por quota", () => {
     expect(computePerShare(form)).toEqual({
@@ -94,3 +117,30 @@ describe("formatAmount", () => {
     expect(formatAmount(null, false)).toBe("—");
   });
 });
+
+describe("administratorLabel", () => {
+  it("nacional usa Administrador/Diretor e offshore usa Directors", () => {
+    expect(administratorLabel(false)).toBe("Administrador/Diretor");
+    expect(administratorLabel(true)).toBe("Directors");
+    expect(administratorLabel(false, 1)).toBe("1º Administrador/Diretor");
+    expect(administratorLabel(true, 2)).toBe("2º Director");
+  });
+
+  it("mapeia administrator person IDs e nomes de terceiros", () => {
+    const form = holdingFormFromDetails({
+      administrator1PersonId: "person-1",
+      administrator1: null,
+      administrator2PersonId: null,
+      administrator2: "Maria Terceira",
+    });
+    expect(form.administrator1PersonId).toBe("person-1");
+    expect(form.administrator2).toBe("Maria Terceira");
+
+    const fields = holdingFormToFields(form);
+    expect(fields.administrator1PersonId).toBe("person-1");
+    expect(fields.administrator1).toBeNull();
+    expect(fields.administrator2PersonId).toBeNull();
+    expect(fields.administrator2).toBe("Maria Terceira");
+  });
+});
+

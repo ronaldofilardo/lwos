@@ -13,6 +13,7 @@ vi.mock("../_shared/database", () => databaseMocks);
 import {
   certidoes as certidoesTable,
   companies as companiesTable,
+  documents as documentsTable,
   people as peopleTable,
   properties as propertiesTable,
 } from "../../../drizzle/schema";
@@ -27,6 +28,7 @@ type TableRows = {
   properties?: unknown[];
   people?: unknown[];
   companies?: unknown[];
+  documents?: unknown[];
 };
 
 function fakeDb(rows: TableRows) {
@@ -37,6 +39,7 @@ function fakeDb(rows: TableRows) {
         if (table === propertiesTable) return rows.properties ?? [];
         if (table === peopleTable) return rows.people ?? [];
         if (table === companiesTable) return rows.companies ?? [];
+        if (table === documentsTable) return rows.documents ?? [];
         return [];
       }),
     })),
@@ -184,6 +187,58 @@ describe("listProjectAlertLevels", () => {
       "fam-red": "VERMELHO",
       "fam-yellow": "AMARELO",
       "fam-none": "NENHUM",
+    });
+  });
+});
+
+describe("certidões dispensadas ou \"Não possui\" não geram alerta", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const certidao = (documentId: string, status: string, subjectId = "p1") => ({
+    documentId,
+    familyId: "fam-1",
+    scope: "PESSOA",
+    subjectId,
+    type: "CNDT",
+    status,
+    validUntil: null,
+  });
+
+  it("resumo ignora certidão cujo documento foi dispensado ou marcado Não possui", async () => {
+    const { db } = fakeDb({
+      certidoes: [
+        certidao("doc-disp", "PENDENTE", "p1"),
+        certidao("doc-np", "POSITIVA", "p2"),
+        certidao("doc-pend", "PENDENTE", "p3"),
+      ],
+      documents: [
+        { id: "doc-disp", status: "DISPENSADO" },
+        { id: "doc-np", status: "NAO_POSSUI" },
+        { id: "doc-pend", status: "PENDENTE" },
+      ],
+      people: [
+        { id: "p1", fullName: "Ana" },
+        { id: "p2", fullName: "Bia" },
+        { id: "p3", fullName: "Caio" },
+      ],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    const summary = await getProjectAlertSummary("fam-1");
+    expect(summary.bySubject).toEqual({ "PESSOA:p3": "AMARELO" });
+    expect(summary.counts).toEqual({ vermelho: 0, amarelo: 1 });
+    expect(summary.redCertidoes).toEqual([]);
+  });
+
+  it("nível da lista de projetos também ignora certidões resolvidas", async () => {
+    const { db } = fakeDb({
+      certidoes: [certidao("doc-np", "POSITIVA")],
+      documents: [{ id: "doc-np", status: "NAO_POSSUI" }],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(listProjectAlertLevels(["fam-1"])).resolves.toEqual({
+      "fam-1": "NENHUM",
     });
   });
 });

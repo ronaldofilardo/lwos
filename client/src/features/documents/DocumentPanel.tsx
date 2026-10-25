@@ -20,6 +20,8 @@ import {
   isResolvedStatus,
 } from "./groupDocuments";
 import { canEdit, canReview } from "@shared/domain/permissions";
+import { requiresReferenceDate } from "@shared/domain/balance-documents";
+import { formatDateOnlyBR } from "@shared/validation/datas";
 
 export function DocumentPanel({ familyId }: { familyId: string }) {
   const { documents, loading } = useDocuments(familyId);
@@ -69,7 +71,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
   });
 
   // Certidões entram na matriz: o documento (entityType CERTIDAO) é reagrupado
-  // dentro do membro/sociedade dono da certidão (Fase 8).
+  // no membro/sociedade dono, em seção separada dos demais documentos.
   const certidaoByDocumentId = new Map(
     (certidoes.data ?? [])
       .filter(row => row.documentId)
@@ -79,7 +81,12 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
     if (doc.entityType !== "CERTIDAO") return doc;
     const certidao = certidaoByDocumentId.get(doc.id);
     if (!certidao) return doc;
-    return { ...doc, entityType: certidao.scope, entityId: certidao.subjectId };
+    return {
+      ...doc,
+      entityType: certidao.scope,
+      entityId: certidao.subjectId,
+      isCertidao: true,
+    };
   });
 
   const groups = groupDocumentsByMember(matrixDocuments, {
@@ -121,10 +128,6 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
             <h2 className="font-display text-2xl text-lucathi-navy">
               Documentos e Certidões
             </h2>
-            <p className="text-sm text-lucathi-gray">
-              Organizada por membro do caso, com certidões integradas. Versões
-              preservadas com SHA-256; validação e dispensa pelo SOCIO.
-            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -379,9 +382,19 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                                   </button>
                                 )}
 
+                                {requiresReferenceDate(document) ? (
+                                  <p className="mt-2 text-xs text-lucathi-gray">
+                                    Data-base:{" "}
+                                    {document.referenceDate
+                                      ? formatDateOnlyBR(document.referenceDate)
+                                      : "não informada"}
+                                  </p>
+                                ) : null}
+
                                 <div className="mt-3">
                                   <DocumentActions
                                     documentId={document.id}
+                                    requiresReferenceDate={requiresReferenceDate(document)}
                                     canReview={canReviewFlag}
                                     disabled={sameAddressState[document.id]}
                                     busy={
@@ -390,8 +403,8 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                                       actions.dispensing
                                     }
                                     status={document.status}
-                                    onUpload={file =>
-                                      actions.upload(document.id, file)
+                                    onUpload={(file, referenceDate) =>
+                                      actions.upload(document.id, file, referenceDate)
                                     }
                                     onReview={(status, reason) =>
                                       actions.review(document.id, status, reason)

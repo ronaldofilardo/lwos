@@ -32,6 +32,27 @@ describe("companyDetailsUpsertSchema", () => {
     expect(parsed.success && parsed.data.fields.capitalSocial).toBe(100000);
   });
 
+  it("recusa valores negativos e acima do teto de numeric(15,2)", () => {
+    const withField = (fields: Record<string, unknown>) =>
+      companyDetailsUpsertSchema.safeParse({ companyId: "hold-1", fields });
+
+    expect(withField({ capitalSocial: -1 }).success).toBe(false);
+    expect(withField({ equity: 10_000_000_000_000 }).success).toBe(false);
+    expect(withField({ capitalSocial: 9_999_999_999_999.99 }).success).toBe(true);
+    expect(withField({ capitalSocial: 0 }).success).toBe(true);
+  });
+
+  it("quantidade de quotas/ações: inteiro maior que zero", () => {
+    const withShares = (shareQuantity: unknown) =>
+      companyDetailsUpsertSchema.safeParse({ companyId: "hold-1", fields: { shareQuantity } });
+
+    expect(withShares(1000).success).toBe(true);
+    expect(withShares(null).success).toBe(true);
+    expect(withShares(0).success).toBe(false);
+    expect(withShares(-5).success).toBe(false);
+    expect(withShares(10.5).success).toBe(false);
+  });
+
   it("aceita campos omitidos (upsert parcial)", () => {
     const parsed = companyDetailsUpsertSchema.safeParse({
       companyId: "hold-1",
@@ -121,4 +142,21 @@ describe("companyDetailsUpsertSchema", () => {
       }).success
     ).toBe(true);
   });
+
+  it("aceita administradores como membro da família (ID) ou terceiro (nome)", () => {
+    const parsed = companyDetailsUpsertSchema.safeParse({
+      companyId: "hold-1",
+      fields: {
+        administrator1PersonId: "person-123",
+        administrator1: null,
+        administrator2PersonId: null,
+        administrator2: "Carlos Terceiro",
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.fields.administrator1PersonId).toBe("person-123");
+    expect(parsed.data.fields.administrator2).toBe("Carlos Terceiro");
+  });
 });
+

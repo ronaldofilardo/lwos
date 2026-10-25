@@ -1,5 +1,6 @@
 import type { Vinculo } from "@/features/families/types";
 import { vinculoLabels } from "@/features/families/types";
+import { isResolvedDocumentStatus } from "@shared/domain/document-status";
 
 export type DocumentEntityType =
   | "FAMILIA"
@@ -21,6 +22,10 @@ export type DocumentRow = {
   dispensationReason: string | null;
   dispensedAt: Date | string | null;
   validUntil: string | null;
+  /** Data-base (balanço/balancete de sociedade), AAAA-MM-DD. */
+  referenceDate?: string | null;
+  /** Documento originado de uma certidão (reagrupado no membro/sociedade dono). */
+  isCertidao?: boolean;
   createdAt: Date | string;
   updatedAt: Date | string;
 };
@@ -44,10 +49,18 @@ export type DocumentGroup = {
   subtitle: string | null;
   documents: DocumentRow[];
   sort: number;
+  /** Documentos e certidões ficam em blocos separados (24/10/2026). */
+  kind: "DOCUMENTO" | "CERTIDAO";
 };
 
-/** As 4 seções pedidas da matriz documental (aba Documentos). */
-export type DocumentSectionKey = "FAMILIARES" | "IMOVEL" | "SOCIEDADE" | "ATIVO";
+/** Seções da matriz documental (aba Documentos); certidões têm seção própria. */
+export type DocumentSectionKey =
+  | "FAMILIARES"
+  | "FAMILIARES_CERTIDOES"
+  | "IMOVEL"
+  | "SOCIEDADE"
+  | "SOCIEDADE_CERTIDOES"
+  | "ATIVO";
 
 export type DocumentSection = {
   key: DocumentSectionKey;
@@ -74,11 +87,7 @@ const entityRank: Record<DocumentEntityType, number> = {
 };
 
 export function isResolvedStatus(status: string): boolean {
-  return (
-    status === "VALIDADO" ||
-    status === "DISPENSADO" ||
-    status === "NAO_POSSUI"
-  );
+  return isResolvedDocumentStatus(status);
 }
 
 export function groupDocumentsByMember(
@@ -100,7 +109,8 @@ export function groupDocumentsByMember(
   const buckets = new Map<string, DocumentGroup>();
 
   for (const doc of documents) {
-    const key = `${doc.entityType}:${doc.entityId}`;
+    const kind: DocumentGroup["kind"] = doc.isCertidao ? "CERTIDAO" : "DOCUMENTO";
+    const key = `${kind === "CERTIDAO" ? "CERT:" : ""}${doc.entityType}:${doc.entityId}`;
     let title = "Outros documentos";
     let subtitle: string | null = null;
     let sort = 99;
@@ -162,6 +172,7 @@ export function groupDocumentsByMember(
         subtitle,
         documents: [doc],
         sort,
+        kind,
       });
     }
   }
@@ -173,31 +184,52 @@ export function groupDocumentsByMember(
 
 const SECTION_META: Record<
   DocumentSectionKey,
-  { title: string; description: string; entityTypes: DocumentEntityType[] }
+  {
+    title: string;
+    description: string;
+    entityTypes: DocumentEntityType[];
+    certidoes: boolean;
+  }
 > = {
   FAMILIARES: {
     title: "Família (Pessoas)",
-    description: "Requisitos da família e de cada membro, com certidões.",
+    description: "Documentos da família e de cada membro.",
     entityTypes: ["FAMILIA", "PESSOA"],
+    certidoes: false,
+  },
+  FAMILIARES_CERTIDOES: {
+    title: "Família (Pessoas) · Certidões",
+    description: "Certidões de cada membro (CNDs, TJ, TRF, CNAT, CNDT e protestos).",
+    entityTypes: ["PESSOA"],
+    certidoes: true,
   },
   IMOVEL: {
     title: "Imóveis",
     description: "Matrícula, IPTU/ITR e demais documentos por imóvel.",
     entityTypes: ["IMOVEL"],
+    certidoes: false,
   },
   SOCIEDADE: {
     title: "Sociedades & Holdings",
     description: "Contrato social, CNPJ e demais documentos societários.",
     entityTypes: ["SOCIEDADE"],
+    certidoes: false,
+  },
+  SOCIEDADE_CERTIDOES: {
+    title: "Sociedades & Holdings · Certidões",
+    description: "Certidões de cada sociedade nacional.",
+    entityTypes: ["SOCIEDADE"],
+    certidoes: true,
   },
   ATIVO: {
     title: "Ativos",
-    description: "Comprovação de titularidade e lastro dos demais ativos.",
+    description: "Documentos de ativos já existentes (novos ativos não exigem documentos).",
     entityTypes: ["ATIVO"],
+    certidoes: false,
   },
 };
 
-/** Organiza os grupos nas 4 seções da matriz documental. */
+/** Organiza os grupos nas seções da matriz documental (documentos × certidões). */
 export function buildDocumentSections(
   groups: DocumentGroup[]
 ): DocumentSection[] {
@@ -208,7 +240,11 @@ export function buildDocumentSections(
         key,
         title: meta.title,
         description: meta.description,
-        groups: groups.filter(group => meta.entityTypes.includes(group.entityType)),
+        groups: groups.filter(
+          group =>
+            meta.entityTypes.includes(group.entityType) &&
+            (group.kind === "CERTIDAO") === meta.certidoes
+        ),
       };
     })
     .filter(section => section.groups.length > 0);

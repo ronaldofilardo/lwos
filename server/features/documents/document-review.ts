@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { documents } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
+import { badRequest } from "../_shared/errors";
 import { releaseSpouseCoupleDocs } from "./couple-docs";
 import { syncDependentIrpfStatus } from "./dependent-irpf";
 import { getDocumentRecord } from "./document-repository";
@@ -11,7 +12,7 @@ export async function reviewDocumentRecord(input: {
   rejectionReason?: string;
 }) {
   if (input.status === "REJEITADO" && !input.rejectionReason) {
-    throw new Error("Motivo da rejeição é obrigatório.");
+    throw badRequest("Motivo da rejeição é obrigatório.");
   }
   const db = await requireDatabase();
   const document = await getDocumentRecord(input.documentId);
@@ -49,7 +50,7 @@ export async function dispenseDocumentRecord(input: {
   approvedBy: string;
 }) {
   if (!input.reason || input.reason.trim().length < 3) {
-    throw new Error("Justificativa da dispensa é obrigatória.");
+    throw badRequest("Justificativa da dispensa é obrigatória.");
   }
   const db = await requireDatabase();
   await db

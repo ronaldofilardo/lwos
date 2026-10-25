@@ -63,6 +63,19 @@ export async function findOrCreateDocumentRecord(input: {
   return id;
 }
 
+/**
+ * Grava a data-base do documento (balanço/balancete). `findOrCreate...` só
+ * aplica a data na criação; como o requisito já nasce na Matriz, a data do
+ * envio precisa ser gravada à parte.
+ */
+export async function setDocumentReferenceDate(documentId: string, referenceDate: string) {
+  const db = await requireDatabase();
+  await db
+    .update(documents)
+    .set({ referenceDate, updatedAt: new Date() })
+    .where(eq(documents.id, documentId));
+}
+
 export async function getDocumentRecord(documentId: string) {
   const db = await requireDatabase();
   const result = await db

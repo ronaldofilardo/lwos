@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../../_core/trpc";
 import { assertFamilyAccess } from "../access/family-access";
+import { badRequest, notFound } from "../_shared/errors";
+import { hoje } from "../../../shared/validation/datas";
+import { requiresReferenceDate } from "../../../shared/domain/balance-documents";
 import { requirePermission } from "../access/authorization";
 import { Permission } from "../../../shared/domain/permissions";
 import { recordAudit } from "../audit/audit-repository";
@@ -9,6 +12,7 @@ import {
   getDocumentRecord,
   listDocumentRecords,
   listVersions,
+  setDocumentReferenceDate,
 } from "./document-repository";
 import {
   dispenseDocumentRecord,
@@ -21,10 +25,7 @@ import {
   uploadVersionSchema,
 } from "./document-types";
 import { storeDocumentVersion } from "./document-upload";
-import {
-  COMPANY_BALANCE_CATEGORIES,
-  reconcileFamilyDocumentRequirements,
-} from "./document-requirements";
+import { reconcileFamilyDocumentRequirements } from "./document-requirements";
 
 export const documentRouter = router({
   list: protectedProcedure
@@ -78,17 +79,34 @@ export const documentRouter = router({
     .input(uploadVersionSchema)
     .mutation(async ({ ctx, input }) => {
       const document = await getDocumentRecord(input.documentId);
-      if (!document) throw new Error("Documento não encontrado.");
+      if (!document) throw notFound("Documento não encontrado.");
       const user = requirePermission(ctx, Permission.DOCUMENT_UPLOAD_VERSION);
       await assertFamilyAccess(ctx, document.familyId);
-      const result = await storeDocumentVersion({ ...input, userId: user.id });
+
+      const { referenceDate, ...file } = input;
+      // Balanço/balancete só entram na Matriz com a data-base (não pode ser futura).
+      const isBalance = requiresReferenceDate(document);
+      if (isBalance && !referenceDate) {
+        throw badRequest("Informe a data-base do balanço/balancete.");
+      }
+      if (isBalance && referenceDate && referenceDate > hoje()) {
+        throw badRequest("A data-base não pode ser uma data futura.");
+      }
+
+      const result = await storeDocumentVersion({ ...file, userId: user.id });
+      if (isBalance && referenceDate) {
+        await setDocumentReferenceDate(input.documentId, referenceDate);
+      }
       await recordAudit({
         action: "VERSAO_DOCUMENTO_ENVIADA",
         entityType: "DOCUMENTO",
         entityId: input.documentId,
         actorUserId: user.id,
         familyId: document.familyId,
-        metadata: { version: result.versionNumber },
+        metadata:
+          isBalance && referenceDate
+            ? { version: result.versionNumber, category: document.category, referenceDate }
+            : { version: result.versionNumber },
       });
       return result;
     }),
@@ -97,7 +115,7 @@ export const documentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const user = requirePermission(ctx, Permission.DOCUMENT_REVIEW);
       const document = await getDocumentRecord(input.documentId);
-      if (!document) throw new Error("Documento não encontrado.");
+      if (!document) throw notFound("Documento não encontrado.");
       await reviewDocumentRecord(input);
       await recordAudit({
         action: `DOCUMENTO_${input.status}`,
@@ -113,7 +131,7 @@ export const documentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const user = requirePermission(ctx, Permission.DOCUMENT_DISPENSE);
       const document = await getDocumentRecord(input.documentId);
-      if (!document) throw new Error("Documento não encontrado.");
+      if (!document) throw notFound("Documento não encontrado.");
       await dispenseDocumentRecord({
         documentId: input.documentId,
         reason: input.reason,
@@ -132,49 +150,5 @@ export const documentRouter = router({
         },
       });
       return { success: true };
-    }),
-  /** Upload de balanço fechado / balancete de uma sociedade, com data-base. */
-  uploadBalance: protectedProcedure
-    .input(
-      z.object({
-        familyId: z.string().min(1),
-        companyId: z.string().min(1),
-        category: z.enum(COMPANY_BALANCE_CATEGORIES),
-        referenceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        fileName: z.string().min(1).max(255),
-        mimeType: z.string().min(1).max(120).default("application/pdf"),
-        base64Data: z.string().min(8).max(8_000_000),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const user = requirePermission(ctx, Permission.DOCUMENT_UPLOAD_BALANCE);
-      await assertFamilyAccess(ctx, input.familyId);
-      const documentId = await findOrCreateDocumentRecord({
-        familyId: input.familyId,
-        entityType: "SOCIEDADE",
-        entityId: input.companyId,
-        category: input.category,
-        referenceDate: input.referenceDate,
-      });
-      const result = await storeDocumentVersion({
-        documentId,
-        fileName: input.fileName,
-        mimeType: input.mimeType,
-        base64Data: input.base64Data,
-        userId: user.id,
-      });
-      await recordAudit({
-        action: "BALANCO_ENVIADO",
-        entityType: "SOCIEDADE",
-        entityId: input.companyId,
-        actorUserId: user.id,
-        familyId: input.familyId,
-        metadata: {
-          category: input.category,
-          referenceDate: input.referenceDate,
-          version: result.versionNumber,
-        },
-      });
-      return { documentId, versionNumber: result.versionNumber };
     }),
 });

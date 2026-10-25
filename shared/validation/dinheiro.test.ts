@@ -52,6 +52,11 @@ describe("isDinheiroValido", () => {
     expect(isDinheiroValido(MAX_DINHEIRO)).toBe(true);
   });
 
+  it("teto corresponde a 13 dígitos inteiros + 2 decimais", () => {
+    expect(MAX_DINHEIRO).toBe(9_999_999_999_999.99);
+    expect(isDinheiroValido(10_000_000_000_000)).toBe(false);
+  });
+
   it("rejeita negativo, NaN e acima do teto", () => {
     expect(isDinheiroValido(-0.01)).toBe(false);
     expect(isDinheiroValido(Number.NaN)).toBe(false);

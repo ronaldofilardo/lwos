@@ -1,3 +1,4 @@
+import { mascaraCnpj } from "@shared/validation";
 import {
   companyJurisdictionLabels,
   companyJurisdictionValues,
@@ -36,7 +37,7 @@ export function CompanyBasicInfoForm({
           placeholder="Company number"
         />
       ) : (
-        <ReadonlyField label="CNPJ" value={taxNumber ?? ""} />
+        <ReadonlyField label="CNPJ" value={taxNumber ? mascaraCnpj(taxNumber) : ""} />
       )}
 
       {international ? (

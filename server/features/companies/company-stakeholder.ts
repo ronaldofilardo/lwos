@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { isCpfValido, normalizarCpf } from "../../../shared/validation";
+
+const optionalCpf = z
+  .string()
+  .nullish()
+  .transform(v => (v === undefined ? undefined : v ? normalizarCpf(v) : null))
+  .refine(v => v === undefined || v === null || isCpfValido(v), "CPF inválido.")
+  .optional();
 
 export const stakeholderInputSchema = z
   .object({
@@ -6,6 +14,7 @@ export const stakeholderInputSchema = z
     // Sócio membro da família (people) OU não-membro informado em externalName.
     personId: z.string().min(1).optional(),
     externalName: z.string().min(2).max(160).optional(),
+    externalCpf: optionalCpf,
     percentage: z.number().min(0).max(100),
   })
   .refine(data => Boolean(data.personId || data.externalName?.trim()), {
@@ -19,13 +28,15 @@ export const stakeholderUpdateSchema = z
     stakeholderId: z.string().min(1),
     personId: z.string().min(1).optional(),
     externalName: z.string().min(2).max(160).optional(),
+    externalCpf: optionalCpf,
     percentage: z.number().min(0).max(100).optional(),
   })
   .refine(
     data =>
       data.percentage !== undefined ||
       data.personId !== undefined ||
-      data.externalName !== undefined,
+      data.externalName !== undefined ||
+      data.externalCpf !== undefined,
     { message: "Nada para atualizar.", path: ["percentage"] }
   );
 
@@ -33,3 +44,4 @@ export const stakeholderDeleteSchema = z.object({
   companyId: z.string().min(1),
   stakeholderId: z.string().min(1),
 });
+

@@ -10,37 +10,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { LabeledField } from "@/components/LabeledField";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import {
+  MAX_DINHEIRO,
+  formatarDinheiro,
+  parseNumeroPtBR,
+} from "@shared/validation/dinheiro";
 import { errorMessage } from "@/lib/trpcError";
-import { AlertIndicator } from "@/features/alerts/AlertIndicator";
-import { levelFor } from "@/features/alerts/alerts";
-import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
-
-const categoryValues = [
-  "INVESTIMENTOS",
-  "VEICULO_EMBARCACAO_AERONAVE",
-  "SEMOVENTES",
-  "CREDITO",
-  "DINHEIRO_ESPECIE",
-  "CONTA_CORRENTE",
-  "ATIVOS_AGRO",
-  "OUTROS",
-] as const;
-
-type AssetCategory = (typeof categoryValues)[number];
-
-const categoryLabels: Record<AssetCategory, string> = {
-  INVESTIMENTOS: "Aplicações / Investimentos",
-  VEICULO_EMBARCACAO_AERONAVE: "Veículo / Embarcação / Aeronave",
-  SEMOVENTES: "Semoventes (animais)",
-  CREDITO: "Crédito / Direito creditório",
-  DINHEIRO_ESPECIE: "Dinheiro em espécie",
-  CONTA_CORRENTE: "Conta corrente / Depósitos",
-  ATIVOS_AGRO: "Ativos agropecuários",
-  OUTROS: "Outros ativos",
-};
+import {
+  ASSET_CATEGORY_LABELS,
+  ASSET_CATEGORY_VALUES,
+  DECLARED_VALUE_LABEL,
+  assetCategoryLabel,
+  declaredValuePlaceholder,
+  formatAssetValue,
+  type AssetCategory,
+} from "./assetLabels";
 
 type AssetRow = {
   id: string;
@@ -52,6 +40,16 @@ type AssetRow = {
 };
 
 type Person = { id: string; fullName: string };
+
+/**
+ * Valor declarado em pt-BR ("100.000,00", "1.500", "R$ 10,50"). Antes o painel
+ * usava Number(x.replace(",", ".")), que transformava o próprio formato do
+ * placeholder ("100.000,00") em NaN e desabilitava o botão sem explicação.
+ */
+function parseDeclaredValue(raw: string): number | null {
+  const value = parseNumeroPtBR(raw);
+  return value !== null && value > 0 && value <= MAX_DINHEIRO ? value : null;
+}
 
 const selectClass = "h-10 rounded-md border border-input bg-background px-3 text-sm";
 
@@ -77,7 +75,7 @@ function AssetFormModal({
     if (!asset) return;
     setDescription(asset.description);
     setCategory(asset.category);
-    setDeclaredValue(String(asset.declaredValue));
+    setDeclaredValue(formatarDinheiro(Number(asset.declaredValue)));
     setOwnerPersonId(asset.ownerPersonId);
     setNotes(asset.notes ?? "");
   }, [asset]);
@@ -93,12 +91,13 @@ function AssetFormModal({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!asset) return;
+    const parsedValue = parseDeclaredValue(declaredValue);
+    if (!asset || parsedValue === null) return;
     update.mutate({
       assetId: asset.id,
       category: category as AssetCategory,
       description: description.trim(),
-      declaredValue: Number(declaredValue.replace(",", ".")),
+      declaredValue: parsedValue,
       ownerPersonId,
       notes: notes.trim() || undefined,
     });
@@ -107,7 +106,7 @@ function AssetFormModal({
   const valid =
     description.trim().length >= 2 &&
     Boolean(category) &&
-    Number(declaredValue.replace(",", ".")) > 0 &&
+    parseDeclaredValue(declaredValue) !== null &&
     Boolean(ownerPersonId);
 
   return (
@@ -132,19 +131,25 @@ function AssetFormModal({
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
             >
               <option value="">Selecione…</option>
-              {categoryValues.map(value => (
-                <option key={value} value={value}>{categoryLabels[value]}</option>
+              {ASSET_CATEGORY_VALUES.map(value => (
+                <option key={value} value={value}>{ASSET_CATEGORY_LABELS[value]}</option>
               ))}
             </select>
           </label>
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-lucathi-gray">Valor declarado (&gt; 0)</span>
+            <span className="text-xs font-medium text-lucathi-gray">{DECLARED_VALUE_LABEL}</span>
             <Input
               inputMode="decimal"
               value={declaredValue}
               onChange={e => setDeclaredValue(e.target.value)}
+              placeholder={declaredValuePlaceholder(category)}
               className="h-9"
             />
+            {declaredValue.trim() && parseDeclaredValue(declaredValue) === null ? (
+              <span className="text-xs text-red-600">
+                Valor inválido. Use o formato 100.000,00 (maior que zero).
+              </span>
+            ) : null}
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium text-lucathi-gray">Responsável</span>
@@ -161,7 +166,13 @@ function AssetFormModal({
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium text-lucathi-gray">Observações</span>
-            <Input value={notes} onChange={e => setNotes(e.target.value)} className="h-9" />
+            <Textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              rows={3}
+              maxLength={8000}
+              className="min-h-20 resize-y"
+            />
           </label>
           <DialogFooter className="gap-2 border-t border-lucathi-line pt-3">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
@@ -187,7 +198,6 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
 
   const people = trpc.people.list.useQuery({ familyId });
   const list = trpc.assets.list.useQuery({ familyId });
-  const { bySubject } = useProjectAlerts(familyId);
 
   const create = trpc.assets.create.useMutation({
     onSuccess: () => {
@@ -199,7 +209,7 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
       setNotes("");
       toast.success("Ativo registrado na Due Diligence.");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (error) => toast.error(errorMessage(error)),
   });
 
   const remove = trpc.assets.remove.useMutation({
@@ -211,15 +221,15 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
     onError: (error) => toast.error(errorMessage(error)),
   });
 
-  const value = Number(declaredValue.replace(",", "."));
+  const value = parseDeclaredValue(declaredValue);
   const valid =
     description.trim().length >= 2 &&
     Boolean(category) &&
-    value > 0 &&
+    value !== null &&
     Boolean(ownerPersonId);
 
   const submit = () => {
-    if (!valid) return;
+    if (!valid || value === null) return;
     create.mutate({
       familyId,
       category: category as AssetCategory,
@@ -264,25 +274,33 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
               className={selectClass}
             >
               <option value="">Selecione</option>
-              {categoryValues.map((value) => (
+              {ASSET_CATEGORY_VALUES.map((value) => (
                 <option key={value} value={value}>
-                  {categoryLabels[value]}
+                  {ASSET_CATEGORY_LABELS[value]}
                 </option>
               ))}
             </select>
           )}
         </LabeledField>
-        <LabeledField label="Valor declarado (IRPF/Balanço) *">
+        <LabeledField label={`${DECLARED_VALUE_LABEL} *`}>
           {(id) => (
-            <Input
-              id={id}
-              inputMode="decimal"
-              value={declaredValue}
-              onChange={(e) => setDeclaredValue(e.target.value)}
-              placeholder="Ex.: 100.000,00"
-            />
+            <>
+              <Input
+                id={id}
+                inputMode="decimal"
+                value={declaredValue}
+                onChange={(e) => setDeclaredValue(e.target.value)}
+                placeholder={declaredValuePlaceholder(category)}
+              />
+              {declaredValue.trim() && value === null ? (
+                <span className="text-xs text-red-600">
+                  Valor inválido. Use o formato 100.000,00 (maior que zero).
+                </span>
+              ) : null}
+            </>
           )}
         </LabeledField>
+
         <LabeledField label="Responsável *">
           {(id) => (
             <select
@@ -300,13 +318,16 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
             </select>
           )}
         </LabeledField>
-        <LabeledField label="Observações / Instituição financeira">
+        <LabeledField label="Observações">
           {(id) => (
-            <Input
+            <Textarea
               id={id}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ex.: Banco XP, conta corrente"
+              rows={3}
+              maxLength={8000}
+              className="min-h-20 resize-y"
             />
           )}
         </LabeledField>
@@ -337,23 +358,23 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
               className="flex flex-col gap-2 rounded-xl bg-lucathi-mist px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div>
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-lucathi-navy">
-                  {asset.description}
-                  <AlertIndicator
-                    level={levelFor(bySubject, "PESSOA", asset.ownerPersonId)}
-                  />
-                </p>
-                <p className="text-xs text-lucathi-gray">
-                  {categoryLabels[asset.category as AssetCategory] || asset.category}
-                  {owner ? ` · Titular: ${owner.fullName}` : ""}
-                  {asset.notes ? ` · ${asset.notes}` : ""}
-                </p>
+                <p className="text-sm font-semibold text-lucathi-navy">{asset.description}</p>
+                <p className="text-xs text-lucathi-gray">{assetCategoryLabel(asset.category)}</p>
+                {owner ? (
+                  <p className="text-xs text-lucathi-gray">Titular: {owner.fullName}</p>
+                ) : null}
+                {asset.notes ? (
+                  <p className="mt-0.5 whitespace-pre-wrap text-xs text-lucathi-gray">
+                    <span className="font-medium text-lucathi-navy">Observações:</span>{" "}
+                    {asset.notes}
+                  </p>
+                ) : null}
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right text-xs">
                   {asset.declaredValue ? (
                     <p className="text-lucathi-gray">
-                      Declarado: R$ {Number(asset.declaredValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      {formatAssetValue(asset.declaredValue, asset.category)}
                     </p>
                   ) : null}
                 </div>

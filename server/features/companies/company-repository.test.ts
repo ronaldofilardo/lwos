@@ -4,6 +4,8 @@
  * @see server/features/companies/company-repository.ts
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const databaseMocks = vi.hoisted(() => ({ requireDatabase: vi.fn() }));
 const idMocks = vi.hoisted(() => ({ createId: vi.fn() }));
@@ -101,7 +103,36 @@ describe("company-repository — participações", () => {
     expect(insertValues.mock.calls[0][0]).toMatchObject({
       personId: null,
       externalName: "Investidor Externo",
+      externalCpf: null,
     });
+  });
+
+  it("aceita não-membro com CPF opcional normalizado", async () => {
+    const { db, insertValues } = mockDb([]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await createStakeholderRecord({
+      companyId: "hold-1",
+      externalName: "Investidor Externo",
+      externalCpf: "529.982.247-25",
+      percentage: 30,
+    } as never);
+
+    expect(insertValues.mock.calls[0][0]).toMatchObject({
+      personId: null,
+      externalName: "Investidor Externo",
+      externalCpf: "52998224725",
+    });
+  });
+
+  it("rejeita CPF inválido no schema do sócio", () => {
+    const parsed = stakeholderInputSchema.safeParse({
+      companyId: "hold-1",
+      externalName: "Investidor Externo",
+      externalCpf: "111.111.111-11",
+      percentage: 30,
+    });
+    expect(parsed.success).toBe(false);
   });
 
   it("rejeita quando a soma de membros e não-membros passa de 100%", async () => {
@@ -177,7 +208,8 @@ function fullDb(config: FullConfig = {}) {
   const setValues = vi.fn(() => ({ where: vi.fn(async () => undefined) }));
   const update = vi.fn(() => ({ set: setValues }));
   const returning = vi.fn(async () => config.removedRows ?? []);
-  const remove = vi.fn(() => ({ where: vi.fn(() => ({ returning })) }));
+  const removeWhere = vi.fn((_condition: unknown) => ({ returning }));
+  const remove = vi.fn(() => ({ where: removeWhere }));
 
   const select = vi.fn(() => ({
     from: vi.fn((table: unknown) => {
@@ -201,7 +233,7 @@ function fullDb(config: FullConfig = {}) {
     operation({ select, insert, update, execute })
   );
   const db = { select, insert, update, delete: remove, transaction, execute };
-  return { db, insertValues, setValues, remove, transaction };
+  return { db, insertValues, setValues, remove, removeWhere, transaction };
 }
 
 describe("company-repository — escrita e consultas básicas", () => {
@@ -376,5 +408,78 @@ describe("company-repository — atualização e remoção de participações", 
     await expect(
       removeStakeholderRecord({ companyId: "hold-1", stakeholderId: "s1" })
     ).rejects.toThrow("Participação não encontrada.");
+  });
+});
+
+describe("company-repository — Fase 0 (segurança e consistência)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("remove participação filtrando por id E companyId no próprio DELETE", async () => {
+    const { db, removeWhere } = fullDb({ removedRows: [{ id: "s1", companyId: "hold-1" }] });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await removeStakeholderRecord({ companyId: "hold-1", stakeholderId: "s1" });
+
+    const condition = removeWhere.mock.calls[0][0] as SQL;
+    const { sql, params } = new PgDialect().sqlToQuery(condition);
+    expect(sql).toContain('"companyId"');
+    expect(params).toEqual(["s1", "hold-1"]);
+  });
+
+  it("não apaga participação de outra sociedade (nenhuma linha devolvida)", async () => {
+    const { db } = fullDb({ removedRows: [] });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      removeStakeholderRecord({ companyId: "hold-1", stakeholderId: "s-de-outra" })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("grava o CNPJ só com dígitos", async () => {
+    const { db, insertValues } = fullDb();
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    idMocks.createId.mockReturnValue("hold-10");
+
+    await createCompanyRecord({
+      familyId: "fam-1",
+      legalName: "Holding Delta",
+      taxNumber: "12.345.678/0001-90",
+      isOffshore: false,
+    } as never);
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "hold-10", taxNumber: "12345678000190" })
+    );
+  });
+
+  it("recusa CNPJ já cadastrado na família, mesmo gravado antes com máscara", async () => {
+    const { db, insertValues } = fullDb({
+      companyRows: [{ id: "hold-1", taxNumber: "12.345.678/0001-90" }],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      createCompanyRecord({
+        familyId: "fam-1",
+        legalName: "Holding Delta",
+        taxNumber: "12345678000190",
+        isOffshore: false,
+      } as never)
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("devolve erros de negócio tipados nas regras de participação", async () => {
+    const over = mockDb([stakeholder("s1", "90.00", "p1", null)]);
+    databaseMocks.requireDatabase.mockResolvedValue(over.db);
+    await expect(
+      createStakeholderRecord({ companyId: "hold-1", personId: "p2", percentage: 20 } as never)
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const duplicate = mockDb([stakeholder("s1", "10.00", "p1", null)]);
+    databaseMocks.requireDatabase.mockResolvedValue(duplicate.db);
+    await expect(
+      createStakeholderRecord({ companyId: "hold-1", personId: "p1", percentage: 10 } as never)
+    ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 });

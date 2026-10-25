@@ -135,38 +135,61 @@ describe("computeCompanyCategories", () => {
     expect(categories).toHaveLength(8);
   });
 
-  it("offshore: documentos estrangeiros + cláusulas sucessórias", () => {
+  it("offshore: só documentos societários estrangeiros", () => {
     const categories = computeCompanyCategories({ isOffshore: true });
     expect(categories).toContain("Certificate of Incorporation");
     expect(categories).toContain("Register of Members");
-    expect(categories).toContain("Cláusulas sucessórias");
-    expect(categories).toContain("Testamento local da jurisdição");
+    expect(categories).toContain("Balance Sheet");
+    expect(categories).not.toContain("Cláusulas sucessórias");
+    expect(categories).not.toContain("Testamento local da jurisdição");
+    expect(categories).not.toContain("Conferência de IRPF/Declaração ao Banco Central");
     expect(categories).not.toContain("Contrato Social Consolidado");
   });
 });
 
 describe("computeAssetCategories", () => {
-  it("padrão por categoria: comprovação de titularidade", () => {
-    expect(computeAssetCategories()).toEqual(["Comprovação de titularidade"]);
+  it("ativos não exigem documentos do cliente", () => {
+    expect(computeAssetCategories()).toEqual([]);
   });
 });
 
 describe("reconcileEntityDocuments", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("retorna vazio quando a entidade não tem categorias", async () => {
-    const { db } = requirementDb({});
+  it("retorna vazio quando a entidade não tem categorias nem pendências", async () => {
+    const { db, insertValues, deleteWhere } = requirementDb({});
     databaseMocks.requireDatabase.mockResolvedValue(db);
 
     await expect(
       reconcileEntityDocuments({
         familyId: "fam-1",
-        entityType: "PESSOA",
-        entityId: "p-1",
+        entityType: "ATIVO",
+        entityId: "a-1",
         categories: [],
       })
     ).resolves.toEqual({ created: 0, removed: 0 });
-    expect(db.select).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalled();
+    expect(deleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("sem categorias, remove só pendências sem arquivo (nunca arquivo enviado)", async () => {
+    const { db, deleteWhere } = requirementDb({
+      existingDocs: [
+        { id: "d1", category: "Comprovação de titularidade", status: "PENDENTE", currentVersion: 0 },
+        { id: "d2", category: "Outro", status: "RECEBIDO_EM_ANALISE", currentVersion: 1 },
+      ],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(
+      reconcileEntityDocuments({
+        familyId: "fam-1",
+        entityType: "ATIVO",
+        entityId: "a-1",
+        categories: [],
+      })
+    ).resolves.toEqual({ created: 0, removed: 1 });
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
   });
 
   it("cria só as categorias faltantes e deduplica o pedido", async () => {
@@ -294,7 +317,8 @@ describe("reconcileFamilyDocumentRequirements", () => {
 
     const result = await reconcileFamilyDocumentRequirements("fam-1");
 
-    expect(insertValues).toHaveBeenCalledTimes(5);
+    // Pessoa, 2 imóveis e 1 sociedade — ativos não geram requisitos.
+    expect(insertValues).toHaveBeenCalledTimes(4);
 
     const payloads = insertValues.mock.calls.map(
       ([rows]) => rows as Record<string, unknown>[]
@@ -319,17 +343,13 @@ describe("reconcileFamilyDocumentRequirements", () => {
     expect(categoriesOf("SOCIEDADE", "soc-1")).toEqual([
       ...computeCompanyCategories({ societaryType: "LTDA" }),
     ]);
-    expect(categoriesOf("ATIVO", "ativo-1")).toEqual([
-      "Comprovação de titularidade",
-    ]);
 
     expect(result.created).toBe(
       computePersonCategories({ vinculo: "TITULAR", civilStatus: "CASADO" })
         .length +
         2 +
         2 +
-        6 +
-        1
+        6
     );
     expect(result.removed).toBe(0);
   });

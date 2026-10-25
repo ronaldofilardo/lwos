@@ -55,6 +55,10 @@ export const assetCategoryValues = [
   "OUTROS",
   "SEMOVENTES",
   "VEICULO_EMBARCACAO_AERONAVE",
+  // Offshore (valor em dólar, símbolo $). Ficam no fim, na mesma ordem do ALTER TYPE ADD VALUE
+  // (migração 0016): a moeda do ativo é derivada da categoria, sem coluna própria.
+  "CONTA_CORRENTE_OFFSHORE",
+  "INVESTIMENTOS_OFFSHORE",
 ] as const;
 
 export const proposalStatusValues = [
@@ -549,9 +553,10 @@ export const companyStakeholders = pgTable(
   {
     ...ids,
     companyId: varchar("companyId", { length: 36 }).notNull(),
-    // Sócio membro da família (people) OU não-membro informado em externalName.
+    // Sócio membro da família (people) OU não-membro informado em externalName (com CPF opcional).
     personId: varchar("personId", { length: 36 }),
     externalName: varchar("externalName", { length: 160 }),
+    externalCpf: varchar("externalCpf", { length: 14 }),
     percentage: decimal("percentage", { precision: 5, scale: 2 }).notNull(),
     createdAt: auditTime,
   },
@@ -641,6 +646,8 @@ export const companyDetails = pgTable(
     corporatePurpose: text("corporatePurpose"),
     capitalSocial: decimal("capitalSocial", { precision: 15, scale: 2 }),
     shareQuantity: decimal("shareQuantity", { precision: 15, scale: 2 }),
+    administrator1PersonId: varchar("administrator1PersonId", { length: 36 }),
+    administrator2PersonId: varchar("administrator2PersonId", { length: 36 }),
     administrator1: varchar("administrator1", { length: 120 }),
     administrator2: varchar("administrator2", { length: 120 }),
     equity: decimal("equity", { precision: 15, scale: 2 }),

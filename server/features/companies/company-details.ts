@@ -5,6 +5,10 @@ import {
   taxRegimeValues,
 } from "../../../drizzle/schema";
 import { UFS } from "../../../shared/validation/uf";
+import {
+  dinheiroSchema,
+  quantidadeQuotasSchema,
+} from "../../../shared/validation/dinheiro-schema";
 
 const text = (max: number) =>
   z
@@ -13,9 +17,13 @@ const text = (max: number) =>
     .transform(value => value.trim() || null)
     .nullish();
 
-const money = z.number().finite().nullish();
+// Não negativo e dentro de numeric(15,2): evita negativos e estouro de coluna.
+const money = dinheiroSchema.nullish();
 
-/** Campos da ficha — todos opcionais (upsert substitui a linha inteira). */
+/**
+ * Campos da ficha — todos opcionais. No upsert, campo ausente preserva o valor
+ * gravado e `null` limpa o campo.
+ */
 export const companyDetailsFieldsSchema = z
   .object({
     nire: text(20),
@@ -31,7 +39,9 @@ export const companyDetailsFieldsSchema = z
     taxRegime: z.enum(taxRegimeValues).nullish(),
     corporatePurpose: text(4000),
     capitalSocial: money,
-    shareQuantity: money,
+    shareQuantity: quantidadeQuotasSchema.nullish(),
+    administrator1PersonId: text(36),
+    administrator2PersonId: text(36),
     administrator1: text(120),
     administrator2: text(120),
     equity: money,
@@ -44,6 +54,8 @@ export const companyDetailsFieldsSchema = z
     taxLiabilities: money,
     laborLiabilities: money,
     financing: money,
+    // Ignorado no servidor: o valor estimado é derivado do balanço ao salvar
+    // (shared/domain/company-valuation.ts). Mantido aqui só por compatibilidade.
     estimatedMarketValue: money,
     companyNumber: text(60),
     jurisdiction: z.enum(companyJurisdictionValues).nullish(),

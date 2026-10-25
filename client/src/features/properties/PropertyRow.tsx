@@ -16,8 +16,7 @@ import { toast } from "sonner";
 import { errorMessage } from "@/lib/trpcError";
 import { PropertyOwnerForm } from "./PropertyOwnerForm";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
-import { worstAlert } from "@/features/alerts/alerts";
-import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
+import { matriculaAlert } from "./propertyMatriculaAlert";
 import {
   PropertyFormModal,
   toPropertyFormValues,
@@ -114,17 +113,12 @@ export function PropertyRow({
   const hasNuaPropriedade = owners.data?.some(
     o => o.rightType === "NUA_PROPRIEDADE"
   );
-  // Alerta do titular (pessoa ou sociedade) — Fase 9.
-  const { bySubject } = useProjectAlerts(familyId);
-  const ownerAlertLevel = worstAlert(
-    ...(owners.data ?? []).map(owner =>
-      owner.companyId
-        ? bySubject?.[`SOCIEDADE:${owner.companyId}`]
-        : owner.personId
-          ? bySubject?.[`PESSOA:${owner.personId}`]
-          : undefined
-    )
+  // "!" do imóvel: entrega da matrícula (imóveis não têm certidões).
+  const documentsQuery = trpc.documents.list.useQuery(
+    { familyId },
+    { enabled: Boolean(familyId) }
   );
+  const registrationAlert = matriculaAlert(documentsQuery.data ?? [], property.id);
 
   const docTypeLabels: Record<string, string> = {
     ESCRITURA_PUBLICA: "Escritura Pública",
@@ -139,7 +133,10 @@ export function PropertyRow({
             <p className="text-sm font-semibold text-lucathi-navy">
               {property.description}
             </p>
-            <AlertIndicator level={ownerAlertLevel} />
+            <AlertIndicator
+              level={registrationAlert.level}
+              reasons={registrationAlert.reasons}
+            />
             {hasUsufruto ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800">
                 <Sparkles className="size-3" /> Usufruto Declarado

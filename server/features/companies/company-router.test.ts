@@ -31,6 +31,7 @@ const docRequirementMocks = vi.hoisted(() => ({
 const peopleMocks = vi.hoisted(() => ({ listPeopleByFamily: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
 const brasilApiMocks = vi.hoisted(() => ({ fetchCompanyByCnpj: vi.fn() }));
+const guardMocks = vi.hoisted(() => ({ assertPersonInFamily: vi.fn() }));
 
 vi.mock("./company-repository", () => repoMocks);
 vi.mock("./company-details-repository", () => detailsMocks);
@@ -39,7 +40,9 @@ vi.mock("../documents/document-requirements", () => docRequirementMocks);
 vi.mock("../people/person-repository", () => peopleMocks);
 vi.mock("../audit/audit-repository", () => auditMocks);
 vi.mock("./brasilapi-client", () => brasilApiMocks);
+vi.mock("../access/entity-guards", () => guardMocks);
 
+import { badRequest } from "../_shared/errors";
 import { companyRouter } from "./company-router";
 
 const company = {
@@ -85,6 +88,9 @@ describe("company-router consultas", () => {
     await expect(caller().stakeholders({ companyId: "sumida" })).rejects.toThrow(
       "Sociedade não encontrada."
     );
+    await expect(caller().stakeholders({ companyId: "sumida" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
     expect(repoMocks.listStakeholderRecords).not.toHaveBeenCalled();
   });
 
@@ -298,6 +304,33 @@ describe("company-router mutações", () => {
     );
   });
 
+  it("valida que o membro informado pertence à família da sociedade", async () => {
+    guardMocks.assertPersonInFamily.mockResolvedValue(undefined);
+    await caller().addStakeholder({ companyId: "soc-1", personId: "p1", percentage: 40 });
+    expect(guardMocks.assertPersonInFamily).toHaveBeenCalledWith("p1", "fam-1");
+
+    guardMocks.assertPersonInFamily.mockClear();
+    await caller().addStakeholder({ companyId: "soc-1", externalName: "Fundo Externo", percentage: 10 });
+    expect(guardMocks.assertPersonInFamily).not.toHaveBeenCalled();
+  });
+
+  it("não cria participação de pessoa de outra família", async () => {
+    guardMocks.assertPersonInFamily.mockRejectedValue(
+      badRequest("A pessoa informada não pertence a esta família.")
+    );
+
+    await expect(
+      caller().addStakeholder({ companyId: "soc-1", personId: "p-outra", percentage: 40 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(repoMocks.createStakeholderRecord).not.toHaveBeenCalled();
+
+    await expect(
+      caller().updateStakeholder({ companyId: "soc-1", stakeholderId: "st-1", personId: "p-outra" })
+    ).rejects.toThrow("não pertence a esta família");
+    expect(repoMocks.updateStakeholderRecord).not.toHaveBeenCalled();
+    guardMocks.assertPersonInFamily.mockReset();
+  });
+
   it("atualiza e remove participacoes com auditoria", async () => {
     await expect(
       caller().updateStakeholder({ companyId: "soc-1", stakeholderId: "st-1", percentage: 25 })
@@ -381,6 +414,10 @@ describe("company-router detalhes da holding", () => {
     await expect(
       caller().upsertDetails({ companyId: "soc-1", fields: {} })
     ).rejects.toThrow("jurisdição");
+    // Erro de negócio tipado: a mensagem chega ao usuário (não vira "Erro interno").
+    await expect(
+      caller().upsertDetails({ companyId: "soc-1", fields: {} })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     await expect(
       caller().upsertDetails({
@@ -407,4 +444,40 @@ describe("company-router detalhes da holding", () => {
       })
     ).resolves.toEqual({ success: true });
   });
+
+  it("valida que administrador pessoa física pertence à família", async () => {
+    guardMocks.assertPersonInFamily.mockResolvedValue(undefined);
+    await caller().upsertDetails({
+      companyId: "soc-1",
+      fields: {
+        administrator1PersonId: "person-1",
+        administrator2PersonId: "person-2",
+      },
+    });
+
+    expect(guardMocks.assertPersonInFamily).toHaveBeenCalledWith("person-1", "fam-1");
+    expect(guardMocks.assertPersonInFamily).toHaveBeenCalledWith("person-2", "fam-1");
+  });
+
+  it("getDetails retorna ficha, sócios, certidões e lista de pessoas da família", async () => {
+    detailsMocks.getCompanyDetailsRecord.mockResolvedValue({ capitalSocial: "5000.00" });
+    repoMocks.listStakeholderRecords.mockResolvedValue([
+      { id: "st-1", personId: "p1", externalName: null, externalCpf: null, percentage: "60.00" },
+      { id: "st-2", personId: null, externalName: "Investidor", externalCpf: "52998224725", percentage: "40.00" },
+    ]);
+    certidaoMocks.listCertidaoRecords.mockResolvedValue([]);
+    peopleMocks.listPeopleByFamily.mockResolvedValue([
+      { id: "p1", fullName: "Ana Silva" },
+    ]);
+    detailsMocks.computePerShare.mockReturnValue({ contabil: 5, patrimonial: null, mercado: null });
+
+    const result = await caller().getDetails({ companyId: "soc-1" });
+    expect(result.company.id).toBe("soc-1");
+    expect(result.stakeholders).toHaveLength(2);
+    expect(result.stakeholders[0].displayName).toBe("Ana Silva");
+    expect(result.stakeholders[1].displayName).toBe("Investidor");
+    expect(result.stakeholders[1].externalCpf).toBe("52998224725");
+    expect(result.people).toEqual([{ id: "p1", fullName: "Ana Silva" }]);
+  });
 });
+

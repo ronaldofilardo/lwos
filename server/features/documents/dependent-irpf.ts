@@ -1,6 +1,7 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { documents, people } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
+import { badRequest } from "../_shared/errors";
 
 /**
  * IRPF do dependente herda o status do IRPF do titular (Fase 8): o dependente
@@ -106,7 +107,7 @@ export async function assertIrpfUploadAllowed(document: {
     .where(eq(people.id, document.entityId))
     .limit(1);
   if (person?.isDependent && person.vinculo !== "TITULAR") {
-    throw new Error(
+    throw badRequest(
       "O IRPF do dependente herda o IRPF do titular — upload bloqueado."
     );
   }

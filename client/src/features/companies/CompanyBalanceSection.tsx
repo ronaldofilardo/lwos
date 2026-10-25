@@ -1,6 +1,6 @@
 import type { HoldingFormState } from "./holdingDetails";
-import { Field } from "./common/CompanyFormField";
-import { CompanyBalanceUpload } from "./common/CompanyBalanceUpload";
+import { formatarDinheiro } from "@shared/validation/dinheiro";
+import { Field, ReadonlyField } from "./common/CompanyFormField";
 
 type UpdateField = (key: keyof HoldingFormState, value: string) => void;
 
@@ -15,21 +15,19 @@ const BALANCE_FIELDS: { key: keyof HoldingFormState; label: string }[] = [
   { key: "taxLiabilities", label: "Obrigações tributárias" },
   { key: "laborLiabilities", label: "Obrigações trabalhistas" },
   { key: "financing", label: "Financiamentos" },
-  { key: "estimatedMarketValue", label: "Valor estimado da empresa" },
 ];
 
 export function CompanyBalanceSection({
   currency,
+  estimatedValue,
   form,
   update,
-  familyId,
-  companyId,
 }: {
   currency: string;
+  /** Valor estimado derivado do balanço (somente leitura). */
+  estimatedValue: number | null;
   form: HoldingFormState;
   update: UpdateField;
-  familyId: string;
-  companyId: string | null;
 }) {
   return (
     <>
@@ -43,26 +41,19 @@ export function CompanyBalanceSection({
             placeholder="0,00"
           />
         ))}
+        <ReadonlyField
+          label={`Valor estimado da empresa (${currency})`}
+          value={estimatedValue === null ? "" : formatarDinheiro(estimatedValue)}
+        />
+        <p className="text-xs text-lucathi-gray sm:col-span-2">
+          Calculado automaticamente: caixa + estoque + créditos a receber + investimentos + ativos
+          imobilizados + lucros acumulados − obrigações trabalhistas − obrigações tributárias −
+          financiamentos. O PL não entra na conta.
+        </p>
+        <p className="text-xs text-lucathi-gray sm:col-span-2">
+          Balanço fechado e balancete (com data-base) são enviados na aba Matriz Documental.
+        </p>
       </div>
-      {companyId ? (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
-            Balanço fechado e balancete
-          </p>
-          <CompanyBalanceUpload
-            familyId={familyId}
-            companyId={companyId}
-            category="Balanço Fechado"
-            label="Balanço fechado (PDF/imagem)"
-          />
-          <CompanyBalanceUpload
-            familyId={familyId}
-            companyId={companyId}
-            category="Balancete Atualizado"
-            label="Balancete atualizado (PDF/imagem)"
-          />
-        </div>
-      ) : null}
     </>
   );
 }

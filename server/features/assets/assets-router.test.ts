@@ -17,6 +17,7 @@ const documentRequirementMocks = vi.hoisted(() => ({
   reconcileEntityDocuments: vi.fn(),
   computeAssetCategories: vi.fn(),
 }));
+const guardMocks = vi.hoisted(() => ({ assertPersonInFamily: vi.fn() }));
 const accessMocks = vi.hoisted(() => ({
   assertFamilyAccess: vi.fn(),
   requireRole: vi.fn(),
@@ -25,6 +26,7 @@ const accessMocks = vi.hoisted(() => ({
 
 vi.mock("./assets-repository", () => assetRepoMocks);
 vi.mock("../audit/audit-repository", () => auditMocks);
+vi.mock("../access/entity-guards", () => guardMocks);
 vi.mock("../documents/document-requirements", () => ({
   reconcileEntityDocuments: documentRequirementMocks.reconcileEntityDocuments,
   computeAssetCategories: documentRequirementMocks.computeAssetCategories,
@@ -37,6 +39,7 @@ vi.mock("../access/authorization", () => ({
   requirePermission: accessMocks.requirePermission,
 }));
 
+import { badRequest } from "../_shared/errors";
 import { assetRouter } from "./assets-router";
 
 function caller(role = "SOCIO") {
@@ -68,6 +71,7 @@ describe("assetRouter", () => {
       return { id: 7 };
     });
     accessMocks.assertFamilyAccess.mockResolvedValue(undefined);
+    guardMocks.assertPersonInFamily.mockResolvedValue(undefined);
     auditMocks.recordAudit.mockResolvedValue(undefined);
     documentRequirementMocks.reconcileEntityDocuments.mockResolvedValue({
       created: 2,
@@ -136,7 +140,29 @@ describe("assetRouter", () => {
     assetRepoMocks.getAssetRecord.mockResolvedValue(null);
     await expect(
       caller().update({ ...validInput, assetId: "sumido" })
-    ).rejects.toThrow("Ativo não encontrado.");
+    ).rejects.toMatchObject({ code: "NOT_FOUND", message: "Ativo não encontrado." });
+  });
+
+  it("valida que o responsável pertence à família ao criar e atualizar", async () => {
+    await caller().create(validInput);
+    expect(guardMocks.assertPersonInFamily).toHaveBeenCalledWith("p1", "fam-1");
+
+    guardMocks.assertPersonInFamily.mockClear();
+    await caller().update({ ...validInput, assetId: "ativo-1" });
+    expect(guardMocks.assertPersonInFamily).toHaveBeenCalledWith("p1", "fam-1");
+  });
+
+  it("recusa responsável de outra família sem gravar", async () => {
+    guardMocks.assertPersonInFamily.mockRejectedValue(
+      badRequest("A pessoa informada não pertence a esta família.")
+    );
+
+    await expect(caller().create(validInput)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller().update({ ...validInput, assetId: "ativo-1" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(assetRepoMocks.createAssetRecord).not.toHaveBeenCalled();
+    expect(assetRepoMocks.updateAssetRecord).not.toHaveBeenCalled();
   });
 
   it("exclui ativo, audita com archivedDocuments", async () => {

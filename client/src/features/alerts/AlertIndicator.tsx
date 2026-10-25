@@ -13,7 +13,7 @@ export function AlertIndicator({
   if (level === "VERMELHO") {
     return (
       <Tooltip delayDuration={100}>
-        <TooltipTrigger asChild tabIndex={0} aria-label="Alerta vermelho de certidão">
+        <TooltipTrigger asChild tabIndex={0} aria-label="Alerta vermelho">
           <span className="inline-flex items-center">
             <CircleAlert className="size-4 text-red-600" aria-hidden="true" />
           </span>
@@ -29,7 +29,7 @@ export function AlertIndicator({
   if (level === "AMARELO") {
     return (
       <Tooltip delayDuration={100}>
-        <TooltipTrigger asChild tabIndex={0} aria-label="Alerta amarelo de certidão">
+        <TooltipTrigger asChild tabIndex={0} aria-label="Alerta amarelo">
           <span className="inline-flex items-center">
             <TriangleAlert className="size-4 text-amber-500" aria-hidden="true" />
           </span>

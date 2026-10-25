@@ -1,5 +1,7 @@
 import { Home, Landmark, UsersRound, Wallet } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { mascaraCnpj } from "@shared/validation";
+import { assetCategoryLabel } from "@/features/assets/assetLabels";
 
 const vinculoLabels: Record<string, string> = {
   TITULAR: "Titular",
@@ -7,14 +9,6 @@ const vinculoLabels: Record<string, string> = {
   FILHO: "Filho(a)",
   NETO: "Neto(a)",
   BISNETO: "Bisneto(a)",
-};
-
-const assetCategoryLabels: Record<string, string> = {
-  INVESTIMENTO: "Aplicação / Investimento",
-  VEICULO: "Veículo",
-  PARTICIPACAO_OUTRA: "Participação",
-  DIREITO: "Direito creditório",
-  OUTRO: "Outro",
 };
 
 function Section({
@@ -135,7 +129,7 @@ export function ClientPatrimonio({ familyId }: { familyId: string }) {
           <Row
             key={company.id}
             title={company.legalName}
-            detail={[company.taxNumber ? `CNPJ ${company.taxNumber}` : null, company.isOffshore ? "Holding internacional" : "Nacional"]
+            detail={[company.taxNumber ? `CNPJ ${mascaraCnpj(company.taxNumber)}` : null, company.isOffshore ? "Holding internacional" : "Nacional"]
               .filter(Boolean)
               .join(" · ")}
           />
@@ -153,7 +147,7 @@ export function ClientPatrimonio({ familyId }: { familyId: string }) {
           <Row
             key={asset.id}
             title={asset.description}
-            detail={assetCategoryLabels[asset.category] ?? asset.category}
+            detail={assetCategoryLabel(asset.category)}
           />
         ))}
       </Section>

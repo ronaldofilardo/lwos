@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Building2, Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { mascaraCnpj, mascaraCpf } from "@shared/validation";
+import {
+  companyTotalsFromRow,
+  computeStakeholderValues,
+  type CompanyTotals,
+} from "@shared/domain/company-valuation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LabeledField } from "@/components/LabeledField";
@@ -15,6 +21,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { errorMessage } from "@/lib/trpcError";
 import { CompanyDetailsModal } from "./CompanyDetailsModal";
+import { StakeholderValues } from "./StakeholderValues";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
 import { levelFor } from "@/features/alerts/alerts";
 import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
@@ -25,12 +32,15 @@ function StakeholderManager({
   companyId,
   familyId,
   people,
-  capitalSocial,
+  totals,
+  international,
 }: {
   companyId: string;
   familyId: string;
   people: Person[];
-  capitalSocial: string | null;
+  /** Capital, PL e valor estimado da sociedade (base dos valores de cada sócio). */
+  totals: CompanyTotals;
+  international: boolean;
 }) {
   const utils = trpc.useUtils();
   const refresh = () => utils.companies.stakeholders.invalidate({ companyId });
@@ -38,6 +48,7 @@ function StakeholderManager({
 
   const [personId, setPersonId] = useState("");
   const [externalName, setExternalName] = useState("");
+  const [externalCpf, setExternalCpf] = useState("");
   const [percentage, setPercentage] = useState("");
 
   const onError = (error: unknown) => toast.error(errorMessage(error));
@@ -46,6 +57,7 @@ function StakeholderManager({
       refresh();
       setPersonId("");
       setExternalName("");
+      setExternalCpf("");
       setPercentage("");
       toast.success("Participação societária registrada.");
     },
@@ -79,7 +91,6 @@ function StakeholderManager({
     0
   );
   const remaining = Math.max(0, Math.round((100 - total) * 100) / 100);
-  const capital = capitalSocial ? Number(capitalSocial) : null;
 
   return (
     <div className="mt-3 space-y-2 border-t border-lucathi-line/60 pt-3">
@@ -104,82 +115,79 @@ function StakeholderManager({
             const person = row.personId
               ? (people ?? []).find(item => item.id === row.personId)
               : null;
-            const label = person?.fullName ?? row.externalName ?? "—";
-            const invested =
-              capital !== null
-                ? (capital * Number(row.percentage)) / 100
-                : null;
+            const cpfSuffix = !person && row.externalCpf ? ` · CPF ${mascaraCpf(row.externalCpf)}` : "";
+            const label = `${person?.fullName ?? row.externalName ?? "—"}${cpfSuffix}`;
+            const values = computeStakeholderValues(row.percentage, totals);
             return (
               <div
                 key={row.id}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-lucathi-line/60 bg-white px-2.5 py-1.5 text-xs"
+                className="rounded-lg border border-lucathi-line/60 bg-white px-2.5 py-1.5 text-xs"
               >
-                <span className="font-medium text-lucathi-navy">{label}</span>
-                <span className="flex items-center gap-1 text-lucathi-gray">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.01"
-                    defaultValue={row.percentage}
-                    key={row.percentage}
-                    onBlur={e => {
-                      const val = Number(e.target.value.replace(",", "."));
-                      if (!isNaN(val) && val !== Number(row.percentage)) {
-                        updateStakeholder.mutate({
-                          companyId,
-                          stakeholderId: row.id,
-                          percentage: val,
-                        });
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-lucathi-navy">{label}</span>
+                  <span className="flex items-center gap-1 text-lucathi-gray">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      defaultValue={row.percentage}
+                      key={row.percentage}
+                      onBlur={e => {
+                        const val = Number(e.target.value.replace(",", "."));
+                        if (!isNaN(val) && val !== Number(row.percentage)) {
+                          updateStakeholder.mutate({
+                            companyId,
+                            stakeholderId: row.id,
+                            percentage: val,
+                          });
+                        }
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      className="h-6 w-14 rounded border border-input bg-transparent px-1 text-right text-xs"
+                      title="Editar participação (%)"
+                    />
+                    %
+                    {person ? "" : " · não-membro"}
+                  </span>
+                  {!person ? (
+                    <button
+                      type="button"
+                      className="rounded border border-lucathi-line px-1.5 py-0.5 text-lucathi-navy hover:bg-lucathi-mist"
+                      disabled={requestExternalDoc.isPending}
+                      onClick={() =>
+                        requestExternalDoc.mutate({
+                          familyId,
+                          entityType: "SOCIEDADE",
+                          entityId: companyId,
+                          category: `Doc. pessoal — ${label}`.slice(0, 80),
+                        })
                       }
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") {
-                        e.currentTarget.blur();
-                      }
-                    }}
-                    className="h-6 w-14 rounded border border-input bg-transparent px-1 text-right text-xs"
-                    title="Editar participação (%)"
-                  />
-                  %
-                  {person ? "" : " · não-membro"}
-                </span>
-                <span className="text-lucathi-gray">
-                  {invested !== null
-                    ? `· ${invested.toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })} investido`
-                    : "· —"}
-                </span>
-                {!person ? (
+                    >
+                      Doc pessoal
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    className="rounded border border-lucathi-line px-1.5 py-0.5 text-lucathi-navy hover:bg-lucathi-mist"
-                    disabled={requestExternalDoc.isPending}
+                    aria-label="Remover participação"
+                    className="ml-auto rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50"
+                    disabled={remove.isPending}
                     onClick={() =>
-                      requestExternalDoc.mutate({
-                        familyId,
-                        entityType: "SOCIEDADE",
-                        entityId: companyId,
-                        category: `Doc. pessoal — ${label}`.slice(0, 80),
-                      })
+                      remove.mutate({ companyId, stakeholderId: row.id })
                     }
                   >
-                    Doc pessoal
+                    <Trash2 className="size-3.5" />
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  aria-label="Remover participação"
-                  className="ml-auto rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50"
-                  disabled={remove.isPending}
-                  onClick={() =>
-                    remove.mutate({ companyId, stakeholderId: row.id })
-                  }
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
+                </div>
+                <StakeholderValues
+                  values={values}
+                  international={international}
+                  className="mt-1 text-lucathi-gray"
+                />
               </div>
             );
           })}
@@ -192,7 +200,7 @@ function StakeholderManager({
 
       {remaining > 0 ? (
         <>
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-2 md:grid-cols-3">
             <LabeledField label="Membro da família">
               {id => (
                 <select
@@ -200,7 +208,10 @@ function StakeholderManager({
                   value={personId}
                   onChange={e => {
                     setPersonId(e.target.value);
-                    if (e.target.value) setExternalName("");
+                    if (e.target.value) {
+                      setExternalName("");
+                      setExternalCpf("");
+                    }
                   }}
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
                 >
@@ -223,6 +234,21 @@ function StakeholderManager({
                     if (e.target.value) setPersonId("");
                   }}
                   placeholder="Ex.: João da Silva"
+                  className="h-9 text-xs"
+                  disabled={Boolean(personId)}
+                />
+              )}
+            </LabeledField>
+            <LabeledField label="CPF (opcional)">
+              {id => (
+                <Input
+                  id={id}
+                  value={externalCpf}
+                  onChange={e => {
+                    setExternalCpf(e.target.value);
+                    if (e.target.value) setPersonId("");
+                  }}
+                  placeholder="000.000.000-00"
                   className="h-9 text-xs"
                   disabled={Boolean(personId)}
                 />
@@ -254,6 +280,7 @@ function StakeholderManager({
                   companyId,
                   personId: personId || undefined,
                   externalName: externalName.trim() || undefined,
+                  externalCpf: externalCpf.trim() || undefined,
                   percentage: Number(percentage.replace(',', '.')),
                 })
               }
@@ -415,9 +442,15 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
                   </p>
                   <p className="text-xs text-lucathi-gray">
                     {item.isOffshore ? "Offshore" : "Nacional"}
-                    {item.taxNumber ? ` · CNPJ ${item.taxNumber}` : ""}
+                    {item.taxNumber ? ` · CNPJ ${mascaraCnpj(item.taxNumber)}` : ""}
                     {simples ? " · Simples Nacional" : ""}
                   </p>
+                  {item.notes ? (
+                    <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs text-lucathi-gray">
+                      <span className="font-medium text-lucathi-navy">Observações:</span>{" "}
+                      {item.notes}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Button
@@ -445,7 +478,8 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
                 companyId={item.id}
                 familyId={familyId}
                 people={people.data ?? []}
-                capitalSocial={item.capitalSocial}
+                totals={companyTotalsFromRow(item)}
+                international={item.isOffshore}
               />
             </div>
           );

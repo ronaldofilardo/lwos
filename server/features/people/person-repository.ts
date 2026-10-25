@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, or } from "drizzle-orm";
 import {
   documents,
   people,
@@ -162,14 +162,7 @@ async function assertConjugeNotDuplicated(familyId: string) {
  * O IRPF do dependente herdará o status do IRPF do titular (sincronizado automaticamente).
  */
 async function assertTitularExistsForDependent(familyId: string) {
-  const db = await requireDatabase();
-  const [titular] = await db
-    .select({ id: people.id })
-    .from(people)
-    .where(
-      and(eq(people.familyId, familyId), eq(people.isPrimaryContact, true))
-    )
-    .limit(1);
+  const titular = await getPrimaryContact(familyId);
   if (!titular) {
     throw new Error(
       "Esta família ainda não tem titular marcado. Defina o titular antes de marcar um dependente."
@@ -268,15 +261,33 @@ export async function addPersonRecord(
         and(eq(people.familyId, input.familyId), eq(people.isPrimaryContact, true))
       )
       .limit(1);
-    const autoPrimary = input.vinculo === "TITULAR" && !existingPrimary;
-    const isPrimary = Boolean(input.isPrimaryContact) || autoPrimary;
 
-    if (isPrimary && input.taxId) {
-      await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
+    const isTitularVinculo = input.vinculo === "TITULAR" || !input.vinculo;
+    const targetVinculo = isTitularVinculo ? "TITULAR" : input.vinculo;
+    const isPrimary =
+      Boolean(input.isPrimaryContact) ||
+      input.vinculo === "TITULAR" ||
+      (isTitularVinculo && !existingPrimary);
+
+    if (isPrimary) {
+      if (input.taxId) {
+        await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
+      }
       await tx
         .update(people)
         .set({ isPrimaryContact: false })
         .where(eq(people.familyId, input.familyId));
+      if (targetVinculo === "TITULAR") {
+        await tx
+          .update(people)
+          .set({ vinculo: null })
+          .where(
+            and(
+              eq(people.familyId, input.familyId),
+              eq(people.vinculo, "TITULAR")
+            )
+          );
+      }
     }
     await tx.insert(people).values({
       id,
@@ -288,7 +299,7 @@ export async function addPersonRecord(
       civilStatus: civilStatus!,
       maritalRegime: maritalRegime!,
       exSpouseNote: input.exSpouseNote || null,
-      vinculo: input.vinculo,
+      vinculo: targetVinculo,
       parentPersonId: input.parentPersonId || null,
       spouseName: input.spouseName?.trim() || null,
       isPrimaryContact: isPrimary,
@@ -307,7 +318,7 @@ export async function addPersonRecord(
     // titular apresenta; ver person-document-categories.ts.
     await tx.insert(documents).values(
       computePersonCategories({
-        vinculo: input.vinculo,
+        vinculo: targetVinculo,
         civilStatus,
       }).map(category => ({
         id: createId(),
@@ -540,14 +551,23 @@ export async function listPeopleByFamily(familyId: string) {
 
 export async function getPrimaryContact(familyId: string) {
   const db = await requireDatabase();
-  const result = await db
+  const [primary] = await db
     .select()
     .from(people)
     .where(
       and(eq(people.familyId, familyId), eq(people.isPrimaryContact, true))
     )
     .limit(1);
-  return result[0] ?? null;
+  if (primary) return primary;
+
+  const [byVinculo] = await db
+    .select()
+    .from(people)
+    .where(
+      and(eq(people.familyId, familyId), eq(people.vinculo, "TITULAR"))
+    )
+    .limit(1);
+  return byVinculo ?? null;
 }
 
 /**
@@ -585,7 +605,17 @@ export async function setPrimaryContact(
       .where(eq(people.familyId, input.familyId));
     await tx
       .update(people)
-      .set({ isPrimaryContact: true })
+      .set({ vinculo: null })
+      .where(
+        and(
+          eq(people.familyId, input.familyId),
+          eq(people.vinculo, "TITULAR"),
+          ne(people.id, input.personId)
+        )
+      );
+    await tx
+      .update(people)
+      .set({ isPrimaryContact: true, vinculo: "TITULAR" })
       .where(
         and(eq(people.familyId, input.familyId), eq(people.id, input.personId))
       );

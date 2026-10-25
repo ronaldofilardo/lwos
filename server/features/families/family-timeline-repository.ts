@@ -13,10 +13,11 @@ import {
   properties,
 } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
+import { isResolvedDocumentStatus } from "../../../shared/domain/document-status";
 import { buildProcessTimeline, type ProcessTimeline } from "./family-timeline";
 
 function isResolved(status: string): boolean {
-  return status === "VALIDADO" || status === "DISPENSADO";
+  return isResolvedDocumentStatus(status);
 }
 
 /**

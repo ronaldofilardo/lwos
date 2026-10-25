@@ -148,6 +148,9 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
               person.birthDate && isNascimentoValido(person.birthDate)
                 ? formatarIdadeDecimal(idadeDecimal(person.birthDate))
                 : null;
+            const isTitular = Boolean(
+              person.isPrimaryContact || person.vinculo === "TITULAR"
+            );
 
             return (
               <div
@@ -161,7 +164,9 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                       level={levelFor(bySubject, "PESSOA", person.id)}
                       reasons={reasonsFor(reasonsBySubject, "PESSOA", person.id)}
                     />
-                    <VinculoBadge vinculo={person.vinculo} />
+                    {person.vinculo && person.vinculo !== "TITULAR" ? (
+                      <VinculoBadge vinculo={person.vinculo} />
+                    ) : null}
                     {person.isDependent ? (
                       <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
                         Dependente no IRPF do titular
@@ -169,7 +174,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                     ) : null}
                   </div>
                   <div className="flex items-center gap-1">
-                    {person.isPrimaryContact ? (
+                    {isTitular ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-lucathi-navy/10 px-2.5 py-1 text-xs font-semibold text-lucathi-navy">
                         <Crown className="size-3.5" />
                         Titular

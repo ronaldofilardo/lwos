@@ -29,6 +29,8 @@ export const uploadVersionSchema = z.object({
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(120),
   base64Data: z.string().min(8).max(8_000_000),
+  /** Data-base do balanço/balancete (obrigatória nesses documentos; ignorada nos demais). */
+  referenceDate: isoDateSchema("Data-base inválida (use AAAA-MM-DD).").optional(),
 });
 
 export const reviewDocumentSchema = z.object({

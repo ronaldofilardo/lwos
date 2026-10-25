@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { assetCategoryValues } from "../../../drizzle/schema";
+import { MAX_DINHEIRO } from "../../../shared/validation/dinheiro";
 
 export const assetCategorySchema = z.enum(assetCategoryValues);
 
@@ -8,9 +9,13 @@ export const createAssetSchema = z.object({
   familyId: z.string().min(1),
   category: assetCategorySchema,
   description: z.string().min(2).max(240),
-  declaredValue: z.number().positive("Informe o valor declarado (> 0)."),
+  declaredValue: z
+    .number()
+    .finite()
+    .positive("Informe o valor declarado (> 0).")
+    .max(MAX_DINHEIRO, "Valor declarado acima do limite permitido."),
   ownerPersonId: z.string().min(1, "Informe o responsável pelo ativo."),
-  notes: z.string().max(1000).optional(),
+  notes: z.string().max(8000).optional(),
 });
 
 export const updateAssetSchema = createAssetSchema

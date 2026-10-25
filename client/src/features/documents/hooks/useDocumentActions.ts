@@ -5,7 +5,11 @@ import { errorMessage } from "@/lib/trpcError";
 
 export function useDocumentActions(familyId: string) {
   const utils = trpc.useUtils();
-  const refresh = () => utils.documents.list.invalidate({ familyId });
+  const refresh = () => {
+    utils.documents.list.invalidate({ familyId });
+    // Dispensa / "Não possui" de certidão muda os alertas (!) de Pessoas e Sociedades.
+    utils.certidoes.summary.invalidate({ familyId });
+  };
   const uploadMutation = trpc.documents.uploadVersion.useMutation({
     onSuccess: () => {
       refresh();
@@ -27,12 +31,14 @@ export function useDocumentActions(familyId: string) {
     },
     onError: error => toast.error(errorMessage(error)),
   });
-  const upload = async (documentId: string, file: File) =>
+  /** `referenceDate` (data-base) é obrigatória em balanço/balancete; ignorada nos demais. */
+  const upload = async (documentId: string, file: File, referenceDate?: string) =>
     uploadMutation.mutateAsync({
       documentId,
       fileName: file.name,
       mimeType: file.type,
       base64Data: await readAsBase64(file),
+      ...(referenceDate ? { referenceDate } : {}),
     });
   const review = (
     documentId: string,

@@ -4,6 +4,7 @@ import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import type { z } from "zod";
 import type { createAssetSchema, updateAssetSchema } from "./assets-types";
+import { notFound } from "../_shared/errors";
 
 export async function createAssetRecord(input: z.infer<typeof createAssetSchema>) {
   const db = await requireDatabase();
@@ -31,7 +32,7 @@ export async function getAssetRecord(assetId: string) {
 export async function updateAssetRecord(input: z.infer<typeof updateAssetSchema>) {
   const db = await requireDatabase();
   const existing = await getAssetRecord(input.assetId);
-  if (!existing) throw new Error("Ativo não encontrado.");
+  if (!existing) throw notFound("Ativo não encontrado.");
   await db
     .update(otherAssets)
     .set({
@@ -60,7 +61,7 @@ export async function removeAssetRecord(
     .from(otherAssets)
     .where(and(eq(otherAssets.id, assetId), eq(otherAssets.familyId, familyId)))
     .limit(1);
-  if (!asset) throw new Error("Ativo não encontrado nesta família.");
+  if (!asset) throw notFound("Ativo não encontrado nesta família.");
 
   const docs = await db
     .select({ id: documents.id })

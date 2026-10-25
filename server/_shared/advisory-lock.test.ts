@@ -74,3 +74,26 @@ describe("withAdvisoryLock", () => {
     expect(result).toBe("direto");
   });
 });
+
+describe("withAdvisoryLock — formato do resultado do driver", () => {
+  const makeRowsDb = (lockResult: unknown) => {
+    const tx = { execute: vi.fn(async () => lockResult) };
+    return {
+      db: { transaction: vi.fn(async (cb: (t: unknown) => Promise<unknown>) => cb(tx)) },
+    };
+  };
+
+  it("aceita QueryResult do node-postgres ({ rows }) com lock obtido", async () => {
+    const { db } = makeRowsDb({ rows: [{ acquired: true }], rowCount: 1 });
+    await expect(
+      withAdvisoryLock(db as never, "DOCUMENT_UPLOAD", "doc-1", async () => "ok")
+    ).resolves.toBe("ok");
+  });
+
+  it("QueryResult com lock indisponível lança erro de concorrência", async () => {
+    const { db } = makeRowsDb({ rows: [{ acquired: false }], rowCount: 1 });
+    await expect(
+      withAdvisoryLock(db as never, "DOCUMENT_UPLOAD", "doc-1", async () => "nunca")
+    ).rejects.toThrow("Operação concorrente");
+  });
+});

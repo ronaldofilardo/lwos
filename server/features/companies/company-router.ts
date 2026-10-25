@@ -3,6 +3,8 @@ import { protectedProcedure, router } from "../../_core/trpc";
 import { requirePermission } from "../access/authorization";
 import { Permission } from "../../../shared/domain/permissions";
 import { assertFamilyAccess } from "../access/family-access";
+import { assertPersonInFamily } from "../access/entity-guards";
+import { badRequest, notFound } from "../_shared/errors";
 import { recordAudit } from "../audit/audit-repository";
 import { ensureCertidoesForSubject, listCertidaoRecords } from "../certidoes/certidao-repository";
 import {
@@ -41,7 +43,7 @@ import { mapBrasilApiToCompanyData } from "./brasilapi-mapper";
 
 async function requireCompanyFamily(companyId: string) {
   const company = await getCompanyRecord(companyId);
-  if (!company) throw new Error("Sociedade não encontrada.");
+  if (!company) throw notFound("Sociedade não encontrada.");
   return company;
 }
 
@@ -174,6 +176,7 @@ export const companyRouter = router({
     const user = requirePermission(ctx, Permission.COMPANY_ADD_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
+    if (input.personId) await assertPersonInFamily(input.personId, company.familyId);
     const stakeholderId = await createStakeholderRecord(input);
     await recordAudit({
       action: "PARTICIPACAO_SOCIETARIA_REGISTRADA",
@@ -189,6 +192,7 @@ export const companyRouter = router({
     const user = requirePermission(ctx, Permission.COMPANY_UPDATE_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
+    if (input.personId) await assertPersonInFamily(input.personId, company.familyId);
     await updateStakeholderRecord(input);
     await recordAudit({
       action: "PARTICIPACAO_SOCIETARIA_ATUALIZADA",
@@ -243,23 +247,33 @@ export const companyRouter = router({
         row => row.scope === "SOCIEDADE" && row.subjectId === company.id
       ),
       perShare: computePerShare(details ?? {}),
+      people: people.map(person => ({
+        id: person.id,
+        fullName: person.fullName,
+      })),
     };
   }),
   upsertDetails: protectedProcedure.input(companyDetailsUpsertSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.COMPANY_UPSERT_DETAILS);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
+    if (input.fields.administrator1PersonId) {
+      await assertPersonInFamily(input.fields.administrator1PersonId, company.familyId);
+    }
+    if (input.fields.administrator2PersonId) {
+      await assertPersonInFamily(input.fields.administrator2PersonId, company.familyId);
+    }
     // Offshore: exige jurisdição e identificador estrangeiro; não usa regime
     // tributário brasileiro.
     if (company.isOffshore) {
       if (!input.fields.jurisdiction) {
-        throw new Error("Informe a jurisdição da sociedade offshore.");
+        throw badRequest("Informe a jurisdição da sociedade offshore.");
       }
       if (!input.fields.companyNumber) {
-        throw new Error("Informe o identificador estrangeiro (company number).");
+        throw badRequest("Informe o identificador estrangeiro (company number).");
       }
       if (input.fields.taxRegime) {
-        throw new Error("Sociedade offshore não usa regime tributário brasileiro.");
+        throw badRequest("Sociedade offshore não usa regime tributário brasileiro.");
       }
     }
     await upsertCompanyDetailsRecord({ companyId: company.id, fields: input.fields });

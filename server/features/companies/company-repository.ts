@@ -17,6 +17,9 @@ import type {
   stakeholderUpdateSchema,
 } from "./company-stakeholder";
 import { withAdvisoryLock, AdvisoryLockKey } from "../../_shared/advisory-lock";
+import { onlyDigits } from "../../../shared/validation/digitos";
+import { normalizarCpf } from "../../../shared/validation/cpf";
+import { badRequest, conflict, notFound } from "../_shared/errors";
 
 /** Tolerância de fração de centavo na soma das participações. */
 const PCT_EPSILON = 0.001;
@@ -41,10 +44,33 @@ export function normalizeName(name: string | null) {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * Documento gravado só com dígitos (convenção de `normalizarCnpj`): o índice
+ * único (familyId, taxNumber) compara texto, então "12.345.678/0001-90" e
+ * "12345678000190" seriam duas sociedades. A exibição usa `mascaraCnpj`.
+ */
+export function normalizeTaxNumber(value: string | null | undefined): string | null {
+  const digits = onlyDigits(value ?? "");
+  return digits || null;
+}
+
 export async function createCompanyRecord(input: z.infer<typeof companyInputSchema>) {
   const db = await requireDatabase();
   const id = createId();
-  await db.insert(companies).values({ ...input, id, taxNumber: input.taxNumber || null });
+  const taxNumber = normalizeTaxNumber(input.taxNumber);
+
+  if (taxNumber) {
+    // Compara por dígitos para pegar também linhas antigas gravadas com máscara.
+    const sameFamily = await db
+      .select({ id: companies.id, taxNumber: companies.taxNumber })
+      .from(companies)
+      .where(eq(companies.familyId, input.familyId));
+    if (sameFamily.some(row => normalizeTaxNumber(row.taxNumber) === taxNumber)) {
+      throw conflict("Já existe uma sociedade com este CNPJ nesta família.");
+    }
+  }
+
+  await db.insert(companies).values({ ...input, id, taxNumber });
   return id;
 }
 
@@ -67,6 +93,18 @@ export async function listCompanyRecords(familyId: string) {
       updatedAt: companies.updatedAt,
       taxRegime: companyDetails.taxRegime,
       capitalSocial: companyDetails.capitalSocial,
+      shareQuantity: companyDetails.shareQuantity,
+      equity: companyDetails.equity,
+      cashAndEquivalents: companyDetails.cashAndEquivalents,
+      inventory: companyDetails.inventory,
+      accountsReceivable: companyDetails.accountsReceivable,
+      investments: companyDetails.investments,
+      fixedAssets: companyDetails.fixedAssets,
+      retainedEarnings: companyDetails.retainedEarnings,
+      taxLiabilities: companyDetails.taxLiabilities,
+      laborLiabilities: companyDetails.laborLiabilities,
+      financing: companyDetails.financing,
+      notes: companyDetails.notes,
     })
     .from(companies)
     .leftJoin(companyDetails, eq(companyDetails.companyId, companies.id))
@@ -91,17 +129,20 @@ export async function createStakeholderRecord(input: z.infer<typeof stakeholderI
         .from(companyStakeholders)
         .where(eq(companyStakeholders.companyId, input.companyId));
       if (input.personId && existing.some(row => row.personId === input.personId)) {
-        throw new Error("Este membro já participa da sociedade.");
+        throw conflict("Este membro já participa da sociedade.");
       }
       if (externalName && existing.some(row => normalizeName(row.externalName) === normalizeName(externalName))) {
-        throw new Error("Este não-membro já participa da sociedade.");
+        throw conflict("Este não-membro já participa da sociedade.");
       }
       const total = totalPercentage(existing) + input.percentage;
       if (total > 100 + PCT_EPSILON) {
-        throw new Error(
+        throw badRequest(
           `A soma das participações não pode passar de 100% (atual ${totalPercentage(existing)}%).`
         );
       }
+      const externalCpf = input.externalCpf
+        ? normalizarCpf(input.externalCpf)
+        : null;
       await tx
         .insert(companyStakeholders)
         .values({
@@ -109,6 +150,7 @@ export async function createStakeholderRecord(input: z.infer<typeof stakeholderI
           companyId: input.companyId,
           personId: input.personId ?? null,
           externalName,
+          externalCpf,
           percentage: input.percentage.toFixed(2),
         });
       return id;
@@ -131,7 +173,7 @@ export async function updateStakeholderRecord(
         .limit(1);
       const stakeholder = current[0];
       if (!stakeholder || stakeholder.companyId !== input.companyId) {
-        throw new Error("Participação não encontrada.");
+        throw notFound("Participação não encontrada.");
       }
       const others = await tx
         .select()
@@ -144,30 +186,39 @@ export async function updateStakeholderRecord(
         input.externalName !== undefined
           ? input.externalName.trim() || null
           : stakeholder.externalName;
+      const externalCpf =
+        input.externalCpf !== undefined
+          ? (input.externalCpf ? normalizarCpf(input.externalCpf) : null)
+          : stakeholder.externalCpf;
       if (!personId && !externalName) {
-        throw new Error("Informe um membro da família ou o nome do não-membro.");
+        throw badRequest("Informe um membro da família ou o nome do não-membro.");
       }
       if (personId && remaining.some(row => row.personId === personId)) {
-        throw new Error("Este membro já participa da sociedade.");
+        throw conflict("Este membro já participa da sociedade.");
       }
       if (
         externalName &&
         remaining.some(row => normalizeName(row.externalName) === normalizeName(externalName))
       ) {
-        throw new Error("Este não-membro já participa da sociedade.");
+        throw conflict("Este não-membro já participa da sociedade.");
       }
 
       const percentage = input.percentage ?? Number(stakeholder.percentage);
       const total = totalPercentage(remaining) + percentage;
       if (total > 100 + PCT_EPSILON) {
-        throw new Error(
+        throw badRequest(
           `A soma das participações não pode passar de 100% (atual ${totalPercentage(remaining)}%).`
         );
       }
 
       await tx
         .update(companyStakeholders)
-        .set({ personId, externalName, percentage: percentage.toFixed(2) })
+        .set({
+          personId,
+          externalName,
+          externalCpf,
+          percentage: percentage.toFixed(2),
+        })
         .where(eq(companyStakeholders.id, input.stakeholderId));
     }
   );
@@ -177,16 +228,23 @@ export async function removeStakeholderRecord(
   input: z.infer<typeof stakeholderDeleteSchema>
 ) {
   const db = await requireDatabase();
+  // O filtro por companyId vai no próprio DELETE: antes, a linha era apagada
+  // e só depois comparada, o que removia sócio de outra sociedade/família.
   const removed = await db
     .delete(companyStakeholders)
-    .where(eq(companyStakeholders.id, input.stakeholderId))
+    .where(
+      and(
+        eq(companyStakeholders.id, input.stakeholderId),
+        eq(companyStakeholders.companyId, input.companyId)
+      )
+    )
     .returning({
       id: companyStakeholders.id,
       companyId: companyStakeholders.companyId,
     });
   const row = removed[0];
   if (!row || row.companyId !== input.companyId) {
-    throw new Error("Participação não encontrada.");
+    throw notFound("Participação não encontrada.");
   }
   return row.id;
 }
@@ -202,7 +260,7 @@ export async function removeCompanyRecord(
     .from(companies)
     .where(and(eq(companies.id, companyId), eq(companies.familyId, familyId)))
     .limit(1);
-  if (!company) throw new Error("Sociedade não encontrada nesta família.");
+  if (!company) throw notFound("Sociedade não encontrada nesta família.");
 
   const [owner] = await db
     .select({ id: propertyOwners.id })
@@ -210,7 +268,7 @@ export async function removeCompanyRecord(
     .where(eq(propertyOwners.companyId, companyId))
     .limit(1);
   if (owner) {
-    throw new Error(
+    throw conflict(
       "Não é possível excluir: a sociedade é titular de imóvel. Remova a titularidade antes."
     );
   }

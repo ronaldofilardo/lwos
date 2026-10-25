@@ -12,6 +12,7 @@ import {
   computePersonCategories,
 } from "./person-document-categories";
 import { createId } from "../_shared/ids";
+import { COMPANY_BALANCE_CATEGORIES } from "../../../shared/domain/balance-documents";
 
 /**
  * Matriz pura de requisitos documentais por escopo patrimonial (Fase 8).
@@ -40,11 +41,8 @@ export function computePropertyCategories(property: {
     : ["Matrícula atualizada", "IPTU ou ITR"];
 }
 
-/** Categorias de balanço: fonte única para a matriz e para o upload do modal. */
-export const COMPANY_BALANCE_CATEGORIES = [
-  "Balanço Fechado",
-  "Balancete Atualizado",
-] as const;
+/** Categorias de balanço: fonte única em shared (a matriz exige a data-base no envio). */
+export { COMPANY_BALANCE_CATEGORIES };
 
 export const COMPANY_LTD_CATEGORIES = [
   "Comprovante de Inscrição no CNPJ",
@@ -67,9 +65,6 @@ export const COMPANY_OFFSHORE_CATEGORIES = [
   "Share Certificate(s)",
   "Certificate of Good Standing",
   "Balance Sheet",
-  "Conferência de IRPF/Declaração ao Banco Central",
-  "Cláusulas sucessórias",
-  "Testamento local da jurisdição",
 ] as const;
 
 export function computeCompanyCategories(company: {
@@ -84,8 +79,9 @@ export function computeCompanyCategories(company: {
   return [...COMPANY_LTD_CATEGORIES];
 }
 
+/** Demais ativos não exigem documentos do cliente (decisão de 24/10/2026). */
 export function computeAssetCategories(): string[] {
-  return ["Comprovação de titularidade"];
+  return [];
 }
 
 type EntityType = "PESSOA" | "IMOVEL" | "SOCIEDADE" | "ATIVO";
@@ -107,7 +103,8 @@ type ReconcileResult = { created: number; removed: number };
 export async function reconcileEntityDocuments(
   input: RequirementInput
 ): Promise<ReconcileResult> {
-  if (!input.categories.length) return { created: 0, removed: 0 };
+  // Lista vazia é válida (ex.: ativos): nada a criar e as pendências antigas
+  // sem arquivo são removidas pela reconciliação abaixo.
   const db = await requireDatabase();
   const existing = await db
     .select({

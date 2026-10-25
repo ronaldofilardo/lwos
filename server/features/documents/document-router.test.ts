@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const repositoryMocks = vi.hoisted(() => ({
   findOrCreateDocumentRecord: vi.fn(),
+  setDocumentReferenceDate: vi.fn(),
   getDocumentRecord: vi.fn(),
   listDocumentRecords: vi.fn(),
   listVersions: vi.fn(),
@@ -19,7 +20,6 @@ const reviewMocks = vi.hoisted(() => ({
 const uploadMocks = vi.hoisted(() => ({ storeDocumentVersion: vi.fn() }));
 const requirementsMocks = vi.hoisted(() => ({
   reconcileFamilyDocumentRequirements: vi.fn(),
-  COMPANY_BALANCE_CATEGORIES: ["Balanço Fechado", "Balancete Atualizado"] as const,
 }));
 const accessMocks = vi.hoisted(() => ({ assertFamilyAccess: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
@@ -199,7 +199,7 @@ describe("document-router upload, revisão e dispensa", () => {
     repositoryMocks.getDocumentRecord.mockResolvedValue(null);
     await expect(
       caller().review({ documentId: "sumido", status: "REJEITADO" })
-    ).rejects.toThrow("Documento não encontrado.");
+    ).rejects.toMatchObject({ code: "NOT_FOUND", message: "Documento não encontrado." });
     expect(reviewMocks.reviewDocumentRecord).not.toHaveBeenCalled();
   });
 
@@ -247,67 +247,92 @@ describe("document-router upload, revisão e dispensa", () => {
     expect(reviewMocks.dispenseDocumentRecord).not.toHaveBeenCalled();
   });
 
-  it("uploadBalance cria/reusa o documento da sociedade, envia versão e audita", async () => {
-    repositoryMocks.findOrCreateDocumentRecord.mockResolvedValue("doc-bal-1");
-    uploadMocks.storeDocumentVersion.mockResolvedValue({ versionNumber: 1 });
-
-    await expect(
-      caller().uploadBalance({
-        familyId: "fam-1",
-        companyId: "soc-1",
-        category: "Balanço Fechado",
-        referenceDate: "2025-12-31",
-        fileName: "balanco.pdf",
-        base64Data: "aGVsbG8td29ybGQ=",
-      })
-    ).resolves.toEqual({ documentId: "doc-bal-1", versionNumber: 1 });
-
-    expect(repositoryMocks.findOrCreateDocumentRecord).toHaveBeenCalledWith({
+  describe("balanço/balancete da sociedade (data-base obrigatória)", () => {
+    const balanceDocument = {
+      id: "doc-bal-1",
       familyId: "fam-1",
       entityType: "SOCIEDADE",
       entityId: "soc-1",
       category: "Balanço Fechado",
-      referenceDate: "2025-12-31",
-    });
-    expect(uploadMocks.storeDocumentVersion).toHaveBeenCalledWith(
-      expect.objectContaining({
-        documentId: "doc-bal-1",
-        fileName: "balanco.pdf",
-        userId: 7,
-      })
-    );
-    expect(auditMocks.recordAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "BALANCO_ENVIADO",
-        entityId: "soc-1",
-        metadata: expect.objectContaining({
-          category: "Balanço Fechado",
-          referenceDate: "2025-12-31",
-        }),
-      })
-    );
-  });
+      status: "PENDENTE",
+    };
+    const balanceInput = {
+      documentId: "doc-bal-1",
+      fileName: "balanco.pdf",
+      mimeType: "application/pdf",
+      base64Data: "aGVsbG8td29ybGQ=",
+    };
 
-  it("uploadBalance recusa data-base inválida e categoria errada", async () => {
-    await expect(
-      caller().uploadBalance({
-        familyId: "fam-1",
-        companyId: "soc-1",
-        category: "Balanço Fechado",
-        referenceDate: "31/12/2025",
-        fileName: "b.pdf",
-        base64Data: "aGVsbG8td29ybGQ=",
-      })
-    ).rejects.toThrow();
-    await expect(
-      caller().uploadBalance({
-        familyId: "fam-1",
-        companyId: "soc-1",
-        category: "Relatório" as never,
-        referenceDate: "2025-12-31",
-        fileName: "b.pdf",
-        base64Data: "aGVsbG8td29ybGQ=",
-      })
-    ).rejects.toThrow();
+    beforeEach(() => {
+      repositoryMocks.getDocumentRecord.mockResolvedValue(balanceDocument);
+      uploadMocks.storeDocumentVersion.mockResolvedValue({ versionNumber: 1 });
+    });
+
+    it("grava a data-base no documento, envia a versão e audita com categoria e data", async () => {
+      await expect(
+        caller().uploadVersion({ ...balanceInput, referenceDate: "2025-12-31" })
+      ).resolves.toEqual({ versionNumber: 1 });
+
+      // A data-base não vai para o armazenamento do arquivo; é gravada no documento.
+      expect(uploadMocks.storeDocumentVersion).toHaveBeenCalledWith({ ...balanceInput, userId: 7 });
+      expect(repositoryMocks.setDocumentReferenceDate).toHaveBeenCalledWith(
+        "doc-bal-1",
+        "2025-12-31"
+      );
+      expect(auditMocks.recordAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "VERSAO_DOCUMENTO_ENVIADA",
+          metadata: { version: 1, category: "Balanço Fechado", referenceDate: "2025-12-31" },
+        })
+      );
+    });
+
+    it("recusa o envio sem data-base (nada é gravado)", async () => {
+      await expect(caller().uploadVersion(balanceInput)).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Informe a data-base do balanço/balancete.",
+      });
+      expect(uploadMocks.storeDocumentVersion).not.toHaveBeenCalled();
+      expect(repositoryMocks.setDocumentReferenceDate).not.toHaveBeenCalled();
+    });
+
+    it("recusa data-base futura e data inválida", async () => {
+      const future = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+      await expect(
+        caller().uploadVersion({ ...balanceInput, referenceDate: future })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      await expect(
+        caller().uploadVersion({ ...balanceInput, referenceDate: "31/12/2025" })
+      ).rejects.toThrow();
+      expect(uploadMocks.storeDocumentVersion).not.toHaveBeenCalled();
+    });
+
+    it("Balance Sheet de sociedade offshore também exige data-base", async () => {
+      repositoryMocks.getDocumentRecord.mockResolvedValue({
+        ...balanceDocument,
+        category: "Balance Sheet",
+      });
+      await expect(caller().uploadVersion(balanceInput)).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+      await expect(
+        caller().uploadVersion({ ...balanceInput, referenceDate: "2025-06-30" })
+      ).resolves.toEqual({ versionNumber: 1 });
+    });
+
+    it("documento comum não exige data-base e não grava referenceDate", async () => {
+      repositoryMocks.getDocumentRecord.mockResolvedValue({
+        ...balanceDocument,
+        entityType: "PESSOA",
+        category: "RG",
+      });
+      await expect(
+        caller().uploadVersion({ ...balanceInput, referenceDate: "2025-12-31" })
+      ).resolves.toEqual({ versionNumber: 1 });
+      expect(repositoryMocks.setDocumentReferenceDate).not.toHaveBeenCalled();
+      expect(auditMocks.recordAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { version: 1 } })
+      );
+    });
   });
 });

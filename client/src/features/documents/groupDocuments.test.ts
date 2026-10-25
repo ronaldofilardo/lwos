@@ -225,3 +225,46 @@ describe("buildDocumentSections", () => {
     expect(sections[0].key).toBe("FAMILIARES");
   });
 });
+
+describe("documentos × certidões em seções separadas", () => {
+  const ctx = {
+    familyName: "Família Costa",
+    people: [{ id: "p1", fullName: "Ana Costa", vinculo: "TITULAR" as const }],
+    properties: [],
+    companies: [{ id: "soc1", legalName: "Costa Holding" }],
+  };
+
+  it("separa certidões do mesmo membro em seção própria", () => {
+    const groups = groupDocumentsByMember(
+      [
+        doc({ id: "d1", entityType: "PESSOA", entityId: "p1", category: "Certidão de casamento" }),
+        doc({ id: "d2", entityType: "PESSOA", entityId: "p1", category: "CNDT", isCertidao: true }),
+        doc({ id: "d3", entityType: "SOCIEDADE", entityId: "soc1", category: "CNAT", isCertidao: true }),
+      ],
+      ctx
+    );
+
+    const sections = buildDocumentSections(groups);
+
+    expect(sections.map(section => section.key)).toEqual([
+      "FAMILIARES",
+      "FAMILIARES_CERTIDOES",
+      "SOCIEDADE_CERTIDOES",
+    ]);
+    expect(sections[0].groups[0].documents.map(d => d.category)).toEqual([
+      "Certidão de casamento",
+    ]);
+    expect(sections[1].groups[0].documents.map(d => d.category)).toEqual(["CNDT"]);
+    expect(sections[1].groups[0].kind).toBe("CERTIDAO");
+  });
+
+  it("Certidão de casamento é documento e não entra na seção de certidões", () => {
+    const groups = groupDocumentsByMember(
+      [doc({ id: "d1", entityType: "PESSOA", entityId: "p1", category: "Certidão de casamento" })],
+      ctx
+    );
+    const sections = buildDocumentSections(groups);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].key).toBe("FAMILIARES");
+  });
+});

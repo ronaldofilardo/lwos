@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Ban, Check, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { hoje } from "@shared/validation/datas";
 
 type Props = {
   documentId: string;
@@ -8,7 +9,9 @@ type Props = {
   busy: boolean;
   status: string;
   disabled?: boolean;
-  onUpload: (file: File) => Promise<unknown>;
+  /** Balanço/balancete: o envio exige a data-base. */
+  requiresReferenceDate?: boolean;
+  onUpload: (file: File, referenceDate?: string) => Promise<unknown>;
   onReview: (
     status: "VALIDADO" | "REJEITADO" | "NAO_POSSUI",
     reason?: string
@@ -22,6 +25,7 @@ export function DocumentActions({
   busy,
   status,
   disabled,
+  requiresReferenceDate = false,
   onUpload,
   onReview,
   onDispense,
@@ -31,13 +35,33 @@ export function DocumentActions({
   const [showDispense, setShowDispense] = useState(false);
   const [dispenseReason, setDispenseReason] = useState("");
 
+  const [referenceDate, setReferenceDate] = useState("");
+
   const upload = async (file?: File) => {
-    if (file) await onUpload(file);
+    if (!file) return;
+    if (requiresReferenceDate && !referenceDate) return;
+    try {
+      await onUpload(file, requiresReferenceDate ? referenceDate : undefined);
+      setReferenceDate("");
+    } finally {
+      // Permite escolher o mesmo arquivo de novo (o onChange não dispara sem limpar).
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   const handleDispense = async () => {
     if (dispenseReason.trim().length < 3) return;
-    await onDispense(dispenseReason.trim());
+    try {
+      await onDispense(dispenseReason.trim());
+    } catch {
+      // O toast de erro já é exibido pela mutation; mantém o campo aberto.
+      return;
+    }
+    setShowDispense(false);
+    setDispenseReason("");
+  };
+
+  const cancelDispense = () => {
     setShowDispense(false);
     setDispenseReason("");
   };
@@ -58,14 +82,32 @@ export function DocumentActions({
             <input 
               type="file" 
               ref={fileRef} 
-              accept=".pdf,image/*"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx"
               className="hidden" 
               onChange={e => upload(e.target.files?.[0])} 
             />
+            {requiresReferenceDate ? (
+              <label className="flex items-center gap-1.5 text-xs text-lucathi-gray">
+                Data-base
+                <input
+                  type="date"
+                  value={referenceDate}
+                  max={hoje()}
+                  onChange={e => setReferenceDate(e.target.value)}
+                  disabled={busy || disabled}
+                  className="h-8 rounded-md border border-input px-2 text-xs"
+                />
+              </label>
+            ) : null}
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || disabled}
+              disabled={busy || disabled || (requiresReferenceDate && !referenceDate)}
+              title={
+                requiresReferenceDate && !referenceDate
+                  ? "Informe a data-base antes de enviar."
+                  : undefined
+              }
               onClick={() => fileRef.current?.click()}
             >
               <Upload className="mr-1 size-3" /> Enviar Versão
@@ -141,6 +183,35 @@ export function DocumentActions({
           </>
         ) : null}
       </div>
+
+      {canReview && showDispense && !isDispensed ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <input
+            value={dispenseReason}
+            onChange={e => setDispenseReason(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") void handleDispense();
+              if (e.key === "Escape") cancelDispense();
+            }}
+            placeholder="Justificativa da dispensa (mín. 3 caracteres)"
+            maxLength={1000}
+            autoFocus
+            aria-label="Justificativa da dispensa"
+            className="h-8 w-72 rounded-md border border-input px-2 text-xs"
+          />
+          <Button
+            size="sm"
+            disabled={busy || disabled || dispenseReason.trim().length < 3}
+            onClick={() => void handleDispense()}
+            className="bg-purple-700 text-white hover:bg-purple-800"
+          >
+            <Ban className="mr-1 size-3" /> Confirmar dispensa
+          </Button>
+          <Button size="sm" variant="ghost" onClick={cancelDispense}>
+            Cancelar
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

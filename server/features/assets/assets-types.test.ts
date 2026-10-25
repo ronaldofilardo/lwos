@@ -31,6 +31,29 @@ describe("createAssetSchema", () => {
     expect(createAssetSchema.safeParse({ ...base, declaredValue: -10 }).success).toBe(false);
   });
 
+  it("recusa valor acima do teto de numeric(15,2) (13 inteiros)", () => {
+    expect(
+      createAssetSchema.safeParse({ ...base, declaredValue: 9_999_999_999_999.99 }).success
+    ).toBe(true);
+    expect(
+      createAssetSchema.safeParse({ ...base, declaredValue: 10_000_000_000_000 }).success
+    ).toBe(false);
+    expect(
+      createAssetSchema.safeParse({ ...base, declaredValue: Number.POSITIVE_INFINITY }).success
+    ).toBe(false);
+  });
+
+  it("aceita as categorias offshore", () => {
+    for (const category of ["CONTA_CORRENTE_OFFSHORE", "INVESTIMENTOS_OFFSHORE"]) {
+      expect(createAssetSchema.safeParse({ ...base, category }).success).toBe(true);
+    }
+  });
+
+  it("observações aceitam até 8000 caracteres", () => {
+    expect(createAssetSchema.safeParse({ ...base, notes: "x".repeat(8000) }).success).toBe(true);
+    expect(createAssetSchema.safeParse({ ...base, notes: "x".repeat(8001) }).success).toBe(false);
+  });
+
   it("exige responsável (ownerPersonId)", () => {
     const { ownerPersonId: _owner, ...withoutOwner } = base;
     expect(createAssetSchema.safeParse(withoutOwner).success).toBe(false);

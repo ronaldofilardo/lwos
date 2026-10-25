@@ -94,7 +94,7 @@ describe("company-details-repository", () => {
     idMocks.createId.mockReturnValue("novo-id");
   });
 
-  it("faz upsert convertendo números para decimal e limpando vazios", async () => {
+  it("faz upsert convertendo números para decimal, derivando o valor estimado e limpando vazios", async () => {
     const { db, state } = mockDb();
     databaseMocks.requireDatabase.mockResolvedValue(db);
 
@@ -105,7 +105,9 @@ describe("company-details-repository", () => {
       companyId: "hold-1",
       capitalSocial: "100000.00",
       shareQuantity: "1000.00",
-      estimatedMarketValue: "250000.00",
+      // Derivado do balanço (10000+2000+3000+4000+1500 − 500 − 300 − 700); o
+      // valor enviado (250000) é ignorado.
+      estimatedMarketValue: "19000.00",
       inventory: null,
       administrator2: null,
       uf: "SP",

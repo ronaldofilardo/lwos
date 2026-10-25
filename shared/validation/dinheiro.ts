@@ -1,5 +1,9 @@
-/** Teto de numeric(15,2): 13 dígitos inteiros + 2 decimais. */
-export const MAX_DINHEIRO = 999_999_999_999_999.99;
+/**
+ * Teto de numeric(15,2): 13 dígitos inteiros + 2 decimais (precisão 15 menos
+ * escala 2). O valor anterior tinha 15 inteiros e deixava passar números que
+ * o banco recusava.
+ */
+export const MAX_DINHEIRO = 9_999_999_999_999.99;
 
 /**
  * Parse de valor monetário/percentual no padrão pt-BR: "1.500" → 1500,

@@ -131,6 +131,31 @@ describe("person-repository criação", () => {
     );
   });
 
+  it("define como default que o primeiro membro cadastrado é o Titular com isPrimaryContact true", async () => {
+    const { db, insertValues } = queuedDb([[]]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue(null);
+    idMocks.createId.mockReturnValueOnce("pessoa-primeira").mockReturnValue("doc");
+
+    await addPersonRecord({
+      familyId: "familia-nova",
+      fullName: "Primeiro Membro",
+      taxId: "52998224725",
+      birthDate: "1985-01-01",
+      civilStatus: "SOLTEIRO",
+      city: "São Paulo",
+      uf: "SP",
+    } as never);
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "pessoa-primeira",
+        vinculo: "TITULAR",
+        isPrimaryContact: true,
+      })
+    );
+  });
+
   it("recusa CPF já cadastrado em outra pessoa do projeto", async () => {
     const { db } = queuedDb([[{ id: "outra-pessoa", fullName: "Outra" }]]);
     databaseMocks.requireDatabase.mockResolvedValue(db);
@@ -767,6 +792,20 @@ describe("consultas de pessoas por família", () => {
     databaseMocks.requireDatabase.mockResolvedValue(none.db);
     await expect(getPrimaryContact("familia-2")).resolves.toBeNull();
   });
+
+  it("localiza o titular por vinculo TITULAR como fallback se isPrimaryContact for false", async () => {
+    const { db } = queuedDb([
+      [],
+      [{ id: "titular-legado", vinculo: "TITULAR", isPrimaryContact: false }],
+    ]);
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(getPrimaryContact("familia-1")).resolves.toEqual({
+      id: "titular-legado",
+      vinculo: "TITULAR",
+      isPrimaryContact: false,
+    });
+  });
 });
 
 describe("person-repository titular e storage", () => {
@@ -811,6 +850,43 @@ describe("person-repository titular e storage", () => {
       "familia-1",
       "cpf-antigo",
       "cpf-novo"
+    );
+  });
+
+  it("ao trocar titular, atualiza titular anterior para OUTRO e novo para TITULAR", async () => {
+    const updateSet = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+    const update = vi.fn().mockReturnValue({ set: updateSet });
+    const tx = {
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([
+              { id: "pessoa-nova", taxId: "52998224725", familyId: "familia-1" },
+            ]),
+          }),
+        }),
+      }),
+      update,
+      insert: vi.fn(),
+      delete: vi.fn(),
+    };
+    const db = {
+      transaction: vi.fn(async (op: (val: typeof tx) => Promise<void>) => op(tx)),
+      select: tx.select,
+      update,
+    };
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+    pathMocks.findFamilyIdByPrimaryContactCpf.mockResolvedValue(null);
+    pathMocks.resolveFamilyStorageFolder.mockResolvedValue("cpf");
+    migrationMocks.migrateFamilyStorageFolder.mockResolvedValue({ migratedFiles: 0 });
+
+    await setPrimaryContact({ familyId: "familia-1", personId: "pessoa-nova" });
+
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ isPrimaryContact: true, vinculo: "TITULAR" })
+    );
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ vinculo: null })
     );
   });
 });

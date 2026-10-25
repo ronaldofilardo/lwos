@@ -1,5 +1,11 @@
 // Espelhos dos enums de drizzle/schema.ts (o client não importa valores do
 // schema — só tipos via @shared/types — e o servidor valida com zod).
+import { parseNumeroPtBR } from "@shared/validation/dinheiro";
+import {
+  computeEstimatedValue,
+  computeUnitValues,
+  type CompanyTotals,
+} from "@shared/domain/company-valuation";
 
 export const companyJurisdictionValues = [
   "BVI",
@@ -69,6 +75,8 @@ export type HoldingFormState = {
   corporatePurpose: string;
   capitalSocial: string;
   shareQuantity: string;
+  administrator1PersonId: string;
+  administrator2PersonId: string;
   administrator1: string;
   administrator2: string;
   equity: string;
@@ -103,6 +111,8 @@ const HOLDING_FORM_KEYS: (keyof HoldingFormState)[] = [
   "corporatePurpose",
   "capitalSocial",
   "shareQuantity",
+  "administrator1PersonId",
+  "administrator2PersonId",
   "administrator1",
   "administrator2",
   "equity",
@@ -144,18 +154,24 @@ export function holdingFormFromDetails(
   return form;
 }
 
-/** "1.234,56" / "1234.56" / "1.000" → 1234.56 / 1234.56 / 1000 (null se vazio). */
+/** Rótulo do(s) administrador(es): "Directors" na offshore, "Administrador/Diretor" na nacional. */
+export function administratorLabel(international: boolean, index?: number): string {
+  if (international) {
+    return index ? `${index}º Director` : "Directors";
+  }
+  return index ? `${index}º Administrador/Diretor` : "Administrador/Diretor";
+}
+
+/**
+ * "1.234,56" / "1234.56" / "1.000" → 1234.56 / 1234.56 / 1000 (null se vazio
+ * ou inválido). Descarta símbolos de moeda e espaços e delega ao parser
+ * compartilhado (`parseNumeroPtBR`), o mesmo usado nos demais formulários;
+ * valores negativos retornam null.
+ */
 export function parseAmount(raw: string): number | null {
   const cleaned = raw.replace(/[^\d.,-]/g, "");
   if (!cleaned) return null;
-  const hasGroupedThousands = /^\d{1,3}(?:\.\d{3})+$/.test(cleaned);
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : hasGroupedThousands
-      ? cleaned.replace(/\./g, "")
-      : cleaned;
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : null;
+  return parseNumeroPtBR(cleaned);
 }
 
 function asEnumOrNull<T extends string>(
@@ -189,6 +205,8 @@ export function holdingFormToFields(form: HoldingFormState) {
     corporatePurpose: text(form.corporatePurpose),
     capitalSocial: parseAmount(form.capitalSocial),
     shareQuantity: parseAmount(form.shareQuantity),
+    administrator1PersonId: text(form.administrator1PersonId),
+    administrator2PersonId: text(form.administrator2PersonId),
     administrator1: text(form.administrator1),
     administrator2: text(form.administrator2),
     equity: parseAmount(form.equity),
@@ -201,7 +219,7 @@ export function holdingFormToFields(form: HoldingFormState) {
     taxLiabilities: parseAmount(form.taxLiabilities),
     laborLiabilities: parseAmount(form.laborLiabilities),
     financing: parseAmount(form.financing),
-    estimatedMarketValue: parseAmount(form.estimatedMarketValue),
+    // estimatedMarketValue não é enviado: o servidor deriva do balanço.
     companyNumber: text(form.companyNumber),
     jurisdiction: asEnumOrNull(form.jurisdiction, companyJurisdictionValues),
     residentAgent: text(form.residentAgent),
@@ -209,19 +227,34 @@ export function holdingFormToFields(form: HoldingFormState) {
   };
 }
 
-/** Valores por quota calculados ao vivo no formulário. */
-export function computePerShare(form: HoldingFormState) {
-  const quantity = parseAmount(form.shareQuantity) ?? 0;
-  const perShare = (raw: string) => {
-    const amount = parseAmount(raw) ?? 0;
-    return quantity > 0 ? amount / quantity : null;
-  };
+/** Valor estimado da empresa calculado ao vivo a partir do balanço digitado (PL fora). */
+export function estimatedValueFromForm(form: HoldingFormState): number | null {
+  return computeEstimatedValue({
+    cashAndEquivalents: parseAmount(form.cashAndEquivalents),
+    inventory: parseAmount(form.inventory),
+    accountsReceivable: parseAmount(form.accountsReceivable),
+    investments: parseAmount(form.investments),
+    fixedAssets: parseAmount(form.fixedAssets),
+    retainedEarnings: parseAmount(form.retainedEarnings),
+    taxLiabilities: parseAmount(form.taxLiabilities),
+    laborLiabilities: parseAmount(form.laborLiabilities),
+    financing: parseAmount(form.financing),
+  });
+}
 
+/** Totais da sociedade (capital, PL, valor estimado, quotas) a partir do formulário. */
+export function holdingTotalsFromForm(form: HoldingFormState): CompanyTotals {
   return {
-    contabil: perShare(form.capitalSocial),
-    patrimonial: perShare(form.equity),
-    mercado: perShare(form.estimatedMarketValue),
+    capitalSocial: parseAmount(form.capitalSocial),
+    equity: parseAmount(form.equity),
+    estimatedValue: estimatedValueFromForm(form),
+    shareQuantity: parseAmount(form.shareQuantity),
   };
+}
+
+/** Valores por quota/ação calculados ao vivo no formulário. */
+export function computePerShare(form: HoldingFormState) {
+  return computeUnitValues(holdingTotalsFromForm(form));
 }
 
 export function formatAmount(

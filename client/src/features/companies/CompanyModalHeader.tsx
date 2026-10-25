@@ -1,3 +1,4 @@
+import { mascaraCnpj } from "@shared/validation";
 import {
   DialogDescription,
   DialogHeader,
@@ -20,7 +21,7 @@ export function CompanyModalHeader({
       </DialogTitle>
       <DialogDescription>
         Ficha cadastral, balanço, documentos e certidões.{" "}
-        {taxNumber ? `CNPJ ${taxNumber}.` : ""}{" "}
+        {taxNumber ? `CNPJ ${mascaraCnpj(taxNumber)}.` : ""}{" "}
         {international
           ? "Holding internacional — valores em $."
           : "Valores em R$."}

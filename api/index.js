@@ -127,7 +127,11 @@ var init_schema = __esm({
       "INVESTIMENTOS",
       "OUTROS",
       "SEMOVENTES",
-      "VEICULO_EMBARCACAO_AERONAVE"
+      "VEICULO_EMBARCACAO_AERONAVE",
+      // Offshore (valor em dólar, símbolo $). Ficam no fim, na mesma ordem do ALTER TYPE ADD VALUE
+      // (migração 0016): a moeda do ativo é derivada da categoria, sem coluna própria.
+      "CONTA_CORRENTE_OFFSHORE",
+      "INVESTIMENTOS_OFFSHORE"
     ];
     proposalStatusValues = [
       "RASCUNHO",
@@ -567,9 +571,10 @@ var init_schema = __esm({
       {
         ...ids,
         companyId: varchar("companyId", { length: 36 }).notNull(),
-        // Sócio membro da família (people) OU não-membro informado em externalName.
+        // Sócio membro da família (people) OU não-membro informado em externalName (com CPF opcional).
         personId: varchar("personId", { length: 36 }),
         externalName: varchar("externalName", { length: 160 }),
+        externalCpf: varchar("externalCpf", { length: 14 }),
         percentage: decimal("percentage", { precision: 5, scale: 2 }).notNull(),
         createdAt: auditTime
       },
@@ -643,6 +648,8 @@ var init_schema = __esm({
         corporatePurpose: text("corporatePurpose"),
         capitalSocial: decimal("capitalSocial", { precision: 15, scale: 2 }),
         shareQuantity: decimal("shareQuantity", { precision: 15, scale: 2 }),
+        administrator1PersonId: varchar("administrator1PersonId", { length: 36 }),
+        administrator2PersonId: varchar("administrator2PersonId", { length: 36 }),
         administrator1: varchar("administrator1", { length: 120 }),
         administrator2: varchar("administrator2", { length: 120 }),
         equity: decimal("equity", { precision: 15, scale: 2 }),
@@ -922,13 +929,13 @@ __export(family_storage_path_exports, {
   onlyDigits: () => onlyDigits2,
   resolveFamilyStorageFolder: () => resolveFamilyStorageFolder
 });
-import { and as and6, eq as eq8 } from "drizzle-orm";
+import { and as and5, eq as eq7 } from "drizzle-orm";
 function onlyDigits2(value) {
   return value.replace(/\D/g, "");
 }
 async function resolveFamilyStorageFolder(familyId) {
   const db = await requireDatabase();
-  const [primary] = await db.select({ taxId: people.taxId }).from(people).where(and6(eq8(people.familyId, familyId), eq8(people.isPrimaryContact, true))).limit(1);
+  const [primary] = await db.select({ taxId: people.taxId }).from(people).where(and5(eq7(people.familyId, familyId), eq7(people.isPrimaryContact, true))).limit(1);
   const digits = primary?.taxId ? onlyDigits2(primary.taxId) : "";
   if (digits) return digits;
   return `familia-${familyId}`;
@@ -937,7 +944,7 @@ async function findFamilyIdByPrimaryContactCpf(cpf, excludeFamilyId) {
   const digits = onlyDigits2(cpf);
   if (!digits) return null;
   const db = await requireDatabase();
-  const rows = await db.select({ familyId: people.familyId, taxId: people.taxId }).from(people).where(eq8(people.isPrimaryContact, true));
+  const rows = await db.select({ familyId: people.familyId, taxId: people.taxId }).from(people).where(eq7(people.isPrimaryContact, true));
   for (const row of rows) {
     if (!row.taxId) continue;
     if (excludeFamilyId && row.familyId === excludeFamilyId) continue;
@@ -1399,6 +1406,10 @@ async function findOrCreateDocumentRecord(input) {
   });
   return id;
 }
+async function setDocumentReferenceDate(documentId, referenceDate) {
+  const db = await requireDatabase();
+  await db.update(documents).set({ referenceDate, updatedAt: /* @__PURE__ */ new Date() }).where(eq3(documents.id, documentId));
+}
 async function getDocumentRecord(documentId) {
   const db = await requireDatabase();
   const result = await db.select().from(documents).where(eq3(documents.id, documentId)).limit(1);
@@ -1631,6 +1642,9 @@ import { z as z2 } from "zod";
 function isoDateSchema(message = "Data inv\xE1lida (use AAAA-MM-DD).") {
   return z2.string().refine((value) => isDataIsoValida(value), { message });
 }
+
+// shared/validation/dinheiro.ts
+var MAX_DINHEIRO = 999999999999999e-2;
 
 // server/features/certidoes/certidao-types.ts
 var certidaoTypeSchema = z3.enum(certidaoTypeValues);
@@ -2311,209 +2325,15 @@ var systemRouter = router({
 init_db();
 
 // server/features/companies/company-router.ts
-import { z as z11 } from "zod";
-
-// server/features/audit/audit-repository.ts
-init_schema();
-init_database();
-init_logger();
-async function recordAudit(input) {
-  const db = await requireDatabase();
-  await db.insert(auditLogs).values({
-    id: createId(),
-    action: input.action,
-    entityType: input.entityType,
-    entityId: input.entityId,
-    actorUserId: input.actorUserId?.toString(),
-    familyId: input.familyId,
-    metadata: input.metadata ? JSON.stringify(input.metadata) : null
-  });
-}
-async function recordAuditSafe(input) {
-  try {
-    await recordAudit(input);
-  } catch (error) {
-    logError("audit.record_failed", {
-      action: input.action,
-      entityType: input.entityType,
-      entityId: input.entityId,
-      error: error instanceof Error ? error.message : String(error)
-    });
-  }
-}
-
-// server/features/documents/document-requirements.ts
-init_schema();
-init_database();
-import { and as and5, eq as eq7, inArray as inArray2 } from "drizzle-orm";
-function computePropertyCategories(property) {
-  const registrationDoc = property.hasRegistration === false ? "Escritura ou contrato de compra e venda" : "Matr\xEDcula atualizada";
-  if (property.kind === "RURAL") {
-    return ["ITR", registrationDoc, "CAR", "CCIR"];
-  }
-  if (property.kind === "URBANO") {
-    return ["IPTU", registrationDoc];
-  }
-  return property.hasRegistration === false ? ["Escritura ou contrato de compra e venda", "IPTU ou ITR"] : ["Matr\xEDcula atualizada", "IPTU ou ITR"];
-}
-var COMPANY_BALANCE_CATEGORIES = [
-  "Balan\xE7o Fechado",
-  "Balancete Atualizado"
-];
-var COMPANY_LTD_CATEGORIES = [
-  "Comprovante de Inscri\xE7\xE3o no CNPJ",
-  "Contrato Social Consolidado",
-  ...COMPANY_BALANCE_CATEGORIES,
-  "Acordo de S\xF3cios",
-  "Livro Raz\xE3o do Imobilizado"
-];
-var COMPANY_SA_EXTRA_CATEGORIES = [
-  "Livro de Registro de A\xE7\xF5es Nominativas",
-  "Livro de Transfer\xEAncia de A\xE7\xF5es"
-];
-var COMPANY_OFFSHORE_CATEGORIES = [
-  "Certificate of Incorporation",
-  "Memorandum & Articles of Association",
-  "Register of Members",
-  "Register of Directors",
-  "Share Certificate(s)",
-  "Certificate of Good Standing",
-  "Balance Sheet",
-  "Confer\xEAncia de IRPF/Declara\xE7\xE3o ao Banco Central",
-  "Cl\xE1usulas sucess\xF3rias",
-  "Testamento local da jurisdi\xE7\xE3o"
-];
-function computeCompanyCategories(company) {
-  if (company.isOffshore) return [...COMPANY_OFFSHORE_CATEGORIES];
-  if (company.societaryType === "SA") {
-    return [...COMPANY_LTD_CATEGORIES, ...COMPANY_SA_EXTRA_CATEGORIES];
-  }
-  return [...COMPANY_LTD_CATEGORIES];
-}
-function computeAssetCategories() {
-  return ["Comprova\xE7\xE3o de titularidade"];
-}
-async function reconcileEntityDocuments(input) {
-  if (!input.categories.length) return { created: 0, removed: 0 };
-  const db = await requireDatabase();
-  const existing = await db.select({
-    id: documents.id,
-    category: documents.category,
-    status: documents.status,
-    currentVersion: documents.currentVersion
-  }).from(documents).where(
-    and5(
-      eq7(documents.familyId, input.familyId),
-      eq7(documents.entityType, input.entityType),
-      eq7(documents.entityId, input.entityId)
-    )
-  );
-  const required = Array.from(new Set(input.categories));
-  const known = new Set(existing.map((row) => row.category));
-  const missing = required.filter((category) => !known.has(category));
-  let created = 0;
-  if (missing.length) {
-    const ids2 = missing.map(() => createId());
-    await db.insert(documents).values(
-      missing.map((category, index2) => ({
-        id: ids2[index2],
-        familyId: input.familyId,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        category,
-        status: "PENDENTE",
-        currentVersion: 0,
-        createdAt: /* @__PURE__ */ new Date(),
-        updatedAt: /* @__PURE__ */ new Date()
-      }))
-    );
-    created = missing.length;
-  }
-  const requiredSet = new Set(required);
-  const staleIds = existing.filter(
-    (row) => !requiredSet.has(row.category) && row.status === "PENDENTE" && row.currentVersion === 0
-  ).map((row) => row.id);
-  let removed = 0;
-  if (staleIds.length) {
-    await db.delete(documents).where(inArray2(documents.id, staleIds));
-    removed = staleIds.length;
-  }
-  return { created, removed };
-}
-async function reconcileFamilyDocumentRequirements(familyId) {
-  const db = await requireDatabase();
-  const [peopleRows, propertyRows, companyRows, assetRows] = await Promise.all([
-    db.select({
-      id: people.id,
-      vinculo: people.vinculo,
-      civilStatus: people.civilStatus
-    }).from(people).where(eq7(people.familyId, familyId)),
-    db.select({
-      id: properties.id,
-      kind: properties.kind,
-      hasRegistration: properties.hasRegistration
-    }).from(properties).where(eq7(properties.familyId, familyId)),
-    db.select({ id: companies.id, isOffshore: companies.isOffshore }).from(companies).where(eq7(companies.familyId, familyId)),
-    db.select({ id: otherAssets.id }).from(otherAssets).where(eq7(otherAssets.familyId, familyId))
-  ]);
-  const detailRows = companyRows.length ? await db.select({
-    companyId: companyDetails.companyId,
-    societaryType: companyDetails.societaryType
-  }).from(companyDetails).where(inArray2(companyDetails.companyId, companyRows.map((row) => row.id))) : [];
-  const societaryByCompany = new Map(
-    detailRows.map((row) => [row.companyId, row.societaryType])
-  );
-  let created = 0;
-  let removed = 0;
-  const reconcile = async (input) => {
-    const result = await reconcileEntityDocuments({ familyId, ...input });
-    created += result.created;
-    removed += result.removed;
-  };
-  for (const person of peopleRows) {
-    await reconcile({
-      entityType: "PESSOA",
-      entityId: person.id,
-      categories: computePersonCategories({
-        vinculo: person.vinculo,
-        civilStatus: person.civilStatus
-      })
-    });
-  }
-  for (const property of propertyRows) {
-    await reconcile({
-      entityType: "IMOVEL",
-      entityId: property.id,
-      categories: computePropertyCategories(property)
-    });
-  }
-  for (const company of companyRows) {
-    await reconcile({
-      entityType: "SOCIEDADE",
-      entityId: company.id,
-      categories: computeCompanyCategories({
-        isOffshore: company.isOffshore,
-        societaryType: societaryByCompany.get(company.id) ?? null
-      })
-    });
-  }
-  for (const asset of assetRows) {
-    await reconcile({
-      entityType: "ATIVO",
-      entityId: asset.id,
-      categories: computeAssetCategories()
-    });
-  }
-  return { created, removed };
-}
+import { z as z12 } from "zod";
 
 // server/features/people/person-repository.ts
 init_schema();
-import { and as and9, eq as eq12, ne as ne2 } from "drizzle-orm";
+import { and as and8, eq as eq11, ne as ne2 } from "drizzle-orm";
 
 // server/features/families/family-repository.ts
 init_schema();
-import { desc as desc3, eq as eq9, count, inArray as inArray3, and as and7 } from "drizzle-orm";
+import { desc as desc3, eq as eq8, count, inArray as inArray2, and as and6 } from "drizzle-orm";
 init_database();
 async function createFamilyRecord(input, createdBy) {
   const db = await requireDatabase();
@@ -2538,16 +2358,16 @@ async function listFamilyRecords() {
   const records = await db.select().from(families).orderBy(desc3(families.updatedAt));
   if (!records.length) return [];
   const familyIds = records.map((r) => r.id);
-  const accessRows = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(and7(inArray3(familyAccess.familyId, familyIds), eq9(familyAccess.accessRole, "CLIENTE")));
+  const accessRows = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(and6(inArray2(familyAccess.familyId, familyIds), eq8(familyAccess.accessRole, "CLIENTE")));
   const familyIdsWithAccess = new Set(accessRows.map((r) => r.familyId));
-  const projectRows = await db.select({ familyId: projects.familyId, status: projects.status }).from(projects).where(inArray3(projects.familyId, familyIds));
+  const projectRows = await db.select({ familyId: projects.familyId, status: projects.status }).from(projects).where(inArray2(projects.familyId, familyIds));
   const statusByFamily = new Map(projectRows.map((r) => [r.familyId, r.status]));
   const titularRows = await db.select({
     familyId: people.familyId,
     fullName: people.fullName,
     email: people.email,
     phone: people.phone
-  }).from(people).where(and7(inArray3(people.familyId, familyIds), eq9(people.isPrimaryContact, true)));
+  }).from(people).where(and6(inArray2(people.familyId, familyIds), eq8(people.isPrimaryContact, true)));
   const titularByFamily = new Map(titularRows.map((r) => [r.familyId, r]));
   return records.map((record) => {
     const titular = titularByFamily.get(record.id);
@@ -2563,12 +2383,12 @@ async function listFamilyRecords() {
 }
 async function getFamilyRecord(familyId) {
   const db = await requireDatabase();
-  const result = await db.select().from(families).where(eq9(families.id, familyId)).limit(1);
+  const result = await db.select().from(families).where(eq8(families.id, familyId)).limit(1);
   const family = result[0] ?? null;
   if (!family) return null;
-  const projectRows = await db.select().from(projects).where(eq9(projects.familyId, familyId)).limit(1);
+  const projectRows = await db.select().from(projects).where(eq8(projects.familyId, familyId)).limit(1);
   const project = projectRows[0] ?? null;
-  const objectiveRows = project ? await db.select().from(projectObjectives).where(eq9(projectObjectives.projectId, project.id)) : [];
+  const objectiveRows = project ? await db.select().from(projectObjectives).where(eq8(projectObjectives.projectId, project.id)) : [];
   return {
     ...family,
     status: project?.status ?? "ATIVO",
@@ -2577,13 +2397,13 @@ async function getFamilyRecord(familyId) {
 }
 async function setProjectStatusRecord(familyId, status) {
   const db = await requireDatabase();
-  const updated = await db.update(projects).set({ status }).where(eq9(projects.familyId, familyId)).returning({ id: projects.id });
+  const updated = await db.update(projects).set({ status }).where(eq8(projects.familyId, familyId)).returning({ id: projects.id });
   if (!updated.length) throw new Error("Projeto n\xE3o encontrado.");
   return { familyId, status };
 }
 async function getClientFamilyIds(userId) {
   const db = await requireDatabase();
-  const access = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(eq9(familyAccess.userId, userId));
+  const access = await db.select({ familyId: familyAccess.familyId }).from(familyAccess).where(eq8(familyAccess.userId, userId));
   return access.map((a) => a.familyId);
 }
 async function getDashboardData(allowedFamilyIds) {
@@ -2592,13 +2412,13 @@ async function getDashboardData(allowedFamilyIds) {
   if (scoped && allowedFamilyIds.length === 0) {
     return { totalFamilies: 0, totalPeople: 0, totalDocuments: 0, families: [] };
   }
-  const allFamilies = scoped ? await db.select().from(families).where(inArray3(families.id, allowedFamilyIds)).orderBy(desc3(families.updatedAt)) : await db.select().from(families).orderBy(desc3(families.updatedAt));
+  const allFamilies = scoped ? await db.select().from(families).where(inArray2(families.id, allowedFamilyIds)).orderBy(desc3(families.updatedAt)) : await db.select().from(families).orderBy(desc3(families.updatedAt));
   const families2 = [];
   let totalPeople = 0;
   let totalDocuments = 0;
   for (const f of allFamilies) {
-    const [{ count: peopleCount }] = await db.select({ count: count() }).from(people).where(eq9(people.familyId, f.id));
-    const [{ count: documentsCount }] = await db.select({ count: count() }).from(documents).where(eq9(documents.familyId, f.id));
+    const [{ count: peopleCount }] = await db.select({ count: count() }).from(people).where(eq8(people.familyId, f.id));
+    const [{ count: documentsCount }] = await db.select({ count: count() }).from(documents).where(eq8(documents.familyId, f.id));
     families2.push({ id: f.id, name: f.name, updatedAt: f.updatedAt, peopleCount: Number(peopleCount), documentsCount: Number(documentsCount) });
     totalPeople += Number(peopleCount);
     totalDocuments += Number(documentsCount);
@@ -2664,14 +2484,14 @@ async function listClientStorageFiles(userId) {
 // server/lib/family-storage-migration.ts
 init_schema();
 init_database();
-import { eq as eq10, inArray as inArray4 } from "drizzle-orm";
+import { eq as eq9, inArray as inArray3 } from "drizzle-orm";
 async function migrateFamilyStorageFolder(familyId, oldFolder, newFolder) {
   if (oldFolder === newFolder) return { migratedFiles: 0 };
   const db = await requireDatabase();
-  const familyDocs = await db.select({ id: documents.id }).from(documents).where(eq10(documents.familyId, familyId));
+  const familyDocs = await db.select({ id: documents.id }).from(documents).where(eq9(documents.familyId, familyId));
   const docIds = familyDocs.map((d) => d.id);
   if (docIds.length === 0) return { migratedFiles: 0 };
-  const versions = await db.select({ id: documentVersions.id, storageKey: documentVersions.storageKey }).from(documentVersions).where(inArray4(documentVersions.documentId, docIds));
+  const versions = await db.select({ id: documentVersions.id, storageKey: documentVersions.storageKey }).from(documentVersions).where(inArray3(documentVersions.documentId, docIds));
   const prefix = `${oldFolder}/`;
   const toMigrate = versions.filter((v) => v.storageKey.startsWith(prefix));
   if (toMigrate.length === 0) return { migratedFiles: 0 };
@@ -2680,7 +2500,7 @@ async function migrateFamilyStorageFolder(familyId, oldFolder, newFolder) {
   try {
     for (const version of toMigrate) {
       const newKey = `${newFolder}/${version.storageKey.slice(prefix.length)}`;
-      await db.update(documentVersions).set({ storageKey: newKey }).where(eq10(documentVersions.id, version.id));
+      await db.update(documentVersions).set({ storageKey: newKey }).where(eq9(documentVersions.id, version.id));
       migratedCount++;
     }
   } catch {
@@ -2700,22 +2520,30 @@ init_database();
 // server/features/documents/dependent-irpf.ts
 init_schema();
 init_database();
-import { and as and8, eq as eq11, inArray as inArray5, ne } from "drizzle-orm";
+import { and as and7, eq as eq10, inArray as inArray4, ne } from "drizzle-orm";
+
+// server/features/_shared/errors.ts
+import { TRPCError as TRPCError4 } from "@trpc/server";
+var badRequest = (message) => new TRPCError4({ code: "BAD_REQUEST", message });
+var notFound = (message) => new TRPCError4({ code: "NOT_FOUND", message });
+var conflict = (message) => new TRPCError4({ code: "CONFLICT", message });
+
+// server/features/documents/dependent-irpf.ts
 async function findPrimaryContactId(familyId) {
   const db = await requireDatabase();
   const [titular] = await db.select({ id: people.id }).from(people).where(
-    and8(eq11(people.familyId, familyId), eq11(people.isPrimaryContact, true))
+    and7(eq10(people.familyId, familyId), eq10(people.isPrimaryContact, true))
   ).limit(1);
   return titular?.id ?? null;
 }
 async function getIrpfStatus(familyId, personId) {
   const db = await requireDatabase();
   const [irpf] = await db.select({ status: documents.status }).from(documents).where(
-    and8(
-      eq11(documents.familyId, familyId),
-      eq11(documents.entityType, "PESSOA"),
-      eq11(documents.entityId, personId),
-      eq11(documents.category, "IRPF")
+    and7(
+      eq10(documents.familyId, familyId),
+      eq10(documents.entityType, "PESSOA"),
+      eq10(documents.entityId, personId),
+      eq10(documents.category, "IRPF")
     )
   ).limit(1);
   return irpf?.status ?? null;
@@ -2727,19 +2555,19 @@ async function syncDependentIrpfStatus(familyId) {
   if (!titularStatus) return 0;
   const db = await requireDatabase();
   const dependents = await db.select({ id: people.id }).from(people).where(
-    and8(
-      eq11(people.familyId, familyId),
-      eq11(people.isDependent, true),
+    and7(
+      eq10(people.familyId, familyId),
+      eq10(people.isDependent, true),
       ne(people.id, titularId)
     )
   );
   if (!dependents.length) return 0;
   const updated = await db.update(documents).set({ status: titularStatus }).where(
-    and8(
-      eq11(documents.familyId, familyId),
-      eq11(documents.entityType, "PESSOA"),
-      inArray5(documents.entityId, dependents.map((row) => row.id)),
-      eq11(documents.category, "IRPF")
+    and7(
+      eq10(documents.familyId, familyId),
+      eq10(documents.entityType, "PESSOA"),
+      inArray4(documents.entityId, dependents.map((row) => row.id)),
+      eq10(documents.category, "IRPF")
     )
   ).returning({ id: documents.id });
   return updated.length;
@@ -2747,9 +2575,9 @@ async function syncDependentIrpfStatus(familyId) {
 async function assertIrpfUploadAllowed(document) {
   if (document.entityType !== "PESSOA" || document.category !== "IRPF") return;
   const db = await requireDatabase();
-  const [person] = await db.select({ isDependent: people.isDependent, vinculo: people.vinculo }).from(people).where(eq11(people.id, document.entityId)).limit(1);
+  const [person] = await db.select({ isDependent: people.isDependent, vinculo: people.vinculo }).from(people).where(eq10(people.id, document.entityId)).limit(1);
   if (person?.isDependent && person.vinculo !== "TITULAR") {
-    throw new Error(
+    throw badRequest(
       "O IRPF do dependente herda o IRPF do titular \u2014 upload bloqueado."
     );
   }
@@ -2938,7 +2766,7 @@ async function assertParentMatches(familyId, parentPersonId, expectedVinculo) {
     id: people.id,
     vinculo: people.vinculo,
     fullName: people.fullName
-  }).from(people).where(and9(eq12(people.id, parentPersonId), eq12(people.familyId, familyId))).limit(1);
+  }).from(people).where(and8(eq11(people.id, parentPersonId), eq11(people.familyId, familyId))).limit(1);
   if (!parent) throw new Error("Pai/m\xE3e n\xE3o encontrado nesta fam\xEDlia.");
   if (parent.vinculo !== expectedVinculo) {
     throw new Error(
@@ -2971,11 +2799,11 @@ function resolveCivilFields(input) {
 }
 async function assertCpfNotDuplicatedInFamily(familyId, taxId, excludePersonId) {
   const db = await requireDatabase();
-  const query = excludePersonId ? and9(
-    eq12(people.familyId, familyId),
-    eq12(people.taxId, taxId),
+  const query = excludePersonId ? and8(
+    eq11(people.familyId, familyId),
+    eq11(people.taxId, taxId),
     ne2(people.id, excludePersonId)
-  ) : and9(eq12(people.familyId, familyId), eq12(people.taxId, taxId));
+  ) : and8(eq11(people.familyId, familyId), eq11(people.taxId, taxId));
   const [duplicate] = await db.select({ id: people.id, fullName: people.fullName }).from(people).where(query).limit(1);
   if (duplicate) {
     throw new Error(
@@ -2985,7 +2813,7 @@ async function assertCpfNotDuplicatedInFamily(familyId, taxId, excludePersonId) 
 }
 async function assertConjugeNotDuplicated(familyId) {
   const db = await requireDatabase();
-  const [existing] = await db.select({ id: people.id }).from(people).where(and9(eq12(people.familyId, familyId), eq12(people.vinculo, "CONJUGE"))).limit(1);
+  const [existing] = await db.select({ id: people.id }).from(people).where(and8(eq11(people.familyId, familyId), eq11(people.vinculo, "CONJUGE"))).limit(1);
   if (existing) {
     throw new Error(
       "Este projeto j\xE1 possui um c\xF4njuge. Edite o registro existente."
@@ -2993,10 +2821,7 @@ async function assertConjugeNotDuplicated(familyId) {
   }
 }
 async function assertTitularExistsForDependent(familyId) {
-  const db = await requireDatabase();
-  const [titular] = await db.select({ id: people.id }).from(people).where(
-    and9(eq12(people.familyId, familyId), eq12(people.isPrimaryContact, true))
-  ).limit(1);
+  const titular = await getPrimaryContact(familyId);
   if (!titular) {
     throw new Error(
       "Esta fam\xEDlia ainda n\xE3o tem titular marcado. Defina o titular antes de marcar um dependente."
@@ -3006,7 +2831,7 @@ async function assertTitularExistsForDependent(familyId) {
 async function assertBirthAfterParent(familyId, parentPersonId, birthDate) {
   const db = await requireDatabase();
   const [parent] = await db.select({ birthDate: people.birthDate, fullName: people.fullName }).from(people).where(
-    and9(eq12(people.id, parentPersonId), eq12(people.familyId, familyId))
+    and8(eq11(people.id, parentPersonId), eq11(people.familyId, familyId))
   ).limit(1);
   if (parent?.birthDate && birthDate < parent.birthDate) {
     throw new Error(
@@ -3049,7 +2874,7 @@ async function addPersonRecord(input) {
       inheritedCivilStatus = inheritedCivilStatus ?? titular.civilStatus;
       inheritedMaritalRegime = inheritedMaritalRegime ?? titular.maritalRegime;
       if (!titular.spouseName && input.fullName) {
-        await db.update(people).set({ spouseName: input.fullName.trim() }).where(eq12(people.id, titular.id));
+        await db.update(people).set({ spouseName: input.fullName.trim() }).where(eq11(people.id, titular.id));
       }
     }
   }
@@ -3063,13 +2888,24 @@ async function addPersonRecord(input) {
   }
   await db.transaction(async (tx) => {
     const [existingPrimary] = await tx.select({ id: people.id }).from(people).where(
-      and9(eq12(people.familyId, input.familyId), eq12(people.isPrimaryContact, true))
+      and8(eq11(people.familyId, input.familyId), eq11(people.isPrimaryContact, true))
     ).limit(1);
-    const autoPrimary = input.vinculo === "TITULAR" && !existingPrimary;
-    const isPrimary = Boolean(input.isPrimaryContact) || autoPrimary;
-    if (isPrimary && input.taxId) {
-      await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
-      await tx.update(people).set({ isPrimaryContact: false }).where(eq12(people.familyId, input.familyId));
+    const isTitularVinculo = input.vinculo === "TITULAR" || !input.vinculo;
+    const targetVinculo = isTitularVinculo ? "TITULAR" : input.vinculo;
+    const isPrimary = Boolean(input.isPrimaryContact) || input.vinculo === "TITULAR" || isTitularVinculo && !existingPrimary;
+    if (isPrimary) {
+      if (input.taxId) {
+        await assertCpfNotUsedByAnotherFamily(input.taxId, input.familyId);
+      }
+      await tx.update(people).set({ isPrimaryContact: false }).where(eq11(people.familyId, input.familyId));
+      if (targetVinculo === "TITULAR") {
+        await tx.update(people).set({ vinculo: null }).where(
+          and8(
+            eq11(people.familyId, input.familyId),
+            eq11(people.vinculo, "TITULAR")
+          )
+        );
+      }
     }
     await tx.insert(people).values({
       id,
@@ -3081,7 +2917,7 @@ async function addPersonRecord(input) {
       civilStatus,
       maritalRegime,
       exSpouseNote: input.exSpouseNote || null,
-      vinculo: input.vinculo,
+      vinculo: targetVinculo,
       parentPersonId: input.parentPersonId || null,
       spouseName: input.spouseName?.trim() || null,
       isPrimaryContact: isPrimary,
@@ -3098,7 +2934,7 @@ async function addPersonRecord(input) {
     });
     await tx.insert(documents).values(
       computePersonCategories({
-        vinculo: input.vinculo,
+        vinculo: targetVinculo,
         civilStatus
       }).map((category) => ({
         id: createId(),
@@ -3121,7 +2957,7 @@ async function addPersonRecord(input) {
 async function updatePersonRecord(input) {
   const db = await requireDatabase();
   const [person] = await db.select().from(people).where(
-    and9(eq12(people.id, input.personId), eq12(people.familyId, input.familyId))
+    and8(eq11(people.id, input.personId), eq11(people.familyId, input.familyId))
   ).limit(1);
   if (!person) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
   const issues = collectPersonIssues({ ...input, vinculo: person.vinculo ?? "" });
@@ -3188,7 +3024,7 @@ async function updatePersonRecord(input) {
       district: input.addressSameAsPrimary ? null : input.district || null,
       city: input.addressSameAsPrimary ? null : input.city || null,
       uf: input.addressSameAsPrimary ? null : input.uf || null
-    }).where(eq12(people.id, input.personId));
+    }).where(eq11(people.id, input.personId));
   });
   if (needsMigration) {
     const newFolder = await resolveFamilyStorageFolder(input.familyId);
@@ -3205,83 +3041,305 @@ async function updatePersonRecord(input) {
 }
 async function removePersonRecord(familyId, personId) {
   const db = await requireDatabase();
-  const [person] = await db.select().from(people).where(and9(eq12(people.id, personId), eq12(people.familyId, familyId))).limit(1);
+  const [person] = await db.select().from(people).where(and8(eq11(people.id, personId), eq11(people.familyId, familyId))).limit(1);
   if (!person) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
   if (person.isPrimaryContact) {
     throw new Error(
       "N\xE3o \xE9 poss\xEDvel excluir o titular do projeto. Defina outro titular antes."
     );
   }
-  const [child] = await db.select({ id: people.id }).from(people).where(eq12(people.parentPersonId, personId)).limit(1);
+  const [child] = await db.select({ id: people.id }).from(people).where(eq11(people.parentPersonId, personId)).limit(1);
   if (child) {
     throw new Error(
       "N\xE3o \xE9 poss\xEDvel excluir: existem filhos/netos dependentes desta pessoa na \xE1rvore."
     );
   }
-  const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq12(propertyOwners.personId, personId)).limit(1);
+  const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq11(propertyOwners.personId, personId)).limit(1);
   if (owner) {
     throw new Error(
       "N\xE3o \xE9 poss\xEDvel excluir: a pessoa \xE9 titular de im\xF3vel."
     );
   }
-  const [stakeholder] = await db.select({ id: companyStakeholders.id }).from(companyStakeholders).where(eq12(companyStakeholders.personId, personId)).limit(1);
+  const [stakeholder] = await db.select({ id: companyStakeholders.id }).from(companyStakeholders).where(eq11(companyStakeholders.personId, personId)).limit(1);
   if (stakeholder) {
     throw new Error(
       "N\xE3o \xE9 poss\xEDvel excluir: a pessoa tem participa\xE7\xE3o em sociedade."
     );
   }
-  const [asset] = await db.select({ id: otherAssets.id }).from(otherAssets).where(eq12(otherAssets.ownerPersonId, personId)).limit(1);
+  const [asset] = await db.select({ id: otherAssets.id }).from(otherAssets).where(eq11(otherAssets.ownerPersonId, personId)).limit(1);
   if (asset) {
     throw new Error(
       "N\xE3o \xE9 poss\xEDvel excluir: a pessoa \xE9 respons\xE1vel por ativos."
     );
   }
   const documentsToArchive = await db.select({ id: documents.id }).from(documents).where(
-    and9(eq12(documents.familyId, familyId), eq12(documents.entityId, personId))
+    and8(eq11(documents.familyId, familyId), eq11(documents.entityId, personId))
   );
   if (documentsToArchive.length) {
     await db.update(documents).set({ status: "DISPENSADO" }).where(
-      and9(eq12(documents.familyId, familyId), eq12(documents.entityId, personId))
+      and8(eq11(documents.familyId, familyId), eq11(documents.entityId, personId))
     );
   }
-  await db.delete(people).where(eq12(people.id, personId));
+  await db.delete(people).where(eq11(people.id, personId));
   return { archivedDocuments: documentsToArchive.length };
 }
 async function getPersonRecord(personId) {
   const db = await requireDatabase();
-  const result = await db.select().from(people).where(eq12(people.id, personId)).limit(1);
+  const result = await db.select().from(people).where(eq11(people.id, personId)).limit(1);
   return result[0] ?? null;
 }
 async function listPeopleByFamily(familyId) {
   const db = await requireDatabase();
-  return db.select().from(people).where(eq12(people.familyId, familyId));
+  return db.select().from(people).where(eq11(people.familyId, familyId));
 }
 async function getPrimaryContact(familyId) {
   const db = await requireDatabase();
-  const result = await db.select().from(people).where(
-    and9(eq12(people.familyId, familyId), eq12(people.isPrimaryContact, true))
+  const [primary] = await db.select().from(people).where(
+    and8(eq11(people.familyId, familyId), eq11(people.isPrimaryContact, true))
   ).limit(1);
-  return result[0] ?? null;
+  if (primary) return primary;
+  const [byVinculo] = await db.select().from(people).where(
+    and8(eq11(people.familyId, familyId), eq11(people.vinculo, "TITULAR"))
+  ).limit(1);
+  return byVinculo ?? null;
 }
 async function setPrimaryContact(input) {
   const db = await requireDatabase();
   let oldFolder = "";
   await db.transaction(async (tx) => {
     const [candidate] = await tx.select({ id: people.id, taxId: people.taxId, familyId: people.familyId }).from(people).where(
-      and9(eq12(people.id, input.personId), eq12(people.familyId, input.familyId))
+      and8(eq11(people.id, input.personId), eq11(people.familyId, input.familyId))
     ).limit(1);
     if (!candidate) throw new Error("Pessoa n\xE3o encontrada nesta fam\xEDlia.");
     if (candidate.taxId) {
       await assertCpfNotUsedByAnotherFamily(candidate.taxId, input.familyId);
     }
     oldFolder = await resolveFamilyStorageFolder(input.familyId);
-    await tx.update(people).set({ isPrimaryContact: false }).where(eq12(people.familyId, input.familyId));
-    await tx.update(people).set({ isPrimaryContact: true }).where(
-      and9(eq12(people.familyId, input.familyId), eq12(people.id, input.personId))
+    await tx.update(people).set({ isPrimaryContact: false }).where(eq11(people.familyId, input.familyId));
+    await tx.update(people).set({ vinculo: null }).where(
+      and8(
+        eq11(people.familyId, input.familyId),
+        eq11(people.vinculo, "TITULAR"),
+        ne2(people.id, input.personId)
+      )
+    );
+    await tx.update(people).set({ isPrimaryContact: true, vinculo: "TITULAR" }).where(
+      and8(eq11(people.familyId, input.familyId), eq11(people.id, input.personId))
     );
   });
   const newFolder = await resolveFamilyStorageFolder(input.familyId);
   return migrateFamilyStorageFolder(input.familyId, oldFolder, newFolder);
+}
+
+// server/features/access/entity-guards.ts
+async function assertPersonInFamily(personId, familyId) {
+  const person = await getPersonRecord(personId);
+  if (!person || person.familyId !== familyId) {
+    throw badRequest("A pessoa informada n\xE3o pertence a esta fam\xEDlia.");
+  }
+  return person;
+}
+
+// server/features/audit/audit-repository.ts
+init_schema();
+init_database();
+init_logger();
+async function recordAudit(input) {
+  const db = await requireDatabase();
+  await db.insert(auditLogs).values({
+    id: createId(),
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    actorUserId: input.actorUserId?.toString(),
+    familyId: input.familyId,
+    metadata: input.metadata ? JSON.stringify(input.metadata) : null
+  });
+}
+async function recordAuditSafe(input) {
+  try {
+    await recordAudit(input);
+  } catch (error) {
+    logError("audit.record_failed", {
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+// server/features/documents/document-requirements.ts
+init_schema();
+init_database();
+import { and as and9, eq as eq12, inArray as inArray5 } from "drizzle-orm";
+
+// shared/domain/balance-documents.ts
+var COMPANY_BALANCE_CATEGORIES = [
+  "Balan\xE7o Fechado",
+  "Balancete Atualizado"
+];
+var OFFSHORE_BALANCE_CATEGORY = "Balance Sheet";
+var BALANCE_DOCUMENT_CATEGORIES = [
+  ...COMPANY_BALANCE_CATEGORIES,
+  OFFSHORE_BALANCE_CATEGORY
+];
+function requiresReferenceDate(document) {
+  return document.entityType === "SOCIEDADE" && BALANCE_DOCUMENT_CATEGORIES.includes(document.category ?? "");
+}
+
+// server/features/documents/document-requirements.ts
+function computePropertyCategories(property) {
+  const registrationDoc = property.hasRegistration === false ? "Escritura ou contrato de compra e venda" : "Matr\xEDcula atualizada";
+  if (property.kind === "RURAL") {
+    return ["ITR", registrationDoc, "CAR", "CCIR"];
+  }
+  if (property.kind === "URBANO") {
+    return ["IPTU", registrationDoc];
+  }
+  return property.hasRegistration === false ? ["Escritura ou contrato de compra e venda", "IPTU ou ITR"] : ["Matr\xEDcula atualizada", "IPTU ou ITR"];
+}
+var COMPANY_LTD_CATEGORIES = [
+  "Comprovante de Inscri\xE7\xE3o no CNPJ",
+  "Contrato Social Consolidado",
+  ...COMPANY_BALANCE_CATEGORIES,
+  "Acordo de S\xF3cios",
+  "Livro Raz\xE3o do Imobilizado"
+];
+var COMPANY_SA_EXTRA_CATEGORIES = [
+  "Livro de Registro de A\xE7\xF5es Nominativas",
+  "Livro de Transfer\xEAncia de A\xE7\xF5es"
+];
+var COMPANY_OFFSHORE_CATEGORIES = [
+  "Certificate of Incorporation",
+  "Memorandum & Articles of Association",
+  "Register of Members",
+  "Register of Directors",
+  "Share Certificate(s)",
+  "Certificate of Good Standing",
+  "Balance Sheet"
+];
+function computeCompanyCategories(company) {
+  if (company.isOffshore) return [...COMPANY_OFFSHORE_CATEGORIES];
+  if (company.societaryType === "SA") {
+    return [...COMPANY_LTD_CATEGORIES, ...COMPANY_SA_EXTRA_CATEGORIES];
+  }
+  return [...COMPANY_LTD_CATEGORIES];
+}
+function computeAssetCategories() {
+  return [];
+}
+async function reconcileEntityDocuments(input) {
+  const db = await requireDatabase();
+  const existing = await db.select({
+    id: documents.id,
+    category: documents.category,
+    status: documents.status,
+    currentVersion: documents.currentVersion
+  }).from(documents).where(
+    and9(
+      eq12(documents.familyId, input.familyId),
+      eq12(documents.entityType, input.entityType),
+      eq12(documents.entityId, input.entityId)
+    )
+  );
+  const required = Array.from(new Set(input.categories));
+  const known = new Set(existing.map((row) => row.category));
+  const missing = required.filter((category) => !known.has(category));
+  let created = 0;
+  if (missing.length) {
+    const ids2 = missing.map(() => createId());
+    await db.insert(documents).values(
+      missing.map((category, index2) => ({
+        id: ids2[index2],
+        familyId: input.familyId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        category,
+        status: "PENDENTE",
+        currentVersion: 0,
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      }))
+    );
+    created = missing.length;
+  }
+  const requiredSet = new Set(required);
+  const staleIds = existing.filter(
+    (row) => !requiredSet.has(row.category) && row.status === "PENDENTE" && row.currentVersion === 0
+  ).map((row) => row.id);
+  let removed = 0;
+  if (staleIds.length) {
+    await db.delete(documents).where(inArray5(documents.id, staleIds));
+    removed = staleIds.length;
+  }
+  return { created, removed };
+}
+async function reconcileFamilyDocumentRequirements(familyId) {
+  const db = await requireDatabase();
+  const [peopleRows, propertyRows, companyRows, assetRows] = await Promise.all([
+    db.select({
+      id: people.id,
+      vinculo: people.vinculo,
+      civilStatus: people.civilStatus
+    }).from(people).where(eq12(people.familyId, familyId)),
+    db.select({
+      id: properties.id,
+      kind: properties.kind,
+      hasRegistration: properties.hasRegistration
+    }).from(properties).where(eq12(properties.familyId, familyId)),
+    db.select({ id: companies.id, isOffshore: companies.isOffshore }).from(companies).where(eq12(companies.familyId, familyId)),
+    db.select({ id: otherAssets.id }).from(otherAssets).where(eq12(otherAssets.familyId, familyId))
+  ]);
+  const detailRows = companyRows.length ? await db.select({
+    companyId: companyDetails.companyId,
+    societaryType: companyDetails.societaryType
+  }).from(companyDetails).where(inArray5(companyDetails.companyId, companyRows.map((row) => row.id))) : [];
+  const societaryByCompany = new Map(
+    detailRows.map((row) => [row.companyId, row.societaryType])
+  );
+  let created = 0;
+  let removed = 0;
+  const reconcile = async (input) => {
+    const result = await reconcileEntityDocuments({ familyId, ...input });
+    created += result.created;
+    removed += result.removed;
+  };
+  for (const person of peopleRows) {
+    await reconcile({
+      entityType: "PESSOA",
+      entityId: person.id,
+      categories: computePersonCategories({
+        vinculo: person.vinculo,
+        civilStatus: person.civilStatus
+      })
+    });
+  }
+  for (const property of propertyRows) {
+    await reconcile({
+      entityType: "IMOVEL",
+      entityId: property.id,
+      categories: computePropertyCategories(property)
+    });
+  }
+  for (const company of companyRows) {
+    await reconcile({
+      entityType: "SOCIEDADE",
+      entityId: company.id,
+      categories: computeCompanyCategories({
+        isOffshore: company.isOffshore,
+        societaryType: societaryByCompany.get(company.id) ?? null
+      })
+    });
+  }
+  for (const asset of assetRows) {
+    await reconcile({
+      entityType: "ATIVO",
+      entityId: asset.id,
+      categories: computeAssetCategories()
+    });
+  }
+  return { created, removed };
 }
 
 // server/features/companies/company-repository.ts
@@ -3312,7 +3370,8 @@ async function withAdvisoryLock(dbOrPromise, lockName, discriminator, fn) {
     const lockResult = await tx.execute(sql4`
       SELECT pg_try_advisory_xact_lock(${key}, ${disc}) as acquired
     `);
-    const acquired = lockResult?.[0]?.acquired ?? false;
+    const lockRows = Array.isArray(lockResult) ? lockResult : lockResult?.rows ?? [];
+    const acquired = Boolean(lockRows[0]?.acquired);
     if (!acquired) {
       throw new Error("Opera\xE7\xE3o concorrente em andamento. Tente novamente.");
     }
@@ -3337,10 +3396,21 @@ function normalizeName(name) {
   const withoutAccents = (name ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "");
   return withoutAccents.trim().toLocaleLowerCase("pt-BR").replace(/\s+/g, " ");
 }
+function normalizeTaxNumber(value) {
+  const digits = onlyDigits(value ?? "");
+  return digits || null;
+}
 async function createCompanyRecord(input) {
   const db = await requireDatabase();
   const id = createId();
-  await db.insert(companies).values({ ...input, id, taxNumber: input.taxNumber || null });
+  const taxNumber = normalizeTaxNumber(input.taxNumber);
+  if (taxNumber) {
+    const sameFamily = await db.select({ id: companies.id, taxNumber: companies.taxNumber }).from(companies).where(eq13(companies.familyId, input.familyId));
+    if (sameFamily.some((row) => normalizeTaxNumber(row.taxNumber) === taxNumber)) {
+      throw conflict("J\xE1 existe uma sociedade com este CNPJ nesta fam\xEDlia.");
+    }
+  }
+  await db.insert(companies).values({ ...input, id, taxNumber });
   return id;
 }
 async function getCompanyRecord(companyId) {
@@ -3359,7 +3429,19 @@ async function listCompanyRecords(familyId) {
     createdAt: companies.createdAt,
     updatedAt: companies.updatedAt,
     taxRegime: companyDetails.taxRegime,
-    capitalSocial: companyDetails.capitalSocial
+    capitalSocial: companyDetails.capitalSocial,
+    shareQuantity: companyDetails.shareQuantity,
+    equity: companyDetails.equity,
+    cashAndEquivalents: companyDetails.cashAndEquivalents,
+    inventory: companyDetails.inventory,
+    accountsReceivable: companyDetails.accountsReceivable,
+    investments: companyDetails.investments,
+    fixedAssets: companyDetails.fixedAssets,
+    retainedEarnings: companyDetails.retainedEarnings,
+    taxLiabilities: companyDetails.taxLiabilities,
+    laborLiabilities: companyDetails.laborLiabilities,
+    financing: companyDetails.financing,
+    notes: companyDetails.notes
   }).from(companies).leftJoin(companyDetails, eq13(companyDetails.companyId, companies.id)).where(eq13(companies.familyId, familyId));
 }
 async function listStakeholderRecords(companyId) {
@@ -3376,22 +3458,24 @@ async function createStakeholderRecord(input) {
       const externalName = input.externalName?.trim() || null;
       const existing = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, input.companyId));
       if (input.personId && existing.some((row) => row.personId === input.personId)) {
-        throw new Error("Este membro j\xE1 participa da sociedade.");
+        throw conflict("Este membro j\xE1 participa da sociedade.");
       }
       if (externalName && existing.some((row) => normalizeName(row.externalName) === normalizeName(externalName))) {
-        throw new Error("Este n\xE3o-membro j\xE1 participa da sociedade.");
+        throw conflict("Este n\xE3o-membro j\xE1 participa da sociedade.");
       }
       const total = totalPercentage(existing) + input.percentage;
       if (total > 100 + PCT_EPSILON) {
-        throw new Error(
+        throw badRequest(
           `A soma das participa\xE7\xF5es n\xE3o pode passar de 100% (atual ${totalPercentage(existing)}%).`
         );
       }
+      const externalCpf = input.externalCpf ? normalizarCpf(input.externalCpf) : null;
       await tx.insert(companyStakeholders).values({
         id,
         companyId: input.companyId,
         personId: input.personId ?? null,
         externalName,
+        externalCpf,
         percentage: input.percentage.toFixed(2)
       });
       return id;
@@ -3407,51 +3491,62 @@ async function updateStakeholderRecord(input) {
       const current = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.id, input.stakeholderId)).limit(1);
       const stakeholder = current[0];
       if (!stakeholder || stakeholder.companyId !== input.companyId) {
-        throw new Error("Participa\xE7\xE3o n\xE3o encontrada.");
+        throw notFound("Participa\xE7\xE3o n\xE3o encontrada.");
       }
       const others = await tx.select().from(companyStakeholders).where(eq13(companyStakeholders.companyId, input.companyId));
       const remaining = others.filter((row) => row.id !== input.stakeholderId);
       const personId = input.personId !== void 0 ? input.personId : stakeholder.personId;
       const externalName = input.externalName !== void 0 ? input.externalName.trim() || null : stakeholder.externalName;
+      const externalCpf = input.externalCpf !== void 0 ? input.externalCpf ? normalizarCpf(input.externalCpf) : null : stakeholder.externalCpf;
       if (!personId && !externalName) {
-        throw new Error("Informe um membro da fam\xEDlia ou o nome do n\xE3o-membro.");
+        throw badRequest("Informe um membro da fam\xEDlia ou o nome do n\xE3o-membro.");
       }
       if (personId && remaining.some((row) => row.personId === personId)) {
-        throw new Error("Este membro j\xE1 participa da sociedade.");
+        throw conflict("Este membro j\xE1 participa da sociedade.");
       }
       if (externalName && remaining.some((row) => normalizeName(row.externalName) === normalizeName(externalName))) {
-        throw new Error("Este n\xE3o-membro j\xE1 participa da sociedade.");
+        throw conflict("Este n\xE3o-membro j\xE1 participa da sociedade.");
       }
       const percentage = input.percentage ?? Number(stakeholder.percentage);
       const total = totalPercentage(remaining) + percentage;
       if (total > 100 + PCT_EPSILON) {
-        throw new Error(
+        throw badRequest(
           `A soma das participa\xE7\xF5es n\xE3o pode passar de 100% (atual ${totalPercentage(remaining)}%).`
         );
       }
-      await tx.update(companyStakeholders).set({ personId, externalName, percentage: percentage.toFixed(2) }).where(eq13(companyStakeholders.id, input.stakeholderId));
+      await tx.update(companyStakeholders).set({
+        personId,
+        externalName,
+        externalCpf,
+        percentage: percentage.toFixed(2)
+      }).where(eq13(companyStakeholders.id, input.stakeholderId));
     }
   );
 }
 async function removeStakeholderRecord(input) {
   const db = await requireDatabase();
-  const removed = await db.delete(companyStakeholders).where(eq13(companyStakeholders.id, input.stakeholderId)).returning({
+  const removed = await db.delete(companyStakeholders).where(
+    and10(
+      eq13(companyStakeholders.id, input.stakeholderId),
+      eq13(companyStakeholders.companyId, input.companyId)
+    )
+  ).returning({
     id: companyStakeholders.id,
     companyId: companyStakeholders.companyId
   });
   const row = removed[0];
   if (!row || row.companyId !== input.companyId) {
-    throw new Error("Participa\xE7\xE3o n\xE3o encontrada.");
+    throw notFound("Participa\xE7\xE3o n\xE3o encontrada.");
   }
   return row.id;
 }
 async function removeCompanyRecord(familyId, companyId) {
   const db = await requireDatabase();
   const [company] = await db.select().from(companies).where(and10(eq13(companies.id, companyId), eq13(companies.familyId, familyId))).limit(1);
-  if (!company) throw new Error("Sociedade n\xE3o encontrada nesta fam\xEDlia.");
+  if (!company) throw notFound("Sociedade n\xE3o encontrada nesta fam\xEDlia.");
   const [owner] = await db.select({ id: propertyOwners.id }).from(propertyOwners).where(eq13(propertyOwners.companyId, companyId)).limit(1);
   if (owner) {
-    throw new Error(
+    throw conflict(
       "N\xE3o \xE9 poss\xEDvel excluir: a sociedade \xE9 titular de im\xF3vel. Remova a titularidade antes."
     );
   }
@@ -3527,24 +3622,34 @@ var removeCompanySchema = z8.object({
 // server/features/companies/company-details.ts
 init_schema();
 init_uf();
+import { z as z10 } from "zod";
+
+// shared/validation/dinheiro-schema.ts
 import { z as z9 } from "zod";
-var text2 = (max) => z9.string().max(max, `M\xE1ximo de ${max} caracteres.`).transform((value) => value.trim() || null).nullish();
-var money = z9.number().finite().nullish();
-var companyDetailsFieldsSchema = z9.object({
+var MENSAGEM_FAIXA = "Valor fora da faixa permitida (0 a 9.999.999.999.999,99).";
+var dinheiroSchema = z9.number().finite().min(0, MENSAGEM_FAIXA).max(MAX_DINHEIRO, MENSAGEM_FAIXA);
+var quantidadeQuotasSchema = z9.number().finite().int("A quantidade de quotas/a\xE7\xF5es deve ser um n\xFAmero inteiro.").positive("A quantidade de quotas/a\xE7\xF5es deve ser maior que zero.").max(MAX_DINHEIRO, MENSAGEM_FAIXA);
+
+// server/features/companies/company-details.ts
+var text2 = (max) => z10.string().max(max, `M\xE1ximo de ${max} caracteres.`).transform((value) => value.trim() || null).nullish();
+var money = dinheiroSchema.nullish();
+var companyDetailsFieldsSchema = z10.object({
   nire: text2(20),
-  uf: z9.enum(UFS).nullish(),
+  uf: z10.enum(UFS).nullish(),
   sede: text2(160),
-  cep: z9.string().max(8).transform((v) => v.replace(/\D/g, "") || null).nullish(),
+  cep: z10.string().max(8).transform((v) => v.replace(/\D/g, "") || null).nullish(),
   street: text2(160),
   number: text2(20),
   complement: text2(80),
   district: text2(80),
   city: text2(120),
-  societaryType: z9.enum(societaryTypeValues).nullish(),
-  taxRegime: z9.enum(taxRegimeValues).nullish(),
+  societaryType: z10.enum(societaryTypeValues).nullish(),
+  taxRegime: z10.enum(taxRegimeValues).nullish(),
   corporatePurpose: text2(4e3),
   capitalSocial: money,
-  shareQuantity: money,
+  shareQuantity: quantidadeQuotasSchema.nullish(),
+  administrator1PersonId: text2(36),
+  administrator2PersonId: text2(36),
   administrator1: text2(120),
   administrator2: text2(120),
   equity: money,
@@ -3557,22 +3662,24 @@ var companyDetailsFieldsSchema = z9.object({
   taxLiabilities: money,
   laborLiabilities: money,
   financing: money,
+  // Ignorado no servidor: o valor estimado é derivado do balanço ao salvar
+  // (shared/domain/company-valuation.ts). Mantido aqui só por compatibilidade.
   estimatedMarketValue: money,
   companyNumber: text2(60),
-  jurisdiction: z9.enum(companyJurisdictionValues).nullish(),
+  jurisdiction: z10.enum(companyJurisdictionValues).nullish(),
   residentAgent: text2(120),
   notes: text2(8e3)
 }).superRefine((data, ctx) => {
   if (data.societaryType === "SA" && data.taxRegime === "SIMPLES_NACIONAL") {
     ctx.addIssue({
-      code: z9.ZodIssueCode.custom,
+      code: z10.ZodIssueCode.custom,
       path: ["taxRegime"],
       message: "S.A. n\xE3o pode optar pelo Simples Nacional (LC 123/2006, art. 3\xBA, \xA74\xBA)."
     });
   }
 });
-var companyDetailsIdSchema = z9.object({
-  companyId: z9.string().min(1, "Informe a sociedade.")
+var companyDetailsIdSchema = z10.object({
+  companyId: z10.string().min(1, "Informe a sociedade.")
 });
 var companyDetailsUpsertSchema = companyDetailsIdSchema.extend({
   fields: companyDetailsFieldsSchema
@@ -3582,6 +3689,36 @@ var companyDetailsUpsertSchema = companyDetailsIdSchema.extend({
 init_schema();
 init_database();
 import { eq as eq14 } from "drizzle-orm";
+
+// shared/domain/company-valuation.ts
+var ESTIMATED_VALUE_ASSET_KEYS = [
+  "cashAndEquivalents",
+  "inventory",
+  "accountsReceivable",
+  "investments",
+  "fixedAssets",
+  "retainedEarnings"
+];
+var ESTIMATED_VALUE_LIABILITY_KEYS = [
+  "laborLiabilities",
+  "taxLiabilities",
+  "financing"
+];
+var round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+function toNumberOrNull(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+function computeEstimatedValue(input) {
+  const assets = ESTIMATED_VALUE_ASSET_KEYS.map((key) => toNumberOrNull(input[key]));
+  const liabilities = ESTIMATED_VALUE_LIABILITY_KEYS.map((key) => toNumberOrNull(input[key]));
+  if ([...assets, ...liabilities].every((value) => value === null)) return null;
+  const sum = (values) => values.reduce((total, value) => total + (value ?? 0), 0);
+  return round2(sum(assets) - sum(liabilities));
+}
+
+// server/features/companies/company-details-repository.ts
 function detailValues(fields) {
   const text3 = (value) => value ?? null;
   const amount = (value) => value === void 0 || value === null ? null : value.toFixed(2);
@@ -3600,6 +3737,8 @@ function detailValues(fields) {
     corporatePurpose: text3(fields.corporatePurpose),
     capitalSocial: amount(fields.capitalSocial),
     shareQuantity: amount(fields.shareQuantity),
+    administrator1PersonId: text3(fields.administrator1PersonId),
+    administrator2PersonId: text3(fields.administrator2PersonId),
     administrator1: text3(fields.administrator1),
     administrator2: text3(fields.administrator2),
     equity: amount(fields.equity),
@@ -3624,9 +3763,26 @@ async function getCompanyDetailsRecord(companyId) {
   const result = await db.select().from(companyDetails).where(eq14(companyDetails.companyId, companyId)).limit(1);
   return result[0] ?? null;
 }
+function presentFields(fields) {
+  const values = detailValues(fields);
+  const sent = fields;
+  return Object.fromEntries(
+    Object.entries(values).filter(([key]) => sent[key] !== void 0)
+  );
+}
+function withEstimatedValue(current, fields) {
+  const sent = fields;
+  const balance = {};
+  for (const key of [...ESTIMATED_VALUE_ASSET_KEYS, ...ESTIMATED_VALUE_LIABILITY_KEYS]) {
+    balance[key] = sent[key] !== void 0 ? sent[key] : current?.[key];
+  }
+  return { ...fields, estimatedMarketValue: computeEstimatedValue(balance) };
+}
 async function upsertCompanyDetailsRecord(input) {
   const db = await requireDatabase();
-  const values = detailValues(input.fields);
+  const current = await getCompanyDetailsRecord(input.companyId);
+  const fields = withEstimatedValue(current, input.fields);
+  const values = detailValues(fields);
   const now = /* @__PURE__ */ new Date();
   await db.insert(companyDetails).values({
     id: createId(),
@@ -3636,7 +3792,8 @@ async function upsertCompanyDetailsRecord(input) {
     updatedAt: now
   }).onConflictDoUpdate({
     target: companyDetails.companyId,
-    set: { ...values, updatedAt: now }
+    // Só atualiza o que veio no payload; ausente = preserva o valor gravado.
+    set: { ...presentFields(fields), updatedAt: now }
   });
 }
 function computePerShare(input) {
@@ -3653,30 +3810,33 @@ function computePerShare(input) {
 }
 
 // server/features/companies/company-stakeholder.ts
-import { z as z10 } from "zod";
-var stakeholderInputSchema = z10.object({
-  companyId: z10.string().min(1),
+import { z as z11 } from "zod";
+var optionalCpf = z11.string().nullish().transform((v) => v === void 0 ? void 0 : v ? normalizarCpf(v) : null).refine((v) => v === void 0 || v === null || isCpfValido(v), "CPF inv\xE1lido.").optional();
+var stakeholderInputSchema = z11.object({
+  companyId: z11.string().min(1),
   // Sócio membro da família (people) OU não-membro informado em externalName.
-  personId: z10.string().min(1).optional(),
-  externalName: z10.string().min(2).max(160).optional(),
-  percentage: z10.number().min(0).max(100)
+  personId: z11.string().min(1).optional(),
+  externalName: z11.string().min(2).max(160).optional(),
+  externalCpf: optionalCpf,
+  percentage: z11.number().min(0).max(100)
 }).refine((data) => Boolean(data.personId || data.externalName?.trim()), {
   message: "Informe um membro da fam\xEDlia ou o nome do n\xE3o-membro.",
   path: ["personId"]
 });
-var stakeholderUpdateSchema = z10.object({
-  companyId: z10.string().min(1),
-  stakeholderId: z10.string().min(1),
-  personId: z10.string().min(1).optional(),
-  externalName: z10.string().min(2).max(160).optional(),
-  percentage: z10.number().min(0).max(100).optional()
+var stakeholderUpdateSchema = z11.object({
+  companyId: z11.string().min(1),
+  stakeholderId: z11.string().min(1),
+  personId: z11.string().min(1).optional(),
+  externalName: z11.string().min(2).max(160).optional(),
+  externalCpf: optionalCpf,
+  percentage: z11.number().min(0).max(100).optional()
 }).refine(
-  (data) => data.percentage !== void 0 || data.personId !== void 0 || data.externalName !== void 0,
+  (data) => data.percentage !== void 0 || data.personId !== void 0 || data.externalName !== void 0 || data.externalCpf !== void 0,
   { message: "Nada para atualizar.", path: ["percentage"] }
 );
-var stakeholderDeleteSchema = z10.object({
-  companyId: z10.string().min(1),
-  stakeholderId: z10.string().min(1)
+var stakeholderDeleteSchema = z11.object({
+  companyId: z11.string().min(1),
+  stakeholderId: z11.string().min(1)
 });
 
 // server/features/companies/brasilapi-client.ts
@@ -3713,8 +3873,8 @@ async function fetchCompanyByCnpj(rawCnpj) {
 
 // server/features/companies/brasilapi-mapper.ts
 init_uf();
-function resolveSocietaryType(code, desc12) {
-  const text3 = (desc12 ?? "").toUpperCase();
+function resolveSocietaryType(code, desc13) {
+  const text3 = (desc13 ?? "").toUpperCase();
   if (code === 2062 || text3.includes("LIMITADA") || text3.includes("LTDA")) return "LTDA";
   if (code === 2046 || code === 2054 || text3.includes("ANONIMA") || text3.includes("AN\xD4NIMA")) return "SA";
   if (text3.includes("CONTA DE PARTICIP") || text3.includes("SCP")) return "SCP";
@@ -3775,20 +3935,20 @@ function mapBrasilApiToCompanyData(data) {
 // server/features/companies/company-router.ts
 async function requireCompanyFamily(companyId) {
   const company = await getCompanyRecord(companyId);
-  if (!company) throw new Error("Sociedade n\xE3o encontrada.");
+  if (!company) throw notFound("Sociedade n\xE3o encontrada.");
   return company;
 }
 var companyRouter = router({
-  lookupCnpj: protectedProcedure.input(z11.object({ cnpj: z11.string().min(14) })).query(async ({ input }) => {
+  lookupCnpj: protectedProcedure.input(z12.object({ cnpj: z12.string().min(14) })).query(async ({ input }) => {
     const apiData = await fetchCompanyByCnpj(input.cnpj);
     if (!apiData) return null;
     return mapBrasilApiToCompanyData(apiData);
   }),
-  list: protectedProcedure.input(z11.object({ familyId: z11.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z12.object({ familyId: z12.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCompanyRecords(input.familyId);
   }),
-  stakeholders: protectedProcedure.input(z11.object({ companyId: z11.string() })).query(async ({ ctx, input }) => {
+  stakeholders: protectedProcedure.input(z12.object({ companyId: z12.string() })).query(async ({ ctx, input }) => {
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     return listStakeholderRecords(input.companyId);
@@ -3897,6 +4057,7 @@ var companyRouter = router({
     const user = requirePermission(ctx, Permission.COMPANY_ADD_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
+    if (input.personId) await assertPersonInFamily(input.personId, company.familyId);
     const stakeholderId = await createStakeholderRecord(input);
     await recordAudit({
       action: "PARTICIPACAO_SOCIETARIA_REGISTRADA",
@@ -3912,6 +4073,7 @@ var companyRouter = router({
     const user = requirePermission(ctx, Permission.COMPANY_UPDATE_STAKEHOLDER);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
+    if (input.personId) await assertPersonInFamily(input.personId, company.familyId);
     await updateStakeholderRecord(input);
     await recordAudit({
       action: "PARTICIPACAO_SOCIETARIA_ATUALIZADA",
@@ -3963,22 +4125,32 @@ var companyRouter = router({
       certidoes: certidoes2.filter(
         (row) => row.scope === "SOCIEDADE" && row.subjectId === company.id
       ),
-      perShare: computePerShare(details ?? {})
+      perShare: computePerShare(details ?? {}),
+      people: people2.map((person) => ({
+        id: person.id,
+        fullName: person.fullName
+      }))
     };
   }),
   upsertDetails: protectedProcedure.input(companyDetailsUpsertSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.COMPANY_UPSERT_DETAILS);
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
+    if (input.fields.administrator1PersonId) {
+      await assertPersonInFamily(input.fields.administrator1PersonId, company.familyId);
+    }
+    if (input.fields.administrator2PersonId) {
+      await assertPersonInFamily(input.fields.administrator2PersonId, company.familyId);
+    }
     if (company.isOffshore) {
       if (!input.fields.jurisdiction) {
-        throw new Error("Informe a jurisdi\xE7\xE3o da sociedade offshore.");
+        throw badRequest("Informe a jurisdi\xE7\xE3o da sociedade offshore.");
       }
       if (!input.fields.companyNumber) {
-        throw new Error("Informe o identificador estrangeiro (company number).");
+        throw badRequest("Informe o identificador estrangeiro (company number).");
       }
       if (input.fields.taxRegime) {
-        throw new Error("Sociedade offshore n\xE3o usa regime tribut\xE1rio brasileiro.");
+        throw badRequest("Sociedade offshore n\xE3o usa regime tribut\xE1rio brasileiro.");
       }
     }
     await upsertCompanyDetailsRecord({ companyId: company.id, fields: input.fields });
@@ -4009,7 +4181,7 @@ var companyRouter = router({
 });
 
 // server/features/documents/document-router.ts
-import { z as z13 } from "zod";
+import { z as z14 } from "zod";
 
 // server/features/documents/document-review.ts
 init_schema();
@@ -4055,7 +4227,7 @@ async function releaseSpouseCoupleDocs(sourceDocument) {
 // server/features/documents/document-review.ts
 async function reviewDocumentRecord(input) {
   if (input.status === "REJEITADO" && !input.rejectionReason) {
-    throw new Error("Motivo da rejei\xE7\xE3o \xE9 obrigat\xF3rio.");
+    throw badRequest("Motivo da rejei\xE7\xE3o \xE9 obrigat\xF3rio.");
   }
   const db = await requireDatabase();
   const document = await getDocumentRecord(input.documentId);
@@ -4077,7 +4249,7 @@ async function reviewDocumentRecord(input) {
 }
 async function dispenseDocumentRecord(input) {
   if (!input.reason || input.reason.trim().length < 3) {
-    throw new Error("Justificativa da dispensa \xE9 obrigat\xF3ria.");
+    throw badRequest("Justificativa da dispensa \xE9 obrigat\xF3ria.");
   }
   const db = await requireDatabase();
   await db.update(documents).set({
@@ -4091,9 +4263,9 @@ async function dispenseDocumentRecord(input) {
 
 // server/features/documents/document-types.ts
 init_schema();
-import { z as z12 } from "zod";
-var documentEntitySchema = z12.enum(entityTypeValues);
-var documentStatusSchema = z12.enum([
+import { z as z13 } from "zod";
+var documentEntitySchema = z13.enum(entityTypeValues);
+var documentStatusSchema = z13.enum([
   "PENDENTE",
   "RECEBIDO_EM_ANALISE",
   "VALIDADO",
@@ -4103,30 +4275,32 @@ var documentStatusSchema = z12.enum([
   "NAO_POSSUI",
   "NA"
 ]);
-var createDocumentSchema = z12.object({
-  familyId: z12.string().min(1),
+var createDocumentSchema = z13.object({
+  familyId: z13.string().min(1),
   entityType: documentEntitySchema,
-  entityId: z12.string().min(1),
-  category: z12.string().min(2).max(80),
+  entityId: z13.string().min(1),
+  category: z13.string().min(2).max(80),
   validUntil: isoDateSchema("Data de validade inv\xE1lida (use AAAA-MM-DD).").optional(),
   /** Data-base do documento (ex.: balanço fechado / balancete). */
   referenceDate: isoDateSchema("Data-base inv\xE1lida (use AAAA-MM-DD).").optional()
 });
-var uploadVersionSchema = z12.object({
-  documentId: z12.string().min(1),
-  fileName: z12.string().min(1).max(255),
-  mimeType: z12.string().min(1).max(120),
-  base64Data: z12.string().min(8).max(8e6)
+var uploadVersionSchema = z13.object({
+  documentId: z13.string().min(1),
+  fileName: z13.string().min(1).max(255),
+  mimeType: z13.string().min(1).max(120),
+  base64Data: z13.string().min(8).max(8e6),
+  /** Data-base do balanço/balancete (obrigatória nesses documentos; ignorada nos demais). */
+  referenceDate: isoDateSchema("Data-base inv\xE1lida (use AAAA-MM-DD).").optional()
 });
-var reviewDocumentSchema = z12.object({
-  documentId: z12.string().min(1),
-  status: z12.enum(["VALIDADO", "REJEITADO", "NAO_POSSUI"]),
-  rejectionReason: z12.string().min(3).max(1e3).optional()
+var reviewDocumentSchema = z13.object({
+  documentId: z13.string().min(1),
+  status: z13.enum(["VALIDADO", "REJEITADO", "NAO_POSSUI"]),
+  rejectionReason: z13.string().min(3).max(1e3).optional()
 });
-var dispenseDocumentSchema = z12.object({
-  documentId: z12.string().min(1),
-  reason: z12.string().min(3).max(1e3),
-  requestedBy: z12.string().optional()
+var dispenseDocumentSchema = z13.object({
+  documentId: z13.string().min(1),
+  reason: z13.string().min(3).max(1e3),
+  requestedBy: z13.string().optional()
 });
 
 // server/features/documents/document-upload.ts
@@ -4144,12 +4318,18 @@ var ALLOWED_MIME_TYPES = /* @__PURE__ */ new Set([
 ]);
 async function storeDocumentVersion(input) {
   if (!ALLOWED_MIME_TYPES.has(input.mimeType))
-    throw new Error("Tipo de arquivo n\xE3o permitido.");
+    throw badRequest("Tipo de arquivo n\xE3o permitido.");
   const document = await getDocumentRecord(input.documentId);
-  if (!document) throw new Error("Documento n\xE3o encontrado.");
+  if (!document) throw notFound("Documento n\xE3o encontrado.");
   await assertIrpfUploadAllowed(document);
   const bytes = Buffer.from(input.base64Data, "base64");
-  assertStorageSize(bytes);
+  try {
+    assertStorageSize(bytes);
+  } catch (error) {
+    throw badRequest(
+      error instanceof Error ? error.message : "Arquivo inv\xE1lido ou maior que 5 MB."
+    );
+  }
   const sha256 = createHash2("sha256").update(bytes).digest("hex");
   const nextVersion = document.currentVersion + 1;
   const familyFolder = await resolveFamilyStorageFolder(document.familyId);
@@ -4161,7 +4341,7 @@ async function storeDocumentVersion(input) {
     document.id,
     async (tx) => {
       const [currentDoc] = await tx.select({ currentVersion: documents.currentVersion }).from(documents).where(eq17(documents.id, document.id)).limit(1);
-      if (!currentDoc) throw new Error("Documento n\xE3o encontrado.");
+      if (!currentDoc) throw notFound("Documento n\xE3o encontrado.");
       const versionNumber = currentDoc.currentVersion + 1;
       await tx.insert(documentVersions).values({
         id: createId(),
@@ -4194,11 +4374,11 @@ async function storeDocumentVersion(input) {
 
 // server/features/documents/document-router.ts
 var documentRouter = router({
-  list: protectedProcedure.input(z13.object({ familyId: z13.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z14.object({ familyId: z14.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listDocumentRecords(input.familyId);
   }),
-  versions: protectedProcedure.input(z13.object({ documentId: z13.string() })).query(async ({ ctx, input }) => {
+  versions: protectedProcedure.input(z14.object({ documentId: z14.string() })).query(async ({ ctx, input }) => {
     const document = await getDocumentRecord(input.documentId);
     if (!document) return [];
     await assertFamilyAccess(ctx, document.familyId);
@@ -4217,7 +4397,7 @@ var documentRouter = router({
     });
     return { documentId };
   }),
-  generateRequirements: protectedProcedure.input(z13.object({ familyId: z13.string() })).mutation(async ({ ctx, input }) => {
+  generateRequirements: protectedProcedure.input(z14.object({ familyId: z14.string() })).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.DOCUMENT_GENERATE_REQUIREMENTS);
     await assertFamilyAccess(ctx, input.familyId);
     const { created, removed } = await reconcileFamilyDocumentRequirements(
@@ -4235,24 +4415,35 @@ var documentRouter = router({
   }),
   uploadVersion: protectedProcedure.input(uploadVersionSchema).mutation(async ({ ctx, input }) => {
     const document = await getDocumentRecord(input.documentId);
-    if (!document) throw new Error("Documento n\xE3o encontrado.");
+    if (!document) throw notFound("Documento n\xE3o encontrado.");
     const user = requirePermission(ctx, Permission.DOCUMENT_UPLOAD_VERSION);
     await assertFamilyAccess(ctx, document.familyId);
-    const result = await storeDocumentVersion({ ...input, userId: user.id });
+    const { referenceDate, ...file } = input;
+    const isBalance = requiresReferenceDate(document);
+    if (isBalance && !referenceDate) {
+      throw badRequest("Informe a data-base do balan\xE7o/balancete.");
+    }
+    if (isBalance && referenceDate && referenceDate > hoje()) {
+      throw badRequest("A data-base n\xE3o pode ser uma data futura.");
+    }
+    const result = await storeDocumentVersion({ ...file, userId: user.id });
+    if (isBalance && referenceDate) {
+      await setDocumentReferenceDate(input.documentId, referenceDate);
+    }
     await recordAudit({
       action: "VERSAO_DOCUMENTO_ENVIADA",
       entityType: "DOCUMENTO",
       entityId: input.documentId,
       actorUserId: user.id,
       familyId: document.familyId,
-      metadata: { version: result.versionNumber }
+      metadata: isBalance && referenceDate ? { version: result.versionNumber, category: document.category, referenceDate } : { version: result.versionNumber }
     });
     return result;
   }),
   review: protectedProcedure.input(reviewDocumentSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.DOCUMENT_REVIEW);
     const document = await getDocumentRecord(input.documentId);
-    if (!document) throw new Error("Documento n\xE3o encontrado.");
+    if (!document) throw notFound("Documento n\xE3o encontrado.");
     await reviewDocumentRecord(input);
     await recordAudit({
       action: `DOCUMENTO_${input.status}`,
@@ -4266,7 +4457,7 @@ var documentRouter = router({
   dispense: protectedProcedure.input(dispenseDocumentSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.DOCUMENT_DISPENSE);
     const document = await getDocumentRecord(input.documentId);
-    if (!document) throw new Error("Documento n\xE3o encontrado.");
+    if (!document) throw notFound("Documento n\xE3o encontrado.");
     await dispenseDocumentRecord({
       documentId: input.documentId,
       reason: input.reason,
@@ -4285,48 +4476,6 @@ var documentRouter = router({
       }
     });
     return { success: true };
-  }),
-  /** Upload de balanço fechado / balancete de uma sociedade, com data-base. */
-  uploadBalance: protectedProcedure.input(
-    z13.object({
-      familyId: z13.string().min(1),
-      companyId: z13.string().min(1),
-      category: z13.enum(COMPANY_BALANCE_CATEGORIES),
-      referenceDate: z13.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      fileName: z13.string().min(1).max(255),
-      mimeType: z13.string().min(1).max(120).default("application/pdf"),
-      base64Data: z13.string().min(8).max(8e6)
-    })
-  ).mutation(async ({ ctx, input }) => {
-    const user = requirePermission(ctx, Permission.DOCUMENT_UPLOAD_BALANCE);
-    await assertFamilyAccess(ctx, input.familyId);
-    const documentId = await findOrCreateDocumentRecord({
-      familyId: input.familyId,
-      entityType: "SOCIEDADE",
-      entityId: input.companyId,
-      category: input.category,
-      referenceDate: input.referenceDate
-    });
-    const result = await storeDocumentVersion({
-      documentId,
-      fileName: input.fileName,
-      mimeType: input.mimeType,
-      base64Data: input.base64Data,
-      userId: user.id
-    });
-    await recordAudit({
-      action: "BALANCO_ENVIADO",
-      entityType: "SOCIEDADE",
-      entityId: input.companyId,
-      actorUserId: user.id,
-      familyId: input.familyId,
-      metadata: {
-        category: input.category,
-        referenceDate: input.referenceDate,
-        version: result.versionNumber
-      }
-    });
-    return { documentId, versionNumber: result.versionNumber };
   })
 });
 
@@ -4334,7 +4483,7 @@ var documentRouter = router({
 init_schema();
 import { createHash as createHash3, randomBytes } from "node:crypto";
 import { and as and13, eq as eq20 } from "drizzle-orm";
-import { z as z14 } from "zod";
+import { z as z15 } from "zod";
 init_database();
 
 // server/features/alerts/project-alerts-repository.ts
@@ -4437,10 +4586,17 @@ function computeConclusionBlockers(input) {
 }
 
 // server/features/alerts/project-alerts-repository.ts
+var EXEMPT_DOCUMENT_STATUSES = /* @__PURE__ */ new Set(["DISPENSADO", "NAO_POSSUI"]);
+function exemptDocumentIds(rows) {
+  return new Set(
+    rows.filter((row) => EXEMPT_DOCUMENT_STATUSES.has(row.status)).map((row) => row.id)
+  );
+}
 async function loadAlertRows(familyId) {
   const db = await requireDatabase();
-  const [certidaoRows, propertyRows, peopleRows, companyRows] = await Promise.all([
+  const [certidaoRows, propertyRows, peopleRows, companyRows, documentRows] = await Promise.all([
     db.select({
+      documentId: certidoes.documentId,
       scope: certidoes.scope,
       subjectId: certidoes.subjectId,
       type: certidoes.type,
@@ -4453,8 +4609,10 @@ async function loadAlertRows(familyId) {
       encumbranceType: properties.encumbranceType
     }).from(properties).where(eq18(properties.familyId, familyId)),
     db.select({ id: people.id, fullName: people.fullName }).from(people).where(eq18(people.familyId, familyId)),
-    db.select({ id: companies.id, legalName: companies.legalName }).from(companies).where(eq18(companies.familyId, familyId))
+    db.select({ id: companies.id, legalName: companies.legalName }).from(companies).where(eq18(companies.familyId, familyId)),
+    db.select({ id: documents.id, status: documents.status }).from(documents).where(eq18(documents.familyId, familyId))
   ]);
+  const exempt = exemptDocumentIds(documentRows ?? []);
   const nameByKey = /* @__PURE__ */ new Map();
   for (const row of peopleRows) {
     nameByKey.set(`PESSOA:${row.id}`, row.fullName);
@@ -4463,7 +4621,7 @@ async function loadAlertRows(familyId) {
     nameByKey.set(`SOCIEDADE:${row.id}`, row.legalName);
   }
   return {
-    certidoes: certidaoRows.map((row) => ({
+    certidoes: certidaoRows.filter((row) => !(row.documentId && exempt.has(row.documentId))).map((row) => ({
       ...row,
       subjectName: nameByKey.get(`${row.scope}:${row.subjectId}`) ?? null
     })),
@@ -4503,13 +4661,19 @@ async function getConclusionBlockers(familyId, justification) {
 async function listProjectAlertLevels(familyIds) {
   if (!familyIds.length) return {};
   const db = await requireDatabase();
-  const rows = await db.select({
-    familyId: certidoes.familyId,
-    scope: certidoes.scope,
-    subjectId: certidoes.subjectId,
-    status: certidoes.status,
-    validUntil: certidoes.validUntil
-  }).from(certidoes).where(inArray7(certidoes.familyId, familyIds));
+  const [allRows, documentRows] = await Promise.all([
+    db.select({
+      familyId: certidoes.familyId,
+      documentId: certidoes.documentId,
+      scope: certidoes.scope,
+      subjectId: certidoes.subjectId,
+      status: certidoes.status,
+      validUntil: certidoes.validUntil
+    }).from(certidoes).where(inArray7(certidoes.familyId, familyIds)),
+    db.select({ id: documents.id, status: documents.status }).from(documents).where(inArray7(documents.familyId, familyIds))
+  ]);
+  const exempt = exemptDocumentIds(documentRows ?? []);
+  const rows = allRows.filter((row) => !(row.documentId && exempt.has(row.documentId)));
   const byFamily = /* @__PURE__ */ new Map();
   for (const row of rows) {
     const list = byFamily.get(row.familyId) ?? [];
@@ -4535,7 +4699,17 @@ async function listProjectAlertLevels(familyIds) {
 // server/features/families/family-timeline-repository.ts
 init_schema();
 init_database();
-import { and as and12, count as count2, desc as desc4, eq as eq19, gt, isNull } from "drizzle-orm";
+import { and as and12, count as count2, desc as desc5, eq as eq19, gt, isNull } from "drizzle-orm";
+
+// shared/domain/document-status.ts
+var RESOLVED_DOCUMENT_STATUSES = [
+  "VALIDADO",
+  "DISPENSADO",
+  "NAO_POSSUI"
+];
+function isResolvedDocumentStatus(status) {
+  return RESOLVED_DOCUMENT_STATUSES.includes(status);
+}
 
 // server/features/families/family-timeline.ts
 var iso = (value) => value ? new Date(value).toISOString() : null;
@@ -4709,7 +4883,7 @@ function buildProcessTimeline(input) {
 
 // server/features/families/family-timeline-repository.ts
 function isResolved(status) {
-  return status === "VALIDADO" || status === "DISPENSADO";
+  return isResolvedDocumentStatus(status);
 }
 async function getFamilyTimelineRecord(familyId) {
   const db = await requireDatabase();
@@ -4723,7 +4897,7 @@ async function getFamilyTimelineRecord(familyId) {
     status: leads.status,
     createdAt: leads.createdAt,
     updatedAt: leads.updatedAt
-  }).from(leads).where(eq19(leads.familyId, familyId)).orderBy(desc4(leads.createdAt)).limit(1);
+  }).from(leads).where(eq19(leads.familyId, familyId)).orderBy(desc5(leads.createdAt)).limit(1);
   const [{ total: peopleTotal }] = await db.select({ total: count2() }).from(people).where(eq19(people.familyId, familyId));
   const [{ total: titularCount }] = await db.select({ total: count2() }).from(people).where(
     and12(eq19(people.familyId, familyId), eq19(people.isPrimaryContact, true))
@@ -4738,7 +4912,7 @@ async function getFamilyTimelineRecord(familyId) {
     status: financialProposals.status,
     createdAt: financialProposals.createdAt,
     acceptedAt: financialProposals.acceptedAt
-  }).from(financialProposals).where(eq19(financialProposals.familyId, familyId)).orderBy(desc4(financialProposals.createdAt)).limit(1);
+  }).from(financialProposals).where(eq19(financialProposals.familyId, familyId)).orderBy(desc5(financialProposals.createdAt)).limit(1);
   const [{ total: clientAccessCount }] = await db.select({ total: count2() }).from(familyAccess).where(
     and12(
       eq19(familyAccess.familyId, familyId),
@@ -4810,15 +4984,15 @@ var familyRouter = router({
       )
     );
   }),
-  get: protectedProcedure.input(z14.object({ familyId: z14.string().min(1) })).query(async ({ ctx, input }) => {
+  get: protectedProcedure.input(z15.object({ familyId: z15.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getFamilyRecord(input.familyId);
   }),
   updateStatus: protectedProcedure.input(
-    z14.object({
-      familyId: z14.string().min(1),
-      status: z14.enum(projectStatusValues),
-      justification: z14.string().max(2e3).optional()
+    z15.object({
+      familyId: z15.string().min(1),
+      status: z15.enum(projectStatusValues),
+      justification: z15.string().max(2e3).optional()
     })
   ).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.FAMILY_UPDATE_STATUS);
@@ -4848,7 +5022,7 @@ var familyRouter = router({
     });
     return { success: true, status: input.status };
   }),
-  timeline: protectedProcedure.input(z14.object({ familyId: z14.string().min(1) })).query(async ({ ctx, input }) => {
+  timeline: protectedProcedure.input(z15.object({ familyId: z15.string().min(1) })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getFamilyTimelineRecord(input.familyId);
   }),
@@ -4864,7 +5038,7 @@ var familyRouter = router({
     });
     return result;
   }),
-  grantClientAccess: protectedProcedure.input(z14.object({ familyId: z14.string(), userId: z14.number().int() })).mutation(async ({ ctx, input }) => {
+  grantClientAccess: protectedProcedure.input(z15.object({ familyId: z15.string(), userId: z15.number().int() })).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.FAMILY_GRANT_CLIENT_ACCESS);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
@@ -4883,7 +5057,7 @@ var familyRouter = router({
     });
     return { success: true };
   }),
-  generateFirstAccessLink: protectedProcedure.input(z14.object({ familyId: z14.string().min(1) })).mutation(async ({ ctx, input }) => {
+  generateFirstAccessLink: protectedProcedure.input(z15.object({ familyId: z15.string().min(1) })).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.FAMILY_GENERATE_FIRST_ACCESS_LINK);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
@@ -4922,7 +5096,7 @@ var familyRouter = router({
     });
     return { token, fullName: contact.fullName };
   }),
-  generatePasswordResetLink: protectedProcedure.input(z14.object({ familyId: z14.string().min(1) })).mutation(async ({ ctx, input }) => {
+  generatePasswordResetLink: protectedProcedure.input(z15.object({ familyId: z15.string().min(1) })).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.FAMILY_GENERATE_PASSWORD_RESET_LINK);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
@@ -4977,28 +5151,28 @@ var familyRouter = router({
 
 // server/features/reports/lwr-router.ts
 init_schema();
-import { desc as desc5, eq as eq21 } from "drizzle-orm";
-import { z as z16 } from "zod";
+import { desc as desc6, eq as eq21 } from "drizzle-orm";
+import { z as z17 } from "zod";
 init_database();
 
 // server/features/reports/lwr-types.ts
-import { z as z15 } from "zod";
-var lwrInputSchema = z15.object({
-  familyId: z15.string().min(1),
-  baseDate: z15.string().min(10),
-  proposedStructure: z15.string().min(10).max(12e3),
-  financialProposal: z15.string().max(12e3).optional().default("Proposta financeira gerenciada no m\xF3dulo aut\xF4nomo."),
-  canvaUrl: z15.string().max(1e3).optional(),
-  presentationFileKey: z15.string().max(500).optional()
+import { z as z16 } from "zod";
+var lwrInputSchema = z16.object({
+  familyId: z16.string().min(1),
+  baseDate: z16.string().min(10),
+  proposedStructure: z16.string().min(10).max(12e3),
+  financialProposal: z16.string().max(12e3).optional().default("Proposta financeira gerenciada no m\xF3dulo aut\xF4nomo."),
+  canvaUrl: z16.string().max(1e3).optional(),
+  presentationFileKey: z16.string().max(500).optional()
 });
 
 // server/features/reports/lwr-router.ts
 var lwrRouter = router({
-  list: protectedProcedure.input(z16.object({ familyId: z16.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z17.object({ familyId: z17.string() })).query(async ({ ctx, input }) => {
     requirePermission(ctx, Permission.LWR_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
-    return db.select().from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version));
+    return db.select().from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc6(lwrReports.version));
   }),
   create: protectedProcedure.input(lwrInputSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.LWR_CREATE);
@@ -5008,7 +5182,7 @@ var lwrRouter = router({
       "LWR_CREATE",
       input.familyId,
       async (tx) => {
-        const previous = await tx.select({ version: lwrReports.version }).from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc5(lwrReports.version)).limit(1);
+        const previous = await tx.select({ version: lwrReports.version }).from(lwrReports).where(eq21(lwrReports.familyId, input.familyId)).orderBy(desc6(lwrReports.version)).limit(1);
         const version = (previous[0]?.version ?? 0) + 1;
         const reportId = createId();
         await tx.insert(lwrReports).values({
@@ -5030,10 +5204,10 @@ var lwrRouter = router({
 });
 
 // server/features/people/person-router.ts
-import { z as z17 } from "zod";
-import { TRPCError as TRPCError4 } from "@trpc/server";
+import { z as z18 } from "zod";
+import { TRPCError as TRPCError5 } from "@trpc/server";
 var personRouter = router({
-  list: protectedProcedure.input(z17.object({ familyId: z17.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z18.object({ familyId: z18.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listPeopleByFamily(input.familyId);
   }),
@@ -5044,8 +5218,8 @@ var personRouter = router({
     try {
       personId = await addPersonRecord(input);
     } catch (err) {
-      if (err instanceof TRPCError4) throw err;
-      throw new TRPCError4({
+      if (err instanceof TRPCError5) throw err;
+      throw new TRPCError5({
         code: "BAD_REQUEST",
         message: err instanceof Error ? err.message : "Erro ao cadastrar pessoa."
       });
@@ -5073,8 +5247,8 @@ var personRouter = router({
     try {
       result = await updatePersonRecord(input);
     } catch (err) {
-      if (err instanceof TRPCError4) throw err;
-      throw new TRPCError4({
+      if (err instanceof TRPCError5) throw err;
+      throw new TRPCError5({
         code: "BAD_REQUEST",
         message: err instanceof Error ? err.message : "Erro ao atualizar pessoa."
       });
@@ -5180,8 +5354,8 @@ var personRouter = router({
 // server/features/portal/portal-router.ts
 init_schema();
 import { createHash as createHash4, randomBytes as randomBytes2 } from "node:crypto";
-import { and as and14, desc as desc6, eq as eq22, gt as gt3, isNull as isNull3 } from "drizzle-orm";
-import { z as z18 } from "zod";
+import { and as and14, desc as desc7, eq as eq22, gt as gt3, isNull as isNull3 } from "drizzle-orm";
+import { z as z19 } from "zod";
 init_database();
 function hashToken2(token) {
   return createHash4("sha256").update(token).digest("hex");
@@ -5196,7 +5370,7 @@ async function getActivePortalLink(token) {
   return result[0] ?? null;
 }
 var portalRouter = router({
-  createLink: protectedProcedure.input(z18.object({ familyId: z18.string(), origin: z18.string().url() })).mutation(async ({ ctx, input }) => {
+  createLink: protectedProcedure.input(z19.object({ familyId: z19.string(), origin: z19.string().url() })).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.PORTAL_CREATE_LINK);
     const token = randomBytes2(24).toString("base64url");
     const db = await requireDatabase();
@@ -5211,12 +5385,12 @@ var portalRouter = router({
     await recordAudit({ action: "LINK_PORTAL_GERADO", entityType: "FAMILIA", entityId: input.familyId, actorUserId: user.id, familyId: input.familyId });
     return { id: linkId, url: `${input.origin}/portal/${token}`, expiresInDays: 7 };
   }),
-  listLinks: protectedProcedure.input(z18.object({ familyId: z18.string() })).query(async ({ ctx, input }) => {
+  listLinks: protectedProcedure.input(z19.object({ familyId: z19.string() })).query(async ({ ctx, input }) => {
     requirePermission(ctx, Permission.PORTAL_LIST_LINKS);
     const db = await requireDatabase();
-    return db.select({ id: portalLinks.id, expiresAt: portalLinks.expiresAt, revokedAt: portalLinks.revokedAt, createdAt: portalLinks.createdAt }).from(portalLinks).where(eq22(portalLinks.familyId, input.familyId)).orderBy(desc6(portalLinks.createdAt));
+    return db.select({ id: portalLinks.id, expiresAt: portalLinks.expiresAt, revokedAt: portalLinks.revokedAt, createdAt: portalLinks.createdAt }).from(portalLinks).where(eq22(portalLinks.familyId, input.familyId)).orderBy(desc7(portalLinks.createdAt));
   }),
-  revokeLink: protectedProcedure.input(z18.object({ linkId: z18.string() })).mutation(async ({ ctx, input }) => {
+  revokeLink: protectedProcedure.input(z19.object({ linkId: z19.string() })).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.PORTAL_REVOKE_LINK);
     const db = await requireDatabase();
     const [link] = await db.select().from(portalLinks).where(eq22(portalLinks.id, input.linkId)).limit(1);
@@ -5225,7 +5399,7 @@ var portalRouter = router({
     await recordAudit({ action: "LINK_PORTAL_REVOGADO", entityType: "FAMILIA", entityId: link.familyId, actorUserId: user.id, familyId: link.familyId });
     return { success: true };
   }),
-  status: publicProcedure.input(z18.object({ token: z18.string().min(16) })).query(async ({ input }) => {
+  status: publicProcedure.input(z19.object({ token: z19.string().min(16) })).query(async ({ input }) => {
     const link = await getActivePortalLink(input.token);
     if (!link) throw new Error("Link inv\xE1lido, revogado ou expirado.");
     const db = await requireDatabase();
@@ -5235,7 +5409,7 @@ var portalRouter = router({
     const reports = await db.select().from(lwrReports).where(eq22(lwrReports.familyId, link.familyId));
     return { family, project, documents: documentList, reports };
   }),
-  uploadDocument: publicProcedure.input(z18.object({ token: z18.string().min(16), documentId: z18.string(), fileName: z18.string(), mimeType: z18.string(), base64Data: z18.string() })).mutation(async ({ input }) => {
+  uploadDocument: publicProcedure.input(z19.object({ token: z19.string().min(16), documentId: z19.string(), fileName: z19.string(), mimeType: z19.string(), base64Data: z19.string() })).mutation(async ({ input }) => {
     const link = await getActivePortalLink(input.token);
     if (!link) throw new Error("Link inv\xE1lido, revogado ou expirado.");
     const document = await getDocumentRecord(input.documentId);
@@ -5247,12 +5421,12 @@ var portalRouter = router({
 });
 
 // server/features/properties/property-router.ts
-import { z as z20 } from "zod";
+import { z as z21 } from "zod";
 
 // server/features/properties/property-repository.ts
 init_schema();
 init_database();
-import { desc as desc7, eq as eq23, and as and15 } from "drizzle-orm";
+import { desc as desc8, eq as eq23, and as and15 } from "drizzle-orm";
 var PCT_EPSILON2 = 1e-3;
 function totalOwnership(rows) {
   return rows.reduce((sum, row) => sum + Number(row.ownershipPercentage ?? 0), 0);
@@ -5346,7 +5520,7 @@ async function removePropertyRecord(familyId, propertyId) {
 }
 async function listPropertyRecords(familyId) {
   const db = await requireDatabase();
-  return db.select().from(properties).where(eq23(properties.familyId, familyId)).orderBy(desc7(properties.updatedAt));
+  return db.select().from(properties).where(eq23(properties.familyId, familyId)).orderBy(desc8(properties.updatedAt));
 }
 async function getPropertyRecord(propertyId) {
   const db = await requireDatabase();
@@ -5429,43 +5603,43 @@ async function listPropertyOwners(propertyId) {
 }
 
 // server/features/properties/property-types.ts
-import { z as z19 } from "zod";
+import { z as z20 } from "zod";
 init_schema();
-var propertyKindSchema = z19.enum(propertyKindValues);
-var propertyUtilitySchema = z19.enum(propertyUtilityValues);
-var encumbranceTypeSchema = z19.enum(encumbranceTypeValues);
-var moneySchema = z19.number().nonnegative();
-var propertyInputSchema = z19.object({
-  familyId: z19.string().min(1, "Projeto obrigat\xF3rio."),
-  description: z19.string().min(3, "Informe a descri\xE7\xE3o (m\xEDnimo 3 caracteres).").max(240),
+var propertyKindSchema = z20.enum(propertyKindValues);
+var propertyUtilitySchema = z20.enum(propertyUtilityValues);
+var encumbranceTypeSchema = z20.enum(encumbranceTypeValues);
+var moneySchema = z20.number().nonnegative();
+var propertyInputSchema = z20.object({
+  familyId: z20.string().min(1, "Projeto obrigat\xF3rio."),
+  description: z20.string().min(3, "Informe a descri\xE7\xE3o (m\xEDnimo 3 caracteres).").max(240),
   kind: propertyKindSchema.optional(),
   uf: ufSchema.optional(),
-  cep: z19.string().max(8).optional().or(z19.literal("")),
-  hasRegistration: z19.boolean().default(true),
-  registrationNumber: z19.string().max(120).optional(),
-  alternativeDocType: z19.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
-  noRegistrationReason: z19.string().max(1e3).optional(),
-  registryOfficeNumber: z19.number().int().min(1).max(55).optional(),
+  cep: z20.string().max(8).optional().or(z20.literal("")),
+  hasRegistration: z20.boolean().default(true),
+  registrationNumber: z20.string().max(120).optional(),
+  alternativeDocType: z20.enum(["ESCRITURA_PUBLICA", "CONTRATO_COMPRA_VENDA"]).optional(),
+  noRegistrationReason: z20.string().max(1e3).optional(),
+  registryOfficeNumber: z20.number().int().min(1).max(55).optional(),
   registryUf: ufSchema.optional(),
-  registryCity: z19.string().max(120).optional(),
-  propertyCity: z19.string().min(2, "Informe a cidade do im\xF3vel.").max(120),
-  inscricaoImobiliaria: z19.string().max(120).optional(),
-  ccir: z19.string().max(40).optional(),
-  nirf: z19.string().max(40).optional(),
-  notes: z19.string().max(4e3).optional(),
+  registryCity: z20.string().max(120).optional(),
+  propertyCity: z20.string().min(2, "Informe a cidade do im\xF3vel.").max(120),
+  inscricaoImobiliaria: z20.string().max(120).optional(),
+  ccir: z20.string().max(40).optional(),
+  nirf: z20.string().max(40).optional(),
+  notes: z20.string().max(4e3).optional(),
   acquisitionDate: isoDateSchema("Data de aquisi\xE7\xE3o inv\xE1lida (use AAAA-MM-DD).").optional(),
   declaredValue: moneySchema.optional(),
   marketValue: moneySchema.optional(),
   venalValue: moneySchema.optional(),
   irGcapValue: moneySchema.optional(),
   emolumentsValue: moneySchema.optional(),
-  itbiRate: z19.number().min(0, "Al\xEDquota de ITBI n\xE3o pode ser negativa.").max(100, "Al\xEDquota de ITBI deve estar entre 0 e 100.").optional(),
-  hasLaudemio: z19.boolean().default(false),
-  laudemioRate: z19.number().min(0, "Al\xEDquota de laudemio n\xE3o pode ser negativa.").max(100, "Al\xEDquota de laudemio deve estar entre 0 e 100.").optional(),
+  itbiRate: z20.number().min(0, "Al\xEDquota de ITBI n\xE3o pode ser negativa.").max(100, "Al\xEDquota de ITBI deve estar entre 0 e 100.").optional(),
+  hasLaudemio: z20.boolean().default(false),
+  laudemioRate: z20.number().min(0, "Al\xEDquota de laudemio n\xE3o pode ser negativa.").max(100, "Al\xEDquota de laudemio deve estar entre 0 e 100.").optional(),
   utility: propertyUtilitySchema.default("PENDENTE"),
   rentValue: moneySchema.optional(),
   encumbranceType: encumbranceTypeSchema.default("PENDENTE"),
-  encumbranceNote: z19.string().max(1e3).optional()
+  encumbranceNote: z20.string().max(1e3).optional()
 }).refine(
   (data) => {
     if (!data.hasRegistration) {
@@ -5513,24 +5687,24 @@ var propertyInputSchema = z19.object({
     path: ["rentValue"]
   }
 );
-var propertyUpdateSchema = propertyInputSchema.omit({ familyId: true }).extend({ propertyId: z19.string().min(1) });
-var propertyOwnerInputSchema = z19.object({
-  propertyId: z19.string().min(1),
-  personId: z19.string().min(1).optional(),
-  companyId: z19.string().min(1).optional(),
-  ownershipPercentage: z19.number().positive("Percentual deve ser maior que zero.").max(100, "Percentual deve estar entre 0 e 100."),
-  rightType: z19.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
+var propertyUpdateSchema = propertyInputSchema.omit({ familyId: true }).extend({ propertyId: z20.string().min(1) });
+var propertyOwnerInputSchema = z20.object({
+  propertyId: z20.string().min(1),
+  personId: z20.string().min(1).optional(),
+  companyId: z20.string().min(1).optional(),
+  ownershipPercentage: z20.number().positive("Percentual deve ser maior que zero.").max(100, "Percentual deve estar entre 0 e 100."),
+  rightType: z20.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"])
 }).refine((data) => Boolean(data.personId) !== Boolean(data.companyId), {
   message: "A titularidade exige exatamente um dono: pessoa ou sociedade.",
   path: ["personId"]
 });
-var propertyOwnerUpdateSchema = z19.object({
-  propertyId: z19.string().min(1),
-  ownerId: z19.string().min(1),
-  personId: z19.string().min(1).optional(),
-  companyId: z19.string().min(1).optional(),
-  ownershipPercentage: z19.number().positive().max(100).optional(),
-  rightType: z19.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
+var propertyOwnerUpdateSchema = z20.object({
+  propertyId: z20.string().min(1),
+  ownerId: z20.string().min(1),
+  personId: z20.string().min(1).optional(),
+  companyId: z20.string().min(1).optional(),
+  ownershipPercentage: z20.number().positive().max(100).optional(),
+  rightType: z20.enum(["PROPRIEDADE", "USUFRUTO", "NUA_PROPRIEDADE"]).optional()
 }).refine(
   (data) => {
     if (data.personId === void 0 && data.companyId === void 0) {
@@ -5543,22 +5717,22 @@ var propertyOwnerUpdateSchema = z19.object({
     path: ["personId"]
   }
 );
-var propertyOwnerDeleteSchema = z19.object({
-  propertyId: z19.string().min(1),
-  ownerId: z19.string().min(1)
+var propertyOwnerDeleteSchema = z20.object({
+  propertyId: z20.string().min(1),
+  ownerId: z20.string().min(1)
 });
-var removePropertySchema = z19.object({
-  familyId: z19.string().min(1),
-  propertyId: z19.string().min(1)
+var removePropertySchema = z20.object({
+  familyId: z20.string().min(1),
+  propertyId: z20.string().min(1)
 });
 
 // server/features/properties/property-router.ts
 var propertyRouter = router({
-  list: protectedProcedure.input(z20.object({ familyId: z20.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z21.object({ familyId: z21.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listPropertyRecords(input.familyId);
   }),
-  owners: protectedProcedure.input(z20.object({ propertyId: z20.string() })).query(async ({ ctx, input }) => {
+  owners: protectedProcedure.input(z21.object({ propertyId: z21.string() })).query(async ({ ctx, input }) => {
     const property = await getPropertyRecord(input.propertyId);
     if (!property) return [];
     await assertFamilyAccess(ctx, property.familyId);
@@ -5659,16 +5833,16 @@ var propertyRouter = router({
 // server/features/users/user-router.ts
 init_schema();
 init_roles();
-import { desc as desc8, eq as eq24 } from "drizzle-orm";
-import { z as z21 } from "zod";
+import { desc as desc9, eq as eq24 } from "drizzle-orm";
+import { z as z22 } from "zod";
 init_database();
 var userRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     requirePermission(ctx, Permission.USER_LIST);
     const db = await requireDatabase();
-    return db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).orderBy(desc8(users.lastSignedIn));
+    return db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).orderBy(desc9(users.lastSignedIn));
   }),
-  changeRole: protectedProcedure.input(z21.object({ userId: z21.number().int(), role: z21.enum(APP_ROLES) })).mutation(async ({ ctx, input }) => {
+  changeRole: protectedProcedure.input(z22.object({ userId: z22.number().int(), role: z22.enum(APP_ROLES) })).mutation(async ({ ctx, input }) => {
     const actor = requirePermission(ctx, Permission.USER_CHANGE_ROLE);
     if (input.userId === actor.id && input.role !== "SOCIO") throw new Error("O SOCIO respons\xE1vel n\xE3o pode remover o pr\xF3prio papel.");
     const db = await requireDatabase();
@@ -5680,22 +5854,22 @@ var userRouter = router({
 
 // server/features/audit/audit-router.ts
 init_schema();
-import { desc as desc9, eq as eq25 } from "drizzle-orm";
-import { z as z22 } from "zod";
+import { desc as desc10, eq as eq25 } from "drizzle-orm";
+import { z as z23 } from "zod";
 init_database();
 var auditRouter = router({
-  listByFamily: protectedProcedure.input(z22.object({ familyId: z22.string() })).query(async ({ ctx, input }) => {
+  listByFamily: protectedProcedure.input(z23.object({ familyId: z23.string() })).query(async ({ ctx, input }) => {
     requirePermission(ctx, Permission.AUDIT_LIST_BY_FAMILY);
     await assertFamilyAccess(ctx, input.familyId);
     const db = await requireDatabase();
-    return db.select().from(auditLogs).where(eq25(auditLogs.familyId, input.familyId)).orderBy(desc9(auditLogs.createdAt));
+    return db.select().from(auditLogs).where(eq25(auditLogs.familyId, input.familyId)).orderBy(desc10(auditLogs.createdAt));
   })
 });
 
 // server/features/people/first-access-router.ts
 import { createHash as createHash5 } from "node:crypto";
 import { and as and16, eq as eq26, isNull as isNull4, gt as gt4 } from "drizzle-orm";
-import { z as z23 } from "zod";
+import { z as z24 } from "zod";
 import bcrypt2 from "bcryptjs";
 init_db();
 init_database();
@@ -5715,7 +5889,7 @@ async function assertExistingClientUsable(db, existing, familyId) {
   return existing.id;
 }
 var firstAccessRouter = router({
-  verifyToken: publicProcedure.input(z23.object({ token: z23.string().min(16) })).query(async ({ input }) => {
+  verifyToken: publicProcedure.input(z24.object({ token: z24.string().min(16) })).query(async ({ input }) => {
     checkRateLimit(`verify:${input.token}`);
     const db = await requireDatabase();
     const [link] = await db.select().from(firstAccessLinks).where(
@@ -5734,7 +5908,7 @@ var firstAccessRouter = router({
       email: person.email ?? null
     };
   }),
-  setPassword: publicProcedure.input(z23.object({ token: z23.string().min(16), password: z23.string().min(6) })).mutation(async ({ input }) => {
+  setPassword: publicProcedure.input(z24.object({ token: z24.string().min(16), password: z24.string().min(6) })).mutation(async ({ input }) => {
     checkRateLimit(`setpwd:${input.token}`);
     return withAdvisoryLock(
       requireDatabase(),
@@ -5801,12 +5975,12 @@ var firstAccessRouter = router({
 });
 
 // server/features/assets/assets-router.ts
-import { z as z25 } from "zod";
+import { z as z26 } from "zod";
 
 // server/features/assets/assets-repository.ts
 init_schema();
 init_database();
-import { and as and17, desc as desc10, eq as eq27 } from "drizzle-orm";
+import { and as and17, desc as desc11, eq as eq27 } from "drizzle-orm";
 async function createAssetRecord(input) {
   const db = await requireDatabase();
   const id = createId();
@@ -5820,7 +5994,7 @@ async function createAssetRecord(input) {
 }
 async function listAssetRecords(familyId) {
   const db = await requireDatabase();
-  return db.select().from(otherAssets).where(eq27(otherAssets.familyId, familyId)).orderBy(desc10(otherAssets.updatedAt));
+  return db.select().from(otherAssets).where(eq27(otherAssets.familyId, familyId)).orderBy(desc11(otherAssets.updatedAt));
 }
 async function getAssetRecord(assetId) {
   const db = await requireDatabase();
@@ -5830,7 +6004,7 @@ async function getAssetRecord(assetId) {
 async function updateAssetRecord(input) {
   const db = await requireDatabase();
   const existing = await getAssetRecord(input.assetId);
-  if (!existing) throw new Error("Ativo n\xE3o encontrado.");
+  if (!existing) throw notFound("Ativo n\xE3o encontrado.");
   await db.update(otherAssets).set({
     category: input.category,
     description: input.description,
@@ -5844,7 +6018,7 @@ async function updateAssetRecord(input) {
 async function removeAssetRecord(familyId, assetId) {
   const db = await requireDatabase();
   const [asset] = await db.select().from(otherAssets).where(and17(eq27(otherAssets.id, assetId), eq27(otherAssets.familyId, familyId))).limit(1);
-  if (!asset) throw new Error("Ativo n\xE3o encontrado nesta fam\xEDlia.");
+  if (!asset) throw notFound("Ativo n\xE3o encontrado nesta fam\xEDlia.");
   const docs = await db.select({ id: documents.id }).from(documents).where(
     and17(eq27(documents.entityType, "ATIVO"), eq27(documents.entityId, assetId))
   );
@@ -5857,31 +6031,32 @@ async function removeAssetRecord(familyId, assetId) {
 
 // server/features/assets/assets-types.ts
 init_schema();
-import { z as z24 } from "zod";
-var assetCategorySchema = z24.enum(assetCategoryValues);
-var createAssetSchema = z24.object({
-  familyId: z24.string().min(1),
+import { z as z25 } from "zod";
+var assetCategorySchema = z25.enum(assetCategoryValues);
+var createAssetSchema = z25.object({
+  familyId: z25.string().min(1),
   category: assetCategorySchema,
-  description: z24.string().min(2).max(240),
-  declaredValue: z24.number().positive("Informe o valor declarado (> 0)."),
-  ownerPersonId: z24.string().min(1, "Informe o respons\xE1vel pelo ativo."),
-  notes: z24.string().max(1e3).optional()
+  description: z25.string().min(2).max(240),
+  declaredValue: z25.number().finite().positive("Informe o valor declarado (> 0).").max(MAX_DINHEIRO, "Valor declarado acima do limite permitido."),
+  ownerPersonId: z25.string().min(1, "Informe o respons\xE1vel pelo ativo."),
+  notes: z25.string().max(8e3).optional()
 });
-var updateAssetSchema = createAssetSchema.omit({ familyId: true }).extend({ assetId: z24.string().min(1) });
-var removeAssetSchema = z24.object({
-  familyId: z24.string().min(1),
-  assetId: z24.string().min(1)
+var updateAssetSchema = createAssetSchema.omit({ familyId: true }).extend({ assetId: z25.string().min(1) });
+var removeAssetSchema = z25.object({
+  familyId: z25.string().min(1),
+  assetId: z25.string().min(1)
 });
 
 // server/features/assets/assets-router.ts
 var assetRouter = router({
-  list: protectedProcedure.input(z25.object({ familyId: z25.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z26.object({ familyId: z26.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listAssetRecords(input.familyId);
   }),
   create: protectedProcedure.input(createAssetSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.ASSET_CREATE);
     await assertFamilyAccess(ctx, input.familyId);
+    await assertPersonInFamily(input.ownerPersonId, input.familyId);
     const assetId = await createAssetRecord(input);
     const { created, removed } = await reconcileEntityDocuments({
       familyId: input.familyId,
@@ -5902,8 +6077,9 @@ var assetRouter = router({
   update: protectedProcedure.input(updateAssetSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.ASSET_UPDATE);
     const asset = await getAssetRecord(input.assetId);
-    if (!asset) throw new Error("Ativo n\xE3o encontrado.");
+    if (!asset) throw notFound("Ativo n\xE3o encontrado.");
     await assertFamilyAccess(ctx, asset.familyId);
+    await assertPersonInFamily(input.ownerPersonId, asset.familyId);
     const result = await updateAssetRecord(input);
     const { created, removed } = await reconcileEntityDocuments({
       familyId: asset.familyId,
@@ -5938,12 +6114,12 @@ var assetRouter = router({
 });
 
 // server/features/proposals/proposal-router.ts
-import { z as z27 } from "zod";
+import { z as z28 } from "zod";
 
 // server/features/proposals/proposal-repository.ts
 init_schema();
 init_database();
-import { desc as desc11, eq as eq28 } from "drizzle-orm";
+import { desc as desc12, eq as eq28 } from "drizzle-orm";
 async function createProposalRecord(input) {
   const db = await requireDatabase();
   const id = createId();
@@ -5958,7 +6134,7 @@ async function createProposalRecord(input) {
 }
 async function listProposalRecords(familyId) {
   const db = await requireDatabase();
-  return db.select().from(financialProposals).where(eq28(financialProposals.familyId, familyId)).orderBy(desc11(financialProposals.createdAt));
+  return db.select().from(financialProposals).where(eq28(financialProposals.familyId, familyId)).orderBy(desc12(financialProposals.createdAt));
 }
 async function getProposalRecord(proposalId) {
   const db = await requireDatabase();
@@ -5993,37 +6169,37 @@ async function reviewCounterProposalRecord(input) {
 }
 
 // server/features/proposals/proposal-types.ts
-import { z as z26 } from "zod";
-var proposalStatusSchema = z26.enum([
+import { z as z27 } from "zod";
+var proposalStatusSchema = z27.enum([
   "RASCUNHO",
   "ENVIADA",
   "ACEITA",
   "CONTRAPROPOSTA_RECEBIDA",
   "RECUSADA"
 ]);
-var createProposalSchema = z26.object({
-  familyId: z26.string().min(1),
-  scopeDescription: z26.string().min(10, "Descri\xE7\xE3o do escopo de trabalho deve ter ao menos 10 caracteres."),
-  proposedValue: z26.number().positive("Valor da proposta deve ser maior que zero.")
+var createProposalSchema = z27.object({
+  familyId: z27.string().min(1),
+  scopeDescription: z27.string().min(10, "Descri\xE7\xE3o do escopo de trabalho deve ter ao menos 10 caracteres."),
+  proposedValue: z27.number().positive("Valor da proposta deve ser maior que zero.")
 });
-var acceptProposalSchema = z26.object({
-  proposalId: z26.string().min(1),
-  clientNotes: z26.string().max(1e3).optional()
+var acceptProposalSchema = z27.object({
+  proposalId: z27.string().min(1),
+  clientNotes: z27.string().max(1e3).optional()
 });
-var counterProposalSchema = z26.object({
-  proposalId: z26.string().min(1),
-  counterProposalValue: z26.number().positive("Valor da contraproposta deve ser maior que zero."),
-  counterProposalNotes: z26.string().min(3, "Justificativa da contraproposta \xE9 obrigat\xF3ria.").max(1e3)
+var counterProposalSchema = z27.object({
+  proposalId: z27.string().min(1),
+  counterProposalValue: z27.number().positive("Valor da contraproposta deve ser maior que zero."),
+  counterProposalNotes: z27.string().min(3, "Justificativa da contraproposta \xE9 obrigat\xF3ria.").max(1e3)
 });
-var reviewCounterProposalSchema = z26.object({
-  proposalId: z26.string().min(1),
-  decision: z26.enum(["ACEITAR", "RECUSAR"]),
-  notes: z26.string().max(1e3).optional()
+var reviewCounterProposalSchema = z27.object({
+  proposalId: z27.string().min(1),
+  decision: z27.enum(["ACEITAR", "RECUSAR"]),
+  notes: z27.string().max(1e3).optional()
 });
 
 // server/features/proposals/proposal-router.ts
 var proposalRouter = router({
-  list: protectedProcedure.input(z27.object({ familyId: z27.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z28.object({ familyId: z28.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listProposalRecords(input.familyId);
   }),
@@ -6129,17 +6305,17 @@ var leadRouter = router({
 });
 
 // server/features/certidoes/certidao-router.ts
-import { z as z28 } from "zod";
+import { z as z29 } from "zod";
 var certidaoRouter = router({
-  list: protectedProcedure.input(z28.object({ familyId: z28.string() })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z29.object({ familyId: z29.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return listCertidaoRecords(input.familyId);
   }),
-  summary: protectedProcedure.input(z28.object({ familyId: z28.string() })).query(async ({ ctx, input }) => {
+  summary: protectedProcedure.input(z29.object({ familyId: z29.string() })).query(async ({ ctx, input }) => {
     await assertFamilyAccess(ctx, input.familyId);
     return getProjectAlertSummary(input.familyId);
   }),
-  generate: protectedProcedure.input(z28.object({ familyId: z28.string() })).mutation(async ({ ctx, input }) => {
+  generate: protectedProcedure.input(z29.object({ familyId: z29.string() })).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.CERTIDAO_GENERATE);
     await assertFamilyAccess(ctx, input.familyId);
     const created = await ensureFamilyCertidoes(input.familyId);
@@ -6176,7 +6352,7 @@ var certidaoRouter = router({
 });
 
 // server/features/address/address-router.ts
-import { z as z29 } from "zod";
+import { z as z30 } from "zod";
 
 // server/features/address/viacep-client.ts
 var TIMEOUT_MS = 4e3;
@@ -6243,13 +6419,13 @@ async function lookupAddressByCep(rawCep) {
 
 // server/features/address/address-router.ts
 var addressRouter = router({
-  lookupCep: protectedProcedure.input(z29.object({ cep: z29.string().min(1, "Informe o CEP.") })).query(async ({ input }) => {
+  lookupCep: protectedProcedure.input(z30.object({ cep: z30.string().min(1, "Informe o CEP.") })).query(async ({ input }) => {
     return lookupAddressByCep(input.cep);
   })
 });
 
 // server/features/birthdays/birthday-router.ts
-import { TRPCError as TRPCError5 } from "@trpc/server";
+import { TRPCError as TRPCError6 } from "@trpc/server";
 
 // server/features/birthdays/birthday-repository.ts
 init_schema();
@@ -6276,7 +6452,7 @@ async function listProjectBirthdays() {
 var birthdayRouter = router({
   list: protectedProcedure.query(({ ctx }) => {
     if (ctx.user?.role !== "SOCIO") {
-      throw new TRPCError5({
+      throw new TRPCError6({
         code: "FORBIDDEN",
         message: "Acesso restrito ao perfil S\xF3cio."
       });

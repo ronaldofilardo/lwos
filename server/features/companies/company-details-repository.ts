@@ -2,6 +2,11 @@ import { eq } from "drizzle-orm";
 import { companyDetails } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
+import {
+  ESTIMATED_VALUE_ASSET_KEYS,
+  ESTIMATED_VALUE_LIABILITY_KEYS,
+  computeEstimatedValue,
+} from "../../../shared/domain/company-valuation";
 import type { z } from "zod";
 import type {
   companyDetailsFieldsSchema,
@@ -33,6 +38,8 @@ function detailValues(fields: CompanyDetailsFields) {
     corporatePurpose: text(fields.corporatePurpose),
     capitalSocial: amount(fields.capitalSocial),
     shareQuantity: amount(fields.shareQuantity),
+    administrator1PersonId: text(fields.administrator1PersonId),
+    administrator2PersonId: text(fields.administrator2PersonId),
     administrator1: text(fields.administrator1),
     administrator2: text(fields.administrator2),
     equity: amount(fields.equity),
@@ -63,12 +70,45 @@ export async function getCompanyDetailsRecord(companyId: string) {
   return result[0] ?? null;
 }
 
+/**
+ * Campos efetivamente enviados (`undefined` = não enviado). Usado no UPDATE do
+ * upsert: antes, qualquer campo ausente do payload virava NULL e apagava o
+ * dado gravado (ex.: campo novo esquecido no formulário). `null` continua
+ * significando "limpar o campo".
+ */
+function presentFields(fields: CompanyDetailsFields) {
+  const values = detailValues(fields) as Record<string, unknown>;
+  const sent = fields as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(values).filter(([key]) => sent[key] !== undefined)
+  );
+}
+
+/**
+ * O valor estimado da empresa não é digitado: é derivado do balanço. Usa a
+ * linha já gravada + o que veio no payload (campo ausente preserva o gravado),
+ * então um salvamento parcial também deixa o valor consistente.
+ */
+function withEstimatedValue(
+  current: Record<string, unknown> | null,
+  fields: CompanyDetailsFields
+): CompanyDetailsFields {
+  const sent = fields as Record<string, unknown>;
+  const balance: Record<string, unknown> = {};
+  for (const key of [...ESTIMATED_VALUE_ASSET_KEYS, ...ESTIMATED_VALUE_LIABILITY_KEYS]) {
+    balance[key] = sent[key] !== undefined ? sent[key] : current?.[key];
+  }
+  return { ...fields, estimatedMarketValue: computeEstimatedValue(balance) };
+}
+
 export async function upsertCompanyDetailsRecord(input: {
   companyId: string;
   fields: CompanyDetailsFields;
 }) {
   const db = await requireDatabase();
-  const values = detailValues(input.fields);
+  const current = await getCompanyDetailsRecord(input.companyId);
+  const fields = withEstimatedValue(current as Record<string, unknown> | null, input.fields);
+  const values = detailValues(fields);
   const now = new Date();
   await db
     .insert(companyDetails)
@@ -81,7 +121,8 @@ export async function upsertCompanyDetailsRecord(input: {
     })
     .onConflictDoUpdate({
       target: companyDetails.companyId,
-      set: { ...values, updatedAt: now },
+      // Só atualiza o que veio no payload; ausente = preserva o valor gravado.
+      set: { ...presentFields(fields), updatedAt: now },
     });
 }
 

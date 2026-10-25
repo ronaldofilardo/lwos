@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import {
   AlertCircle,
+  Ban,
   CheckCircle2,
   CircleDashed,
   EyeOff,
   FileStack,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { isResolvedDocumentStatus } from "@shared/domain/document-status";
 
 type DocRow = {
   id: string;
@@ -40,8 +42,6 @@ const SECTIONS: SectionDef[] = [
   { key: "ATIVO", title: "Ativos", entityTypes: ["ATIVO"] },
 ];
 
-const RESOLVED = new Set(["VALIDADO", "DISPENSADO"]);
-
 function statusInfo(status: string): {
   label: string;
   icon: typeof CheckCircle2;
@@ -60,6 +60,13 @@ function statusInfo(status: string): {
       return {
         label: "Dispensado",
         icon: EyeOff,
+        iconClass: "text-purple-500",
+        resolved: true,
+      };
+    case "NAO_POSSUI":
+      return {
+        label: "Não possui",
+        icon: Ban,
         iconClass: "text-purple-500",
         resolved: true,
       };
@@ -143,6 +150,19 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
   const properties = trpc.properties.list.useQuery({ familyId });
   const companies = trpc.companies.list.useQuery({ familyId });
   const assets = trpc.assets.list.useQuery({ familyId });
+  const certidoes = trpc.certidoes.list.useQuery(
+    { familyId },
+    { enabled: Boolean(familyId) }
+  );
+
+  // Documento de certidão → nome do membro/sociedade dono (o documento só guarda o id da certidão).
+  const certidaoOwner = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of certidoes.data ?? []) {
+      if (row.documentId && row.subjectName) map.set(row.documentId, row.subjectName);
+    }
+    return map;
+  }, [certidoes.data]);
 
   const personName = useMemo(() => {
     const map = new Map<string, string>();
@@ -156,7 +176,7 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
     let rejected = 0;
     let pending = 0;
     for (const d of docs) {
-      if (RESOLVED.has(d.status)) resolved++;
+      if (isResolvedDocumentStatus(d.status)) resolved++;
       else if (d.status === "REJEITADO") rejected++;
       else pending++;
     }
@@ -168,7 +188,7 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
     return SECTIONS.map(section => ({
       ...section,
       docs: docs.filter(d => section.entityTypes.includes(d.entityType)),
-    }));
+    })).filter(section => section.key !== "ATIVO" || section.docs.length > 0);
   }, [documents.data]);
 
   if (documents.isLoading) {
@@ -248,7 +268,7 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
       <div className="grid gap-4 md:grid-cols-2">
         {sections.map(section => {
           const resolved = section.docs.filter(d =>
-            RESOLVED.has(d.status)
+            isResolvedDocumentStatus(d.status)
           ).length;
           return (
             <div
@@ -276,7 +296,9 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
                       personName={
                         doc.entityType === "PESSOA"
                           ? personName.get(doc.entityId)
-                          : undefined
+                          : doc.entityType === "CERTIDAO"
+                            ? certidaoOwner.get(doc.id)
+                            : undefined
                       }
                     />
                   ))}
