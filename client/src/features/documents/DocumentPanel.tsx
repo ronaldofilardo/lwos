@@ -1,9 +1,11 @@
-import { ChevronDown, FileStack, RefreshCw } from "lucide-react";
+import { ChevronDown, FileStack, RefreshCw, User, Building2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { StatusBadge } from "@/components/lucathi/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
 import { errorMessage } from "@/lib/trpcError";
 import {
@@ -33,6 +35,8 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
   const [reviewModalReason, setReviewModalReason] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [sameAddressState, setSameAddressState] = useState<Record<string, boolean>>({});
+  const [selectedMember, setSelectedMember] = useState<{ type: "PESSOA" | "SOCIEDADE"; id: string } | null>(null);
+  const [viewType, setViewType] = useState<"DOCUMENTOS" | "CERTIDOES">("DOCUMENTOS");
   // Blocos e membros começam contraídos (Fase 8): estado por chave.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -105,7 +109,17 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
       description: a.description,
     })),
   });
-  const sections = buildDocumentSections(groups);
+
+  const memberGroups = selectedMember
+    ? groups.filter(
+        g =>
+          g.entityType === selectedMember.type && g.entityId === selectedMember.id
+      )
+    : groups;
+  const viewGroups = memberGroups.filter(
+    g => (viewType === "DOCUMENTOS" ? g.kind === "DOCUMENTO" : g.kind === "CERTIDAO")
+  );
+  const sections = buildDocumentSections(viewGroups);
 
   const totalDocs = matrixDocuments.length;
   const resolvedDocs = matrixDocuments.filter(d =>
@@ -131,6 +145,40 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Select onValueChange={value => setSelectedMember(value ? { type: value as "PESSOA" | "SOCIEDADE", id: value.split(":")[1] } : null)}>
+              <SelectLabel>Membro / sociedade</SelectLabel>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos os membros" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Pessoas</SelectLabel>
+                  {(people.data ?? []).map(person => (
+                    <SelectItem key={person.id} value={`PESSOA:${person.id}`}>
+                      {person.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Sociedades</SelectLabel>
+                  {(companies.data ?? []).map(company => (
+                    <SelectItem key={company.id} value={`SOCIEDADE:${company.id}`}>
+                      {company.legalName}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <ToggleGroup type="single" value={viewType} onValueChange={value => setViewType(value as "DOCUMENTOS" | "CERTIDOES")} className="ml-3">
+            <ToggleGroupItem value="DOCUMENTOS">
+              <User className="mr-2 size-3.5" /> Documentos
+            </ToggleGroupItem>
+            <ToggleGroupItem value="CERTIDOES">
+              <Building2 className="mr-2 size-3.5" /> Certidões
+            </ToggleGroupItem>
+          </ToggleGroup>
           {canEditFlag ? (
             <Button
               variant="outline"
@@ -144,13 +192,13 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
               <RefreshCw className="mr-1.5 size-4" /> Gerar requisitos
             </Button>
           ) : null}
-          {totalDocs > 0 ? (
-            <div className="rounded-xl bg-lucathi-mist px-3 py-2 text-right">
+          {viewGroups.length > 0 ? (
+            <div className="rounded-xl bg-lucathi-mist px-3 py-2 text-right ml-auto">
               <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
                 Progresso
               </p>
               <p className="text-sm font-semibold text-lucathi-navy">
-                {resolvedDocs}/{totalDocs} resolvidos
+                {memberGroups.reduce((acc, g) => acc + g.documents.filter(d => isResolvedStatus(d.status)).length, 0)}/{memberGroups.reduce((acc, g) => acc + g.documents.length, 0)} resolvidos
               </p>
             </div>
           ) : null}
