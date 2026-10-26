@@ -228,10 +228,10 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
 
         {tab === "FAMILIARES" && !selectedEntity ? (
           <div className="w-64 ml-3">
+            <p className="text-xs text-lucathi-gray">Familiar</p>
             <Select
               onValueChange={value => setSelectedEntity(value ? { type: "PESSOA", id: value } : null)}
             >
-              <SelectLabel>Familiar</SelectLabel>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um familiar" />
               </SelectTrigger>
@@ -249,10 +249,10 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
 
         {tab === "SOCIEDADES" && !selectedEntity ? (
           <div className="w-64 ml-3">
+            <p className="text-xs text-lucathi-gray">Sociedade</p>
             <Select
               onValueChange={value => setSelectedEntity(value ? { type: "SOCIEDADE", id: value } : null)}
             >
-              <SelectLabel>Sociedade</SelectLabel>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione uma sociedade" />
               </SelectTrigger>
@@ -270,19 +270,19 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
 
         {tab === "IMOVEIS" && !selectedEntity ? (
           <div className="w-64 ml-3">
+            <p className="text-xs text-lucathi-gray">Imóvel</p>
             <Select
               onValueChange={value => setSelectedEntity(value ? { type: "IMOVEL", id: value } : null)}
             >
-              <SelectLabel>Imóvel</SelectLabel>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um imóvel" />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                <SelectLabel>Imóveis</SelectLabel>
-                {(properties.data ?? []).map(p => (
-                  <SelectItem key={p.id} value={p.id}>{p.description}</SelectItem>
-                ))}
+                  <SelectLabel>Imóveis</SelectLabel>
+                  {(properties.data ?? []).map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.description}</SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
