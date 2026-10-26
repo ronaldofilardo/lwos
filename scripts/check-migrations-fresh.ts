@@ -1,6 +1,6 @@
 /**
  * Fase 10 — «Todas as migrations aplicam do zero»: cria um banco descartável,
- * aplica as 13 migrations do journal do zero e compara o schema resultante
+ * aplica as 18 migrations do journal do zero e compara o schema resultante
  * com o banco de desenvolvimento. Ao final, o banco descartável é removido.
  *
  * Uso: pnpm exec tsx scripts/check-migrations-fresh.ts

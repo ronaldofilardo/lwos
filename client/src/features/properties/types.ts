@@ -51,7 +51,7 @@ export function encumbranceSeverity(
   return "vermelho";
 }
 
-/** Vermelho trava a movimentação (vínculo com sociedade, conclusão). */
+/** Semáforo vermelho: gravames distintos de PENDENTE, NA e NAO_HA. */
 export function isEncumbranceRed(value: string | null | undefined): boolean {
   return encumbranceSeverity(value) === "vermelho";
 }

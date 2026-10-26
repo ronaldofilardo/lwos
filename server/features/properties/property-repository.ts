@@ -6,7 +6,6 @@ import {
 } from "../../../drizzle/schema";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
-import { isEncumbranceRed } from "./property-types";
 import type { z } from "zod";
 import type {
   propertyInputSchema,

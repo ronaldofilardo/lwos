@@ -58,7 +58,7 @@ export function CompanyShareholdersTable({
         </ul>
       ) : (
         <p className="mt-1 text-xs text-lucathi-gray">
-          Nenhum sócio vinculado — cadastre no painel “Holding e sociedades”.
+          Nenhum sócio vinculado — cadastre no painel “Sociedades”.
         </p>
       )}
     </div>

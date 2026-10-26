@@ -2,7 +2,7 @@
  * Teste de ponta a ponta (Fase 10) — percorre o appRouter real contra o
  * banco local: projeto com 2 objetivos, titular, cônjuge, filho menor,
  * imóveis urbano e rural, sociedades LTDA e offshore, ativo, certidões
- * positiva/somente física/pendente, alertas, trava de gravame e gate de
+ * positiva/somente física/pendente, alertas, gravame e gate de
  * conclusão. Limpa todos os dados no final.
  *
  * Uso: pnpm exec tsx scripts/e2e-full-project.ts
@@ -237,7 +237,7 @@ async function main() {
     });
     assert(Boolean(ownerRural.ownerId), "titularidade rural 100% registrada");
 
-    // PENDENTE não trava movimentação (só o vermelho trava).
+    // PENDENTE não trava movimentação.
     const ownerUrbano = await caller.properties.addOwner({
       propertyId: urbano.propertyId,
       personId: conjuge.personId,
@@ -246,7 +246,7 @@ async function main() {
     });
     assert(
       Boolean(ownerUrbano.ownerId),
-      "gravame PENDENTE não bloqueia movimentação (só o vermelho)"
+      "gravame PENDENTE não bloqueia movimentação"
     );
 
     // --- 4. sociedades LTDA e offshore + 100% -----------------------------
@@ -410,7 +410,7 @@ async function main() {
       "Pendente"
     );
 
-    // Vira HIPOTECA (vermelho) → a trava de movimentação passa a valer.
+    // Vira HIPOTECA → sociedade pode ser vinculada e editada sem trava de gravame.
     await caller.properties.update({
       propertyId: urbano.propertyId,
       description: "Casa urbana E2E",
@@ -421,26 +421,24 @@ async function main() {
       marketValue: 1000000,
       encumbranceType: "HIPOTECA",
     });
-    await expectError(
-      () =>
-        caller.properties.addOwner({
-          propertyId: urbano.propertyId,
-          personId: filho.personId,
-          ownershipPercentage: 10,
-          rightType: "PROPRIEDADE",
-        }),
-      "gravame vermelho (HIPOTECA) trava a titularidade",
-      "gravame ativo"
+    await assert(
+      await caller.properties.addOwner({
+        propertyId: urbano.propertyId,
+        personId: filho.personId,
+        ownershipPercentage: 10,
+        rightType: "PROPRIEDADE",
+      }),
+      "sociedade vinculada com gravame HIPOTECA não é bloqueada",
+      "não lançou erro"
     );
-    await expectError(
-      () =>
-        caller.properties.updateOwner({
-          propertyId: urbano.propertyId,
-          ownerId: ownerUrbano.ownerId,
-          ownershipPercentage: 60,
-        }),
-      "gravame vermelho trava a edição da titularidade",
-      "gravame ativo"
+    await assert(
+      await caller.properties.updateOwner({
+        propertyId: urbano.propertyId,
+        ownerId: ownerUrbano.ownerId,
+        ownershipPercentage: 60,
+      }),
+      "titularidade editada com gravame HIPOTECA não é bloqueada",
+      "não lançou erro"
     );
 
     // Gravame urbano deixa de ser PENDENTE → restam só as certidões vermelhas.
@@ -481,7 +479,7 @@ async function main() {
     console.log("  [x] Nenhum CPF/CNPJ inválido é aceito");
     console.log("  [x] Nenhuma soma de participação passa de 100%");
     console.log("  [x] Cônjuge único e menor sempre solteiro");
-    console.log("  [x] Gravame nasce Pendente; só o vermelho trava");
+    console.log("  [x] Gravame nasce Pendente; sociedade pode ser vinculada com qualquer gravame");
     console.log("  [x] Alertas refletem certidões positivas/somente físicas");
     console.log("  [x] Projeto não conclui com gravame pendente");
   } finally {

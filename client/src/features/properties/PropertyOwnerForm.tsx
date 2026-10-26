@@ -7,7 +7,6 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/trpcError";
 import { parsePercentual } from "@shared/validation";
-import type { EncumbranceSeverity } from "./types";
 import { propertyOwnerFieldCopy as copy } from "./propertyFieldCopy";
 
 type RightType = "PROPRIEDADE" | "USUFRUTO" | "NUA_PROPRIEDADE";
@@ -21,11 +20,9 @@ const rightTypeLabels: Record<RightType, string> = {
 export function PropertyOwnerForm({
   familyId,
   propertyId,
-  encumbranceSeverity,
 }: {
   familyId: string;
   propertyId: string;
-  encumbranceSeverity?: EncumbranceSeverity | null;
 }) {
   const utils = trpc.useUtils();
   const refresh = () => utils.properties.owners.invalidate({ propertyId });
@@ -77,7 +74,6 @@ export function PropertyOwnerForm({
   );
   const remaining = Math.max(0, Math.round((100 - total) * 100) / 100);
   const isFull = remaining <= 0;
-  const companyBlocked = encumbranceSeverity === "vermelho";
 
   const startEdit = (row: (typeof rows)[number]) => {
     setEditingId(row.id);
@@ -266,7 +262,7 @@ export function PropertyOwnerForm({
                 className={selectClass}
               >
                 <option value="PESSOA">Pessoa</option>
-                <option value="SOCIEDADE" disabled={companyBlocked}>
+                <option value="SOCIEDADE">
                   Sociedade
                 </option>
               </select>
@@ -298,7 +294,6 @@ export function PropertyOwnerForm({
                   value={companyId}
                   onChange={e => setCompanyId(e.target.value)}
                   className={selectClass}
-                  disabled={companyBlocked}
                 >
                   <option value="">{copy.company.placeholder}</option>
                   {companies.data?.map(company => (
@@ -360,12 +355,6 @@ export function PropertyOwnerForm({
           </Button>
         </div>
       )}
-      {companyBlocked ? (
-        <p className="text-xs font-medium text-red-800">
-          Gravame vermelho ativo: o vínculo com sociedade está travado até o
-          gravame ser resolvido.
-        </p>
-      ) : null}
     </div>
   );
 }

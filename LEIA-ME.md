@@ -29,7 +29,7 @@ notepad .env.local     # DATABASE_URL, TEST_DATABASE_URL, JWT_SECRET, STORAGE_RO
 psql -U postgres -h localhost -c "CREATE DATABASE lwos_db;"
 psql -U postgres -h localhost -c "CREATE DATABASE lwos_db_test;"
 
-# 5. Migrations (13, na ordem do journal — ver seção 3)
+# 5. Migrations (18, na ordem do journal — ver seção 3)
 $env:DATABASE_URL = "<url do lwos_db>"
 pnpm exec drizzle-kit migrate
 
@@ -47,10 +47,7 @@ pnpm dev
 ### Atualização de uma instalação existente
 
 Rode somente o passo 5 — o `drizzle-kit migrate` aplica apenas as migrations
-pendentes. Nesta entrega haviam 2 pendentes:
-`0012_file_blobs` e `20261009143825_fase2_schema_adjustments`
-(enxuga `families`, remove `otherAssets.marketValue`, troca a tabela
-`encumbrances` pela coluna `properties.encumbranceType`).
+pendentes.
 
 ## 3. Lista de migrations (ordem do journal)
 
@@ -69,6 +66,11 @@ pendentes. Nesta entrega haviam 2 pendentes:
 | 11 | `0011_company_details` | Ficha de detalhes da sociedade (holding) |
 | 12 | `0012_file_blobs` | Tabela `fileBlobs` (armazenamento de arquivos) |
 | 13 | `20261009143825_fase2_schema_adjustments` | Ajustes da Fase 2: `families` enxuta, gravame em `properties`, `otherAssets.marketValue` removido, checks de valores |
+| 14 | `0014_plain_green_goblin` | ... |
+| 15 | `0015_address_and_cep_fields` | Campos de endereço e CEP em imóveis |
+| 16 | `0016_asset_offshore_categories` | Categorias de ativos offshore |
+| 17 | `0017_company_administrators_and_stakeholder_cpf` | Administradores de sociedade e CPF de stakeholder |
+| 18 | `0018_titular_primary_contact_default` | Titular de contato com valor padrão |
 
 ## 4. Verificações (regressão da Fase 10)
 
@@ -87,7 +89,7 @@ pnpm exec tsx scripts/check-migrations-fresh.ts
 
 O E2E percorre: projeto com 2 objetivos → titular/cônjuge/filho menor →
 imóvel urbano (gravame nasce `PENDENTE`) e rural (CCIR/NIRF) → titularidade →
-gravame vermelho travando movimentação → LTDA (CNPJ com DV, quadro 100%) e
+gravame pode ser vinculado a sociedade com qualquer semáforo → LTDA (CNPJ com DV, quadro 100%) e
 offshore (sem CNPJ/certidões) → ativo → certidões (POSITIVA/SOMENTE_FISICA/
 pendente) → alertas vermelho/amarelo → gate de conclusão (gravame pendente e
 certidão vermelha sem justificativa) → conclusão com justificativa auditada.
@@ -129,7 +131,7 @@ Ver `docs/tbd-registry.md` para a tabela completa de decisões fechadas e
 - [x] Nenhum campo obrigatório é salvo vazio ou com placeholder
 - [x] Nenhuma soma de participação/titularidade passa de 100%
 - [x] Cônjuge único e menor sempre solteiro
-- [x] Gravame nasce Pendente; só o vermelho trava
+- [x] Gravame nasce Pendente; sociedade pode ser vinculada com qualquer gravame
 - [x] S/A não aceita Simples Nacional
 - [x] Cada documento tem um único lugar de upload
 - [x] Alertas vermelhos refletem certidões positivas ou somente físicas

@@ -1,7 +1,7 @@
 /**
  * @description Cobre o propertyRouter: listagem, criação com requisitos de
  * documento + auditoria, atualização, exclusão (arquiva documentos), e o ciclo
- * de titularidades (pessoa/sociedade) com a trava de gravame vermelho.
+ * de titularidades (pessoa/sociedade).
  * @see server/features/properties/property-router.ts
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";

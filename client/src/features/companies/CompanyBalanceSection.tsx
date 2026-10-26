@@ -45,14 +45,6 @@ export function CompanyBalanceSection({
           label={`Valor estimado da empresa (${currency})`}
           value={estimatedValue === null ? "" : formatarDinheiro(estimatedValue)}
         />
-        <p className="text-xs text-lucathi-gray sm:col-span-2">
-          Calculado automaticamente: caixa + estoque + créditos a receber + investimentos + ativos
-          imobilizados + lucros acumulados − obrigações trabalhistas − obrigações tributárias −
-          financiamentos. O PL não entra na conta.
-        </p>
-        <p className="text-xs text-lucathi-gray sm:col-span-2">
-          Balanço fechado e balancete (com data-base) são enviados na aba Matriz Documental.
-        </p>
       </div>
     </>
   );

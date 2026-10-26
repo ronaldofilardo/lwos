@@ -27,7 +27,7 @@ Origem: `Considerações_Documentos_LWOS_24out26.docx`. Os caminhos do zip são 
 
 ## Complemento (25/10/2026) — alertas de certidão
 - Certidão cujo documento foi **dispensado** ou marcado **"Não possui"** deixa de gerar alerta (!) em Pessoas/Sociedades, na contagem do resumo e no nível da lista de projetos. Implementado em `project-alerts-repository.ts` (sem migration; o status da certidão em si não muda). Ao dispensar, o resumo de alertas é recarregado na tela (`useDocumentActions.ts`).
-- Gravame **Pendente** continua bloqueando a conclusão do projeto, sem possibilidade de justificativa (comportamento já coberto por teste). A regra "só o vermelho trava" vale para a movimentação do imóvel, não para a conclusão do projeto.
+- Gravame **Pendente** continua bloqueando a conclusão do projeto, sem possibilidade de justificativa. A regra de vínculo de sociedade vale para qualquer semáforo de gravame.
 
 ## Testes (terminal do VS Code, na raiz do projeto)
 ```powershell

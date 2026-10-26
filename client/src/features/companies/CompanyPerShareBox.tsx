@@ -15,9 +15,6 @@ export function CompanyPerShareBox({
       <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
         Valores por quota/ação
       </p>
-      <p className="text-xs text-lucathi-gray">
-        Calculados: capital social ÷ qtd · PL ÷ qtd · valor de mercado ÷ qtd.
-      </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <ReadonlyField label="Valor contábil" value={formatAmount(values.contabil, international)} />
         <ReadonlyField

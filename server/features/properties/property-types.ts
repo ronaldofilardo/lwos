@@ -152,7 +152,7 @@ export const removePropertySchema = z.object({
   propertyId: z.string().min(1),
 });
 
-/** Gravames que travam a movimentação do imóvel (semáforo vermelho). */
+/** Semáforo vermelho: gravames distintos de PENDENTE, NA e NAO_HA. */
 export function isEncumbranceRed(value: string | null | undefined): boolean {
   return (
     Boolean(value) &&

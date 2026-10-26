@@ -291,7 +291,6 @@ export function PropertyRow({
       <PropertyOwnerForm
         familyId={familyId}
         propertyId={property.id}
-        encumbranceSeverity={severity}
       />
 
       <div className="rounded-lg border border-lucathi-line/40 bg-white/70 p-2.5 text-xs">
@@ -309,16 +308,6 @@ export function PropertyRow({
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <EncumbranceBadge value={property.encumbranceType} />
-          {severity === "amarelo" ? (
-            <span className="text-amber-800">
-              Em verificação — não trava a movimentação.
-            </span>
-          ) : null}
-          {severity === "vermelho" ? (
-            <span className="font-medium text-red-800">
-              Trava a movimentação do imóvel (vincular a sociedade e concluir).
-            </span>
-          ) : null}
         </div>
         {encumbrance.note ? (
           <p className="mt-1.5 text-lucathi-gray">
