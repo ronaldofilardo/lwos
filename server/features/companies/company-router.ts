@@ -89,43 +89,49 @@ export const companyRouter = router({
     });
 
     if (mappedData) {
-      await upsertCompanyDetailsRecord({
-        companyId,
-        fields: {
-          uf: mappedData.uf,
-          sede: mappedData.sede,
-          cep: mappedData.cep,
-          street: mappedData.street,
-          number: mappedData.number,
-          complement: mappedData.complement,
-          district: mappedData.district,
-          city: mappedData.city,
-          societaryType: mappedData.societaryType,
-          taxRegime: mappedData.taxRegime,
-          corporatePurpose: mappedData.corporatePurpose,
-          capitalSocial: mappedData.capitalSocial,
-          administrator1: mappedData.administrator1,
-          administrator2: mappedData.administrator2,
-        },
-      });
+      try {
+        await upsertCompanyDetailsRecord({
+          companyId,
+          fields: {
+            uf: mappedData.uf,
+            sede: mappedData.sede,
+            cep: mappedData.cep,
+            street: mappedData.street,
+            number: mappedData.number,
+            complement: mappedData.complement,
+            district: mappedData.district,
+            city: mappedData.city,
+            societaryType: mappedData.societaryType,
+            taxRegime: mappedData.taxRegime,
+            corporatePurpose: mappedData.corporatePurpose,
+            capitalSocial: mappedData.capitalSocial,
+            administrator1: mappedData.administrator1,
+            administrator2: mappedData.administrator2,
+          },
+        });
 
-      if (mappedData.stakeholders.length) {
-        const people = (await listPeopleByFamily(input.familyId)) ?? [];
-        for (const item of mappedData.stakeholders) {
-          try {
-            const match = people.find(
-              p => normalizeName(p.fullName) === normalizeName(item.name)
-            );
-            await createStakeholderRecord({
-              companyId,
-              personId: match?.id,
-              externalName: match ? undefined : item.name,
-              percentage: 0,
-            });
-          } catch {
-            // Ignora duplicidades pontuais de sócios
+        if (mappedData.stakeholders.length) {
+          const people = (await listPeopleByFamily(input.familyId)) ?? [];
+          for (const item of mappedData.stakeholders) {
+            try {
+              const match = people.find(
+                p => normalizeName(p.fullName) === normalizeName(item.name)
+              );
+              await createStakeholderRecord({
+                companyId,
+                personId: match?.id,
+                externalName: match ? undefined : item.name,
+                percentage: 0,
+              });
+            } catch {
+              // Ignora duplicidades pontuais de sócios
+            }
           }
         }
+      } catch {
+        // Falha ao gravar detalhes da API (ex.: tabela companyDetails não
+        // migrada) não deve impedir a criação da sociedade. A empresa já está
+        // criada; os detalhes podem ser complementados depois.
       }
     }
 
