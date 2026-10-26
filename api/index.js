@@ -3226,9 +3226,6 @@ function computeCompanyCategories(company) {
   }
   return [...COMPANY_LTD_CATEGORIES];
 }
-function computeAssetCategories() {
-  return [];
-}
 async function reconcileEntityDocuments(input) {
   const db = await requireDatabase();
   const existing = await db.select({
@@ -3277,7 +3274,7 @@ async function reconcileEntityDocuments(input) {
 }
 async function reconcileFamilyDocumentRequirements(familyId) {
   const db = await requireDatabase();
-  const [peopleRows, propertyRows, companyRows, assetRows] = await Promise.all([
+  const [peopleRows, propertyRows, companyRows] = await Promise.all([
     db.select({
       id: people.id,
       vinculo: people.vinculo,
@@ -3288,8 +3285,7 @@ async function reconcileFamilyDocumentRequirements(familyId) {
       kind: properties.kind,
       hasRegistration: properties.hasRegistration
     }).from(properties).where(eq12(properties.familyId, familyId)),
-    db.select({ id: companies.id, isOffshore: companies.isOffshore }).from(companies).where(eq12(companies.familyId, familyId)),
-    db.select({ id: otherAssets.id }).from(otherAssets).where(eq12(otherAssets.familyId, familyId))
+    db.select({ id: companies.id, isOffshore: companies.isOffshore }).from(companies).where(eq12(companies.familyId, familyId))
   ]);
   const detailRows = companyRows.length ? await db.select({
     companyId: companyDetails.companyId,
@@ -3330,13 +3326,6 @@ async function reconcileFamilyDocumentRequirements(familyId) {
         isOffshore: company.isOffshore,
         societaryType: societaryByCompany.get(company.id) ?? null
       })
-    });
-  }
-  for (const asset of assetRows) {
-    await reconcile({
-      entityType: "ATIVO",
-      entityId: asset.id,
-      categories: computeAssetCategories()
     });
   }
   return { created, removed };
@@ -6058,19 +6047,13 @@ var assetRouter = router({
     await assertFamilyAccess(ctx, input.familyId);
     await assertPersonInFamily(input.ownerPersonId, input.familyId);
     const assetId = await createAssetRecord(input);
-    const { created, removed } = await reconcileEntityDocuments({
-      familyId: input.familyId,
-      entityType: "ATIVO",
-      entityId: assetId,
-      categories: computeAssetCategories()
-    });
     await recordAudit({
       action: "ATIVO_CRIADO",
       entityType: "ATIVO",
       entityId: assetId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { category: input.category, description: input.description, requirements: created, requirementsRemoved: removed }
+      metadata: { category: input.category, description: input.description }
     });
     return { assetId };
   }),
@@ -6081,19 +6064,13 @@ var assetRouter = router({
     await assertFamilyAccess(ctx, asset.familyId);
     await assertPersonInFamily(input.ownerPersonId, asset.familyId);
     const result = await updateAssetRecord(input);
-    const { created, removed } = await reconcileEntityDocuments({
-      familyId: asset.familyId,
-      entityType: "ATIVO",
-      entityId: input.assetId,
-      categories: computeAssetCategories()
-    });
     await recordAudit({
       action: "ATIVO_ATUALIZADO",
       entityType: "ATIVO",
       entityId: input.assetId,
       actorUserId: user.id,
       familyId: asset.familyId,
-      metadata: { category: input.category, description: input.description, requirementsCreated: created, requirementsRemoved: removed }
+      metadata: { category: input.category, description: input.description }
     });
     return result;
   }),
