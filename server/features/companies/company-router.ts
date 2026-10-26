@@ -62,7 +62,12 @@ export const companyRouter = router({
   stakeholders: protectedProcedure.input(z.object({ companyId: z.string() })).query(async ({ ctx, input }) => {
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
-    return listStakeholderRecords(input.companyId);
+    try {
+      return await listStakeholderRecords(input.companyId);
+    } catch {
+      // Tabela companyStakeholders ainda não aplicada no banco.
+      return [];
+    }
   }),
   create: protectedProcedure.input(companyInputSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.COMPANY_CREATE);
@@ -229,10 +234,10 @@ export const companyRouter = router({
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     const [details, stakeholders, certidoes, people] = await Promise.all([
-      getCompanyDetailsRecord(company.id),
-      listStakeholderRecords(company.id),
-      listCertidaoRecords(company.familyId),
-      listPeopleByFamily(company.familyId),
+      getCompanyDetailsRecord(company.id).catch(() => null),
+      listStakeholderRecords(company.id).catch(() => []),
+      listCertidaoRecords(company.familyId).catch(() => []),
+      listPeopleByFamily(company.familyId).catch(() => []),
     ]);
     const names = new Map(people.map(person => [person.id, person.fullName]));
     return {
