@@ -67,24 +67,33 @@ export function DocumentActions({
   };
 
   const isDispensed = status === "DISPENSADO";
+  const isValidated = status === "VALIDADO";
+  const isNoPossui = status === "NAO_POSSUI";
+  const isResolved = isDispensed || isValidated || isNoPossui;
   const needsValidation = status === "RECEBIDO_EM_ANALISE";
+
+  const resolvedLabel = () => {
+    if (isDispensed) return "Documento dispensado";
+    if (isValidated) return "Documento validado";
+    if (isNoPossui) return "Não possui documento";
+    return "";
+  };
 
   return (
     <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
       <div className="flex flex-wrap items-center justify-end gap-2">
-        {isDispensed ? (
-          // Quando dispensado: mostra mensagem em vez de botões
+        {isResolved ? (
           <span className="text-purple-600 text-sm font-medium">
-            Documento dispensado
+            {resolvedLabel()}
           </span>
         ) : (
           <>
-            <input 
-              type="file" 
-              ref={fileRef} 
+            <input
+              type="file"
+              ref={fileRef}
               accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx"
-              className="hidden" 
-              onChange={e => upload(e.target.files?.[0])} 
+              className="hidden"
+              onChange={e => upload(e.target.files?.[0])}
             />
             {requiresReferenceDate ? (
               <label className="flex items-center gap-1.5 text-xs text-lucathi-gray">
@@ -115,76 +124,58 @@ export function DocumentActions({
           </>
         )}
 
-        {canReview ? (
+        {canReview && !isResolved ? (
           <>
-            {/* Ocultando botão Enviar Versão duplicado que existia aqui */}
+            <Button
+              size="sm"
+              disabled={busy || !needsValidation || disabled}
+              onClick={() => onReview("VALIDADO")}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+            >
+              <Check className="mr-1 size-3" /> Validar
+            </Button>
 
-            {isDispensed ? null : (
-              <Button
-                size="sm"
-                disabled={busy || !needsValidation || disabled}
-                onClick={() => onReview("VALIDADO")}
-                className="bg-emerald-700 hover:bg-emerald-800 text-white"
-              >
-                <Check className="mr-1 size-3" /> Validar
-              </Button>
-            )}
+            <input
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="Motivo da rejeição"
+              disabled={!needsValidation || disabled}
+              className="h-8 w-36 rounded-md border border-input px-2 text-xs"
+            />
 
-            {isDispensed ? null : (
-              <input
-                value={reason}
-                onChange={e => setReason(e.target.value)}
-                placeholder="Motivo da rejeição"
-                disabled={!needsValidation || disabled}
-                className="h-8 w-36 rounded-md border border-input px-2 text-xs"
-              />
-            )}
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={busy || reason.trim().length < 3 || !needsValidation || disabled}
+              onClick={() => onReview("REJEITADO", reason)}
+            >
+              <X className="mr-1 size-3" /> Rejeitar
+            </Button>
 
-            {isDispensed ? null : (
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={busy || reason.trim().length < 3 || !needsValidation || disabled}
-                onClick={() => onReview("REJEITADO", reason)}
-              >
-                <X className="mr-1 size-3" /> Rejeitar
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-purple-700 border-purple-200 hover:bg-purple-50"
+              disabled={busy || disabled}
+              onClick={() => setShowDispense(!showDispense)}
+            >
+              <Ban className="mr-1 size-3" /> Dispensar
+            </Button>
 
-            {isDispensed ? null : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-purple-700 border-purple-200 hover:bg-purple-50"
-                disabled={busy || disabled}
-                onClick={() => setShowDispense(!showDispense)}
-              >
-                <Ban className="mr-1 size-3" /> Dispensar
-              </Button>
-            )}
-
-            {isDispensed ? null : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-purple-700 border-purple-200 hover:bg-purple-50"
-                disabled={busy || disabled}
-                onClick={() => onReview("NAO_POSSUI")}
-              >
-                Não possui
-              </Button>
-            )}
-
-            {isDispensed ? (
-              <span className="text-purple-600 text-sm ml-2">
-                Dispensado por Sócio
-              </span>
-            ) : null}
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-purple-700 border-purple-200 hover:bg-purple-50"
+              disabled={busy || disabled}
+              onClick={() => onReview("NAO_POSSUI")}
+            >
+              Não possui
+            </Button>
           </>
         ) : null}
       </div>
 
-      {canReview && showDispense && !isDispensed ? (
+      {canReview && showDispense && !isDispensed && !isResolved ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <input
             value={dispenseReason}
