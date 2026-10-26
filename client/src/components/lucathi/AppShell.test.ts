@@ -9,6 +9,17 @@ const appShellMocks = vi.hoisted(() => ({
   familyQuery: vi.fn(),
 }));
 
+// Fixa "hoje" para 2026-10-19 (segunda-feira) de modo que o aniversário de
+// Ana (1990-10-19) caia nesta semana, tornando o teste determinístico
+// independentemente da data de execução.
+vi.mock("@shared/validation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@shared/validation")>();
+  return {
+    ...actual,
+    hoje: () => "2026-10-19",
+  };
+});
+
 vi.mock("@/_core/hooks/useAuth", () => ({
   useAuth: appShellMocks.useAuth,
 }));
