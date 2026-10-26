@@ -145,12 +145,12 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Select onValueChange={value => setSelectedMember(value ? { type: value as "PESSOA" | "SOCIEDADE", id: value.split(":")[1] } : null)}>
-              <SelectLabel>Membro / sociedade</SelectLabel>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos os membros" />
-              </SelectTrigger>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-lucathi-gray">Membro / sociedade</p>
+              <Select onValueChange={value => setSelectedMember(value ? { type: value as "PESSOA" | "SOCIEDADE", id: value.split(":")[1] } : null)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os membros" />
+                </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
                   <SelectLabel>Pessoas</SelectLabel>
