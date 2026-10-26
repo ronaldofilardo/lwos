@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Ban,
@@ -99,6 +99,13 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
   const [tab, setTab] = useState<TabType>("FAMILIARES");
   const [selectedEntity, setSelectedEntity] = useState<EntityPick | null>(null);
   const [viewType, setViewType] = useState<ViewType>("DOCUMENTOS");
+
+  // Reseta a entidade selecionada ao mudar de categoria (tab), pois uma
+  // entidade de "Familiares" não é válida para "Imóveis" e vice-versa.
+  useEffect(() => {
+    setSelectedEntity(null);
+    setViewType("DOCUMENTOS");
+  }, [tab]);
 
   const certidaoOwner = useMemo(() => {
     const ownerByDocId = new Map<string, string>();
@@ -226,14 +233,16 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
           </ToggleGroup>
         )}
 
-        {tab === "FAMILIARES" && !selectedEntity ? (
+        {tab === "FAMILIARES" ? (
           <div className="w-64 ml-3">
             <p className="text-xs text-lucathi-gray">Familiar</p>
             <Select
               onValueChange={value => setSelectedEntity(value ? { type: "PESSOA", id: value } : null)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione um familiar" />
+                <SelectValue placeholder="Selecione um familiar">
+                  {selectedEntity?.type === "PESSOA" ? personName.get(selectedEntity.id) : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
@@ -244,17 +253,24 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
                 </SelectGroup>
               </SelectContent>
             </Select>
+            {selectedEntity?.type === "PESSOA" && (
+              <Button size="sm" variant="ghost" onClick={() => setSelectedEntity(null)} className="ml-1">
+                Limpar
+              </Button>
+            )}
           </div>
         ) : null}
 
-        {tab === "SOCIEDADES" && !selectedEntity ? (
+        {tab === "SOCIEDADES" ? (
           <div className="w-64 ml-3">
             <p className="text-xs text-lucathi-gray">Sociedade</p>
             <Select
               onValueChange={value => setSelectedEntity(value ? { type: "SOCIEDADE", id: value } : null)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione uma sociedade" />
+                <SelectValue placeholder="Selecione uma sociedade">
+                  {selectedEntity?.type === "SOCIEDADE" ? companyName.get(selectedEntity.id) : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
@@ -265,17 +281,24 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
                 </SelectGroup>
               </SelectContent>
             </Select>
+            {selectedEntity?.type === "SOCIEDADE" && (
+              <Button size="sm" variant="ghost" onClick={() => setSelectedEntity(null)} className="ml-1">
+                Limpar
+              </Button>
+            )}
           </div>
         ) : null}
 
-        {tab === "IMOVEIS" && !selectedEntity ? (
+        {tab === "IMOVEIS" ? (
           <div className="w-64 ml-3">
             <p className="text-xs text-lucathi-gray">Imóvel</p>
             <Select
               onValueChange={value => setSelectedEntity(value ? { type: "IMOVEL", id: value } : null)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione um imóvel" />
+                <SelectValue placeholder="Selecione um imóvel">
+                  {selectedEntity?.type === "IMOVEL" ? propertyName.get(selectedEntity.id) : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
@@ -286,6 +309,11 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
                 </SelectGroup>
               </SelectContent>
             </Select>
+            {selectedEntity?.type === "IMOVEL" && (
+              <Button size="sm" variant="ghost" onClick={() => setSelectedEntity(null)} className="ml-1">
+                Limpar
+              </Button>
+            )}
           </div>
         ) : null}
       </div>
