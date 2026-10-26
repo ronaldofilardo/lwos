@@ -3,7 +3,6 @@ import {
   companies,
   companyDetails,
   documents,
-  otherAssets,
   people,
   properties,
 } from "../../../drizzle/schema";
@@ -171,7 +170,7 @@ export async function reconcileFamilyDocumentRequirements(
   familyId: string
 ): Promise<ReconcileResult> {
   const db = await requireDatabase();
-  const [peopleRows, propertyRows, companyRows, assetRows] =
+  const [peopleRows, propertyRows, companyRows] =
     await Promise.all([
       db
         .select({
@@ -193,10 +192,6 @@ export async function reconcileFamilyDocumentRequirements(
         .select({ id: companies.id, isOffshore: companies.isOffshore })
         .from(companies)
         .where(eq(companies.familyId, familyId)),
-      db
-        .select({ id: otherAssets.id })
-        .from(otherAssets)
-        .where(eq(otherAssets.familyId, familyId)),
     ]);
   const detailRows = companyRows.length
     ? await db
@@ -244,13 +239,6 @@ export async function reconcileFamilyDocumentRequirements(
         isOffshore: company.isOffshore,
         societaryType: societaryByCompany.get(company.id) ?? null,
       }),
-    });
-  }
-  for (const asset of assetRows) {
-    await reconcile({
-      entityType: "ATIVO",
-      entityId: asset.id,
-      categories: computeAssetCategories(),
     });
   }
 

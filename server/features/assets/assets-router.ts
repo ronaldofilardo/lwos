@@ -14,7 +14,6 @@ import {
   updateAssetRecord,
 } from "./assets-repository";
 import { createAssetSchema, removeAssetSchema, updateAssetSchema } from "./assets-types";
-import { computeAssetCategories, reconcileEntityDocuments } from "../documents/document-requirements";
 
 export const assetRouter = router({
   list: protectedProcedure.input(z.object({ familyId: z.string() })).query(async ({ ctx, input }) => {
@@ -26,19 +25,13 @@ export const assetRouter = router({
     await assertFamilyAccess(ctx, input.familyId);
     await assertPersonInFamily(input.ownerPersonId, input.familyId);
     const assetId = await createAssetRecord(input);
-    const { created, removed } = await reconcileEntityDocuments({
-      familyId: input.familyId,
-      entityType: "ATIVO",
-      entityId: assetId,
-      categories: computeAssetCategories(),
-    });
     await recordAudit({
       action: "ATIVO_CRIADO",
       entityType: "ATIVO",
       entityId: assetId,
       actorUserId: user.id,
       familyId: input.familyId,
-      metadata: { category: input.category, description: input.description, requirements: created, requirementsRemoved: removed },
+      metadata: { category: input.category, description: input.description },
     });
     return { assetId };
   }),
@@ -49,19 +42,13 @@ export const assetRouter = router({
     await assertFamilyAccess(ctx, asset.familyId);
     await assertPersonInFamily(input.ownerPersonId, asset.familyId);
     const result = await updateAssetRecord(input);
-    const { created, removed } = await reconcileEntityDocuments({
-      familyId: asset.familyId,
-      entityType: "ATIVO",
-      entityId: input.assetId,
-      categories: computeAssetCategories(),
-    });
     await recordAudit({
       action: "ATIVO_ATUALIZADO",
       entityType: "ATIVO",
       entityId: input.assetId,
       actorUserId: user.id,
       familyId: asset.familyId,
-      metadata: { category: input.category, description: input.description, requirementsCreated: created, requirementsRemoved: removed },
+      metadata: { category: input.category, description: input.description },
     });
     return result;
   }),

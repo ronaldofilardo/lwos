@@ -367,6 +367,6 @@ describe("reconcileFamilyDocumentRequirements", () => {
       reconcileFamilyDocumentRequirements("fam-vazia")
     ).resolves.toEqual({ created: 0, removed: 0 });
     expect(insertValues).not.toHaveBeenCalled();
-    expect(db.select).toHaveBeenCalledTimes(4);
+    expect(db.select).toHaveBeenCalledTimes(3);
   });
 });

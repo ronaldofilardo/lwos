@@ -13,10 +13,6 @@ const assetRepoMocks = vi.hoisted(() => ({
   updateAssetRecord: vi.fn(),
 }));
 const auditMocks = vi.hoisted(() => ({ recordAudit: vi.fn() }));
-const documentRequirementMocks = vi.hoisted(() => ({
-  reconcileEntityDocuments: vi.fn(),
-  computeAssetCategories: vi.fn(),
-}));
 const guardMocks = vi.hoisted(() => ({ assertPersonInFamily: vi.fn() }));
 const accessMocks = vi.hoisted(() => ({
   assertFamilyAccess: vi.fn(),
@@ -27,10 +23,6 @@ const accessMocks = vi.hoisted(() => ({
 vi.mock("./assets-repository", () => assetRepoMocks);
 vi.mock("../audit/audit-repository", () => auditMocks);
 vi.mock("../access/entity-guards", () => guardMocks);
-vi.mock("../documents/document-requirements", () => ({
-  reconcileEntityDocuments: documentRequirementMocks.reconcileEntityDocuments,
-  computeAssetCategories: documentRequirementMocks.computeAssetCategories,
-}));
 vi.mock("../access/family-access", () => ({
   assertFamilyAccess: accessMocks.assertFamilyAccess,
 }));
@@ -73,13 +65,6 @@ describe("assetRouter", () => {
     accessMocks.assertFamilyAccess.mockResolvedValue(undefined);
     guardMocks.assertPersonInFamily.mockResolvedValue(undefined);
     auditMocks.recordAudit.mockResolvedValue(undefined);
-    documentRequirementMocks.reconcileEntityDocuments.mockResolvedValue({
-      created: 2,
-      removed: 0,
-    });
-    documentRequirementMocks.computeAssetCategories.mockReturnValue([
-      "Comprovação de titularidade",
-    ]);
     assetRepoMocks.listAssetRecords.mockResolvedValue([{ id: "ativo-1" }]);
     assetRepoMocks.getAssetRecord.mockResolvedValue({
       id: "ativo-1",
@@ -100,20 +85,10 @@ describe("assetRouter", () => {
     );
   });
 
-  it("cria ativo, gera requisitos e audita ATIVO_CRIADO", async () => {
+  it("cria ativo e audita ATIVO_CRIADO", async () => {
     await expect(caller().create(validInput)).resolves.toEqual({
       assetId: "ativo-9",
     });
-    expect(
-      documentRequirementMocks.reconcileEntityDocuments
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        familyId: "fam-1",
-        entityType: "ATIVO",
-        entityId: "ativo-9",
-        categories: ["Comprovação de titularidade"],
-      })
-    );
     expect(auditMocks.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "ATIVO_CRIADO",
