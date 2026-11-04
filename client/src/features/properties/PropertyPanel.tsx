@@ -12,6 +12,10 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
   const [creating, setCreating] = useState(false);
 
   const list = trpc.properties.list.useQuery({ familyId });
+  const documents = trpc.documents.list.useQuery(
+    { familyId },
+    { enabled: Boolean(familyId) }
+  );
   const create = trpc.properties.create.useMutation({
     onSuccess: () => {
       utils.properties.list.invalidate({ familyId });
@@ -49,7 +53,12 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
 
       <div className="mt-5 space-y-3">
         {list.data?.map(item => (
-          <PropertyRow key={item.id} familyId={familyId} property={item} />
+          <PropertyRow
+            key={item.id}
+            familyId={familyId}
+            property={item}
+            documents={documents.data ?? []}
+          />
         ))}
         {!list.data?.length ? (
           <p className="text-sm text-lucathi-gray">Nenhum imóvel cadastrado.</p>

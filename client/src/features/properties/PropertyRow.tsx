@@ -75,9 +75,12 @@ function EncumbranceBadge({ value }: { value: string | null | undefined }) {
 export function PropertyRow({
   familyId,
   property,
+  documents = [],
 }: {
   familyId: string;
   property: Property;
+  /** Lista de documentos do projeto (fornecida pelo panel pai para evitar N queries). */
+  documents?: readonly { entityType: string; entityId: string; category: string; status: string }[];
 }) {
   const utils = trpc.useUtils();
   const [editing, setEditing] = useState(false);
@@ -113,12 +116,8 @@ export function PropertyRow({
   const hasNuaPropriedade = owners.data?.some(
     o => o.rightType === "NUA_PROPRIEDADE"
   );
-  // "!" do imóvel: entrega da matrícula (imóveis não têm certidões).
-  const documentsQuery = trpc.documents.list.useQuery(
-    { familyId },
-    { enabled: Boolean(familyId) }
-  );
-  const registrationAlert = matriculaAlert(documentsQuery.data ?? [], property.id);
+  // "!" do imóvel: entrega da matrícula — documentos passados pelo panel pai (evita N queries).
+  const registrationAlert = matriculaAlert(documents, property.id);
 
   const docTypeLabels: Record<string, string> = {
     ESCRITURA_PUBLICA: "Escritura Pública",

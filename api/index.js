@@ -3940,7 +3940,11 @@ var companyRouter = router({
   stakeholders: protectedProcedure.input(z12.object({ companyId: z12.string() })).query(async ({ ctx, input }) => {
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
-    return listStakeholderRecords(input.companyId);
+    try {
+      return await listStakeholderRecords(input.companyId);
+    } catch {
+      return [];
+    }
   }),
   create: protectedProcedure.input(companyInputSchema).mutation(async ({ ctx, input }) => {
     const user = requirePermission(ctx, Permission.COMPANY_CREATE);
@@ -3963,41 +3967,44 @@ var companyRouter = router({
       legalName: finalLegalName
     });
     if (mappedData) {
-      await upsertCompanyDetailsRecord({
-        companyId,
-        fields: {
-          uf: mappedData.uf,
-          sede: mappedData.sede,
-          cep: mappedData.cep,
-          street: mappedData.street,
-          number: mappedData.number,
-          complement: mappedData.complement,
-          district: mappedData.district,
-          city: mappedData.city,
-          societaryType: mappedData.societaryType,
-          taxRegime: mappedData.taxRegime,
-          corporatePurpose: mappedData.corporatePurpose,
-          capitalSocial: mappedData.capitalSocial,
-          administrator1: mappedData.administrator1,
-          administrator2: mappedData.administrator2
-        }
-      });
-      if (mappedData.stakeholders.length) {
-        const people2 = await listPeopleByFamily(input.familyId) ?? [];
-        for (const item of mappedData.stakeholders) {
-          try {
-            const match = people2.find(
-              (p) => normalizeName(p.fullName) === normalizeName(item.name)
-            );
-            await createStakeholderRecord({
-              companyId,
-              personId: match?.id,
-              externalName: match ? void 0 : item.name,
-              percentage: 0
-            });
-          } catch {
+      try {
+        await upsertCompanyDetailsRecord({
+          companyId,
+          fields: {
+            uf: mappedData.uf,
+            sede: mappedData.sede,
+            cep: mappedData.cep,
+            street: mappedData.street,
+            number: mappedData.number,
+            complement: mappedData.complement,
+            district: mappedData.district,
+            city: mappedData.city,
+            societaryType: mappedData.societaryType,
+            taxRegime: mappedData.taxRegime,
+            corporatePurpose: mappedData.corporatePurpose,
+            capitalSocial: mappedData.capitalSocial,
+            administrator1: mappedData.administrator1,
+            administrator2: mappedData.administrator2
+          }
+        });
+        if (mappedData.stakeholders.length) {
+          const people2 = await listPeopleByFamily(input.familyId) ?? [];
+          for (const item of mappedData.stakeholders) {
+            try {
+              const match = people2.find(
+                (p) => normalizeName(p.fullName) === normalizeName(item.name)
+              );
+              await createStakeholderRecord({
+                companyId,
+                personId: match?.id,
+                externalName: match ? void 0 : item.name,
+                percentage: 0
+              });
+            } catch {
+            }
           }
         }
+      } catch {
       }
     }
     let requirementsCount = 0;
@@ -4093,10 +4100,10 @@ var companyRouter = router({
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
     const [details, stakeholders, certidoes2, people2] = await Promise.all([
-      getCompanyDetailsRecord(company.id),
-      listStakeholderRecords(company.id),
-      listCertidaoRecords(company.familyId),
-      listPeopleByFamily(company.familyId)
+      getCompanyDetailsRecord(company.id).catch(() => null),
+      listStakeholderRecords(company.id).catch(() => []),
+      listCertidaoRecords(company.familyId).catch(() => []),
+      listPeopleByFamily(company.familyId).catch(() => [])
     ]);
     const names = new Map(people2.map((person) => [person.id, person.fullName]));
     return {
@@ -4305,8 +4312,29 @@ var ALLOWED_MIME_TYPES = /* @__PURE__ */ new Set([
   "image/webp",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 ]);
+function resolveMimeType(fileName, mimeType) {
+  if (ALLOWED_MIME_TYPES.has(mimeType)) return mimeType;
+  if (!mimeType || mimeType === "application/octet-stream") {
+    const ext = fileName.toLowerCase().split(".").pop();
+    switch (ext) {
+      case "pdf":
+        return "application/pdf";
+      case "jpg":
+      case "jpeg":
+        return "image/jpeg";
+      case "png":
+        return "image/png";
+      case "webp":
+        return "image/webp";
+      case "xlsx":
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    }
+  }
+  return mimeType;
+}
 async function storeDocumentVersion(input) {
-  if (!ALLOWED_MIME_TYPES.has(input.mimeType))
+  const mimeType = resolveMimeType(input.fileName, input.mimeType);
+  if (!ALLOWED_MIME_TYPES.has(mimeType))
     throw badRequest("Tipo de arquivo n\xE3o permitido.");
   const document = await getDocumentRecord(input.documentId);
   if (!document) throw notFound("Documento n\xE3o encontrado.");
@@ -4323,7 +4351,7 @@ async function storeDocumentVersion(input) {
   const nextVersion = document.currentVersion + 1;
   const familyFolder = await resolveFamilyStorageFolder(document.familyId);
   const relativeKey = `${familyFolder}/${document.id}/v${nextVersion}/${input.fileName}`;
-  const stored = await storagePut(relativeKey, bytes, input.mimeType);
+  const stored = await storagePut(relativeKey, bytes, mimeType);
   return withAdvisoryLock(
     requireDatabase(),
     "DOCUMENT_UPLOAD",
@@ -4337,7 +4365,7 @@ async function storeDocumentVersion(input) {
         documentId: document.id,
         versionNumber,
         originalName: input.fileName,
-        mimeType: input.mimeType,
+        mimeType,
         storageKey: stored.key,
         sha256,
         uploadedBy: String(input.userId)

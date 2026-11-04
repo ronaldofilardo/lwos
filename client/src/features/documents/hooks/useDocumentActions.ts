@@ -36,7 +36,7 @@ export function useDocumentActions(familyId: string) {
     uploadMutation.mutateAsync({
       documentId,
       fileName: file.name,
-      mimeType: file.type,
+      mimeType: file.type || "application/octet-stream",
       base64Data: await readAsBase64(file),
       ...(referenceDate ? { referenceDate } : {}),
     });

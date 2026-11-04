@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Ban, Check, Upload, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { hoje } from "@shared/validation/datas";
 
@@ -39,10 +40,15 @@ export function DocumentActions({
 
   const upload = async (file?: File) => {
     if (!file) return;
-    if (requiresReferenceDate && !referenceDate) return;
+    if (requiresReferenceDate && !referenceDate) {
+      toast.error("Informe a data-base antes de anexar o arquivo.");
+      return;
+    }
     try {
       await onUpload(file, requiresReferenceDate ? referenceDate : undefined);
       setReferenceDate("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao enviar arquivo.");
     } finally {
       // Permite escolher o mesmo arquivo de novo (o onChange não dispara sem limpar).
       if (fileRef.current) fileRef.current.value = "";

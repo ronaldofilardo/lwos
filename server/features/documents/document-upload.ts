@@ -23,6 +23,28 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
+function resolveMimeType(fileName: string, mimeType: string): string {
+  if (ALLOWED_MIME_TYPES.has(mimeType)) return mimeType;
+  // Só faz fallback por extensão se o mimeType for genérico ou vazio
+  if (!mimeType || mimeType === "application/octet-stream") {
+    const ext = fileName.toLowerCase().split(".").pop();
+    switch (ext) {
+      case "pdf":
+        return "application/pdf";
+      case "jpg":
+      case "jpeg":
+        return "image/jpeg";
+      case "png":
+        return "image/png";
+      case "webp":
+        return "image/webp";
+      case "xlsx":
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    }
+  }
+  return mimeType;
+}
+
 export async function storeDocumentVersion(input: {
   documentId: string;
   fileName: string;
@@ -30,7 +52,8 @@ export async function storeDocumentVersion(input: {
   base64Data: string;
   userId: number;
 }) {
-  if (!ALLOWED_MIME_TYPES.has(input.mimeType))
+  const mimeType = resolveMimeType(input.fileName, input.mimeType);
+  if (!ALLOWED_MIME_TYPES.has(mimeType))
     throw badRequest("Tipo de arquivo não permitido.");
   const document = await getDocumentRecord(input.documentId);
   if (!document) throw notFound("Documento não encontrado.");
@@ -54,7 +77,7 @@ export async function storeDocumentVersion(input: {
 
   // Upload do arquivo ANTES da transação (storage é idempotente por key).
   // Se a transação falhar, o arquivo fica órfão — limpeza periódica resolve.
-  const stored = await storagePut(relativeKey, bytes, input.mimeType);
+  const stored = await storagePut(relativeKey, bytes, mimeType);
 
   // Lock por documento para evitar race na versão (duplo envio simultâneo).
   return withAdvisoryLock(
@@ -77,7 +100,7 @@ export async function storeDocumentVersion(input: {
         documentId: document.id,
         versionNumber,
         originalName: input.fileName,
-        mimeType: input.mimeType,
+        mimeType,
         storageKey: stored.key,
         sha256,
         uploadedBy: String(input.userId),
