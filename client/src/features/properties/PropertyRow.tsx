@@ -89,9 +89,17 @@ export function PropertyRow({
   const owners = trpc.properties.owners.useQuery({ propertyId: property.id });
   const people = trpc.people.list.useQuery({ familyId });
 
+  // O valor mercado das sociedades e o Patrimônio sob Gestão dependem do
+  // marketValue dos imóveis — invalida também essas listas.
+  const refreshWealth = () => {
+    utils.companies.list.invalidate({ familyId });
+    utils.families.getManagedWealth.invalidate();
+  };
+
   const update = trpc.properties.update.useMutation({
     onSuccess: () => {
       utils.properties.list.invalidate({ familyId });
+      refreshWealth();
       setEditing(false);
       toast.success("Imóvel atualizado.");
     },
@@ -100,6 +108,7 @@ export function PropertyRow({
   const remove = trpc.properties.remove.useMutation({
     onSuccess: () => {
       utils.properties.list.invalidate({ familyId });
+      refreshWealth();
       setConfirmDelete(false);
       toast.success("Imóvel excluído.");
     },

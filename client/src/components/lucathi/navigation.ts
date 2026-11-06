@@ -1,9 +1,8 @@
-import { Building2, FileText, LayoutDashboard, UsersRound, Cake } from "lucide-react";
+import { Cake, FileText, Home, LayoutDashboard, UsersRound } from "lucide-react";
 
 export const navigationItems = [
-  { label: "Visão geral", path: "/", icon: LayoutDashboard },
+  { label: "Home", path: "/", icon: Home },
   { label: "Projetos", path: "/familias", icon: UsersRound },
-  { label: "Patrimônio", path: "/patrimonio", icon: Building2 },
   { label: "Relatórios", path: "/relatorios", icon: FileText },
   { label: "Aniversários", path: "/aniversarios", icon: Cake },
 ] as const;

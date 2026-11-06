@@ -1,7 +1,7 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { Input } from "@/components/ui/input";
 
-const THIRD_PARTY_VALUE = "__TERCEIRO__";
+export const THIRD_PARTY_VALUE = "__TERCEIRO__";
 
 type PersonOption = {
   id: string;
@@ -18,6 +18,26 @@ type Props = {
   onClear: () => void;
 };
 
+function storedMode(personIdValue: string, thirdPartyNameValue: string) {
+  if (personIdValue) return personIdValue;
+  if (thirdPartyNameValue) return THIRD_PARTY_VALUE;
+  return "";
+}
+
+/**
+ * Modo exibido no select: a escolha do usuário prevalece sobre o que está
+ * gravado. Era aqui que morava o bug: o modo era deduzido só do nome do
+ * terceiro, então escolher "Terceiro" com o campo vazio voltava para "Não
+ * informado" e o input nunca abria.
+ */
+export function resolveAdministratorMode(
+  chosenMode: string,
+  personIdValue: string,
+  thirdPartyNameValue: string
+) {
+  return chosenMode || storedMode(personIdValue, thirdPartyNameValue);
+}
+
 export function CompanyAdministratorSelect({
   label,
   personIdValue,
@@ -29,20 +49,23 @@ export function CompanyAdministratorSelect({
 }: Props) {
   const selectId = useId();
   const inputId = useId();
-
-  const isThirdParty = !personIdValue && Boolean(thirdPartyNameValue);
-  const selectedMode = personIdValue
-    ? personIdValue
-    : isThirdParty
-      ? THIRD_PARTY_VALUE
-      : "";
+  const [chosenMode, setChosenMode] = useState(
+    storedMode(personIdValue, thirdPartyNameValue)
+  );
+  const mode = resolveAdministratorMode(
+    chosenMode,
+    personIdValue,
+    thirdPartyNameValue
+  );
 
   const handleSelectChange = (value: string) => {
+    setChosenMode(value);
     if (!value) {
       onClear();
     } else if (value === THIRD_PARTY_VALUE) {
       onSelectPerson("");
-      onChangeThirdPartyName(thirdPartyNameValue || "");
+      // onSelectPerson limpa o nome do terceiro no formulário; restaura o valor.
+      onChangeThirdPartyName(thirdPartyNameValue);
     } else {
       onChangeThirdPartyName("");
       onSelectPerson(value);
@@ -56,7 +79,7 @@ export function CompanyAdministratorSelect({
       </label>
       <select
         id={selectId}
-        value={selectedMode}
+        value={mode}
         onChange={e => handleSelectChange(e.target.value)}
         className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-lucathi-navy focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
@@ -68,9 +91,9 @@ export function CompanyAdministratorSelect({
             </option>
           ))}
         </optgroup>
-        <option value={THIRD_PARTY_VALUE}>Terceiro (não-membro)</option>
+        <option value={THIRD_PARTY_VALUE}>Terceiro</option>
       </select>
-      {selectedMode === THIRD_PARTY_VALUE ? (
+      {mode === THIRD_PARTY_VALUE ? (
         <Input
           id={inputId}
           value={thirdPartyNameValue}

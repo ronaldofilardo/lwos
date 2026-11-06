@@ -101,6 +101,11 @@ describe("computePerShare", () => {
     });
   });
 
+  it("soma os imóveis da sociedade no valor mercado por quota", () => {
+    // (250.000 de balanço + 250.000 de imóveis) ÷ 1.000 quotas
+    expect(computePerShare(form, 250000).mercado).toBe(500);
+  });
+
   it("fica null sem quantidade de quotas", () => {
     expect(computePerShare({ ...form, shareQuantity: "" })).toEqual({
       contabil: null,

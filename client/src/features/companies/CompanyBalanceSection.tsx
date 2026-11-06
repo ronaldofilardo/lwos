@@ -10,7 +10,7 @@ const BALANCE_FIELDS: { key: keyof HoldingFormState; label: string }[] = [
   { key: "inventory", label: "Estoque" },
   { key: "accountsReceivable", label: "Créditos a receber" },
   { key: "investments", label: "Investimentos" },
-  { key: "fixedAssets", label: "Ativos Imobilizados" },
+  { key: "fixedAssets", label: "Ativos Imobilizados *" },
   { key: "retainedEarnings", label: "Lucros Acumulados" },
   { key: "taxLiabilities", label: "Obrigações tributárias" },
   { key: "laborLiabilities", label: "Obrigações trabalhistas" },
@@ -19,13 +19,16 @@ const BALANCE_FIELDS: { key: keyof HoldingFormState; label: string }[] = [
 
 export function CompanyBalanceSection({
   currency,
-  estimatedValue,
+  marketValue,
+  propertyValue,
   form,
   update,
 }: {
   currency: string;
-  /** Valor estimado derivado do balanço (somente leitura). */
-  estimatedValue: number | null;
+  /** Valor mercado = balanço apurado + valor dos imóveis (somente leitura). */
+  marketValue: number | null;
+  /** Imóveis em nome da sociedade, somados automaticamente (somente leitura). */
+  propertyValue: number;
   form: HoldingFormState;
   update: UpdateField;
 }) {
@@ -42,10 +45,18 @@ export function CompanyBalanceSection({
           />
         ))}
         <ReadonlyField
-          label={`Valor estimado da empresa (${currency})`}
-          value={estimatedValue === null ? "" : formatarDinheiro(estimatedValue)}
+          label={`Valor dos imóveis (${currency})`}
+          value={formatarDinheiro(propertyValue)}
+        />
+        <ReadonlyField
+          label={`Valor mercado (${currency})`}
+          value={marketValue === null ? "" : formatarDinheiro(marketValue)}
         />
       </div>
+      <p className="mt-2 text-xs text-lucathi-gray">
+        * Ativos Imobilizados: não lançar o valor dos imóveis — eles entram
+        automaticamente em “Valor dos imóveis”.
+      </p>
     </>
   );
 }

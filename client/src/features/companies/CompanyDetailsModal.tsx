@@ -46,8 +46,10 @@ export function CompanyDetailsModal({
   const company = data?.company;
   const international = company?.isOffshore === true;
   const currency = international ? "$" : "R$";
-  const totals = holdingTotalsFromForm(form);
-  const perShare = computePerShare(form);
+  // Imóveis em nome da sociedade: entram no valor mercado (derivado na leitura).
+  const propertyValue = data?.propertyValue ?? 0;
+  const totals = holdingTotalsFromForm(form, propertyValue);
+  const perShare = computePerShare(form, propertyValue);
 
   useEffect(() => {
     if (!data) return;
@@ -59,6 +61,8 @@ export function CompanyDetailsModal({
       utils.companies.getDetails.invalidate();
       utils.companies.list.invalidate({ familyId });
       utils.certidoes.list.invalidate({ familyId });
+      // O valor mercado alimenta o Patrimônio sob Gestão da Home.
+      utils.families.getManagedWealth.invalidate();
       toast.success("Detalhes da holding salvos.");
       onClose();
     },
@@ -131,7 +135,8 @@ export function CompanyDetailsModal({
           <Section title={`Balanço (${currency})`}>
             <CompanyBalanceSection
               currency={currency}
-              estimatedValue={totals.estimatedValue}
+              marketValue={totals.estimatedValue}
+              propertyValue={propertyValue}
               form={form}
               update={update}
             />

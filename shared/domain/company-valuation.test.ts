@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   companyTotalsFromRow,
   computeEstimatedValue,
+  computeMarketValue,
   computeStakeholderValues,
   computeUnitValues,
 } from "./company-valuation";
@@ -53,6 +54,26 @@ describe("computeEstimatedValue", () => {
   });
 });
 
+describe("computeMarketValue", () => {
+  it("soma o valor dos imóveis ao balanço apurado", () => {
+    expect(computeMarketValue(2700, 100_000)).toBe(102_700);
+  });
+
+  it("usa só os imóveis quando o balanço não foi preenchido", () => {
+    expect(computeMarketValue(null, "250000.50")).toBe(250_000.5);
+  });
+
+  it("mantém o balanço quando a sociedade não tem imóveis", () => {
+    expect(computeMarketValue(2700, null)).toBe(2700);
+    expect(computeMarketValue(2700, 0)).toBe(2700);
+  });
+
+  it("devolve null sem balanço e sem imóveis", () => {
+    expect(computeMarketValue(null, null)).toBeNull();
+    expect(computeMarketValue(null, 0)).toBeNull();
+  });
+});
+
 describe("companyTotalsFromRow", () => {
   it("converte a linha do banco e deriva o valor estimado", () => {
     expect(
@@ -67,6 +88,15 @@ describe("companyTotalsFromRow", () => {
       equity: 5000,
       estimatedValue: 2000,
       shareQuantity: 10000,
+    });
+  });
+
+  it("inclui os imóveis da sociedade no valor mercado (não no balanço)", () => {
+    expect(companyTotalsFromRow({ cashAndEquivalents: "2000.00" }, 500_000)).toEqual({
+      capitalSocial: null,
+      equity: null,
+      estimatedValue: 502_000,
+      shareQuantity: null,
     });
   });
 

@@ -22,12 +22,18 @@ import {
   people,
   projects,
   projectObjectives,
+  properties,
+  companies,
+  companyDetails,
+  otherAssets,
 } from "../../../drizzle/schema";
 import {
   createFamilyRecord,
   getDashboardData,
   getClientDashboardData,
+  getClientManagedWealth,
   getFamilyRecord,
+  getManagedWealth,
   listClientStorageFiles,
   listFamilyRecords,
   listStorageFiles,
@@ -46,6 +52,9 @@ type Scenario = {
   projectRows?: Record<string, unknown>[];
   titularRows?: { familyId: string; fullName: string; email: string | null; phone: string | null }[];
   objectiveRows?: { objective: string }[];
+  propertyTotal?: string | number | null;
+  companyTotal?: string | number | null;
+  assetTotal?: string | number | null;
 };
 
 function repoDb(scenario: Scenario) {
@@ -60,6 +69,11 @@ function repoDb(scenario: Scenario) {
     if (table === familyAccess) return scenario.accessRows ?? [];
     if (table === fileBlobs) return scenario.blobs ?? [];
     if (table === projects) return scenario.projectRows ?? [];
+    // Somas do patrimônio sob gestão (Fase 1).
+    if (table === properties) return [{ total: scenario.propertyTotal ?? null }];
+    if (table === companies || table === companyDetails)
+      return [{ balance: scenario.companyTotal ?? null }];
+    if (table === otherAssets) return [{ total: scenario.assetTotal ?? null }];
     // O dashboard consulta people como count; a listagem lê o titular.
     if (table === people)
       return scenario.titularRows ?? [{ count: scenario.peoplePerFamily ?? 0 }];
@@ -76,7 +90,7 @@ function repoDb(scenario: Scenario) {
       const limit = vi.fn(async () => rowsFor(table, "where"));
       const whereRows = () => rowsFor(table, "where");
       const listRows = () => rowsFor(table, "list");
-      return {
+      const chain = {
         limit,
         where: vi.fn(() => ({
           limit,
@@ -86,6 +100,8 @@ function repoDb(scenario: Scenario) {
         orderBy: vi.fn(() => ({ then: (resolve: (value: unknown) => unknown) => resolve(listRows()) })),
         then: (resolve: (value: unknown) => unknown) => resolve(rowsFor(table, "count")),
       };
+      // Somas por família (sociedades) partem de `companies` com innerJoin.
+      return { ...chain, innerJoin: vi.fn(() => chain) };
     }),
   }));
 
@@ -280,6 +296,61 @@ describe("family-repository dashboard", () => {
       totalPeople: 0,
       totalDocuments: 0,
       families: [],
+    });
+  });
+});
+
+describe("family-repository patrimônio sob gestão", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("soma imóveis, sociedades e demais ativos dos projetos ativos", async () => {
+    const { db } = repoDb({
+      projectRows: [
+        { familyId: "fam-1", status: "ATIVO" },
+        { familyId: "fam-2", status: "CONCLUIDO" },
+      ],
+      propertyTotal: "1500000.50",
+      companyTotal: "250000.25",
+      assetTotal: 49000,
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(getManagedWealth()).resolves.toEqual({
+      properties: 1500000.5,
+      companies: 250000.25,
+      otherAssets: 49000,
+      total: 1799000.75,
+    });
+  });
+
+  it("devolve zeros quando o escopo não tem famílias", async () => {
+    const { db } = repoDb({});
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(getManagedWealth([])).resolves.toEqual({
+      properties: 0,
+      companies: 0,
+      otherAssets: 0,
+      total: 0,
+    });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("apura o patrimônio do cliente a partir das famílias vinculadas", async () => {
+    const { db } = repoDb({
+      accessRows: [{ familyId: "fam-1" }],
+      projectRows: [{ familyId: "fam-1", status: "ATIVO" }],
+      propertyTotal: 100,
+      companyTotal: null,
+      assetTotal: "25.10",
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(getClientManagedWealth(7)).resolves.toEqual({
+      properties: 100,
+      companies: 0,
+      otherAssets: 25.1,
+      total: 125.1,
     });
   });
 });

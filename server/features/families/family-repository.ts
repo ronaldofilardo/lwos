@@ -1,4 +1,4 @@
-import { desc, eq, count, inArray, and } from "drizzle-orm";
+import { desc, eq, count, inArray, and, notInArray, sum } from "drizzle-orm";
 import {
   families as familiesTable,
   projects,
@@ -8,7 +8,12 @@ import {
   documents,
   familyAccess,
   fileBlobs,
+  properties,
+  companies,
+  companyDetails,
+  otherAssets,
 } from "../../../drizzle/schema";
+import { toNumberOrNull } from "../../../shared/domain/company-valuation";
 import { createId } from "../_shared/ids";
 import { requireDatabase } from "../_shared/database";
 import { readdir, stat } from "node:fs/promises";
@@ -186,6 +191,116 @@ export async function getDashboardData(allowedFamilyIds?: string[]) {
 export async function getClientDashboardData(userId: number) {
   const allowedFamilyIds = await getClientFamilyIds(userId);
   return getDashboardData(allowedFamilyIds);
+}
+
+export interface ManagedWealth {
+  properties: number;
+  companies: number;
+  otherAssets: number;
+  total: number;
+}
+
+const EMPTY_MANAGED_WEALTH: ManagedWealth = {
+  properties: 0,
+  companies: 0,
+  otherAssets: 0,
+  total: 0,
+};
+
+const round2 = (value: number) =>
+  Math.round((value + Number.EPSILON) * 100) / 100;
+
+/**
+ * Patrimônio sob Gestão: soma, apenas nos projetos ativos, do valor de mercado
+ * dos imóveis, do valor de mercado das sociedades e do valor declarado dos
+ * demais ativos.
+ *
+ * Regra anti-dupla-contagem: cada imóvel entra UMA única vez, pelo mesmo
+ * `properties.marketValue`. A sociedade entra somente pelo balanço apurado
+ * (`companyDetails.estimatedMarketValue`, que nunca inclui imóveis — o valor
+ * mercado do card soma os imóveis em nome da sociedade na leitura, sem gravar
+ * esse valor na coluna). Por isso não há desconto a fazer aqui.
+ *
+ * `allowedFamilyIds`, quando informado, restringe a apuração ao escopo do
+ * usuário — usado no perfil CLIENTE.
+ */
+export async function getManagedWealth(
+  allowedFamilyIds?: string[]
+): Promise<ManagedWealth> {
+  const db = await requireDatabase();
+  if (allowedFamilyIds !== undefined && allowedFamilyIds.length === 0) {
+    return { ...EMPTY_MANAGED_WEALTH };
+  }
+
+  // Projetos que não estão ATIVO (suspensos, concluídos, cancelados) ficam de
+  // fora da apuração do patrimônio sob gestão.
+  const projectRows = await db
+    .select({ familyId: projects.familyId, status: projects.status })
+    .from(projects);
+  const inactiveFamilyIds = projectRows
+    .filter(row => row.status !== "ATIVO")
+    .map(row => row.familyId);
+
+  const [propertyRow] = await db
+    .select({ total: sum(properties.marketValue) })
+    .from(properties)
+    .where(
+      and(
+        allowedFamilyIds
+          ? inArray(properties.familyId, allowedFamilyIds)
+          : undefined,
+        inactiveFamilyIds.length
+          ? notInArray(properties.familyId, inactiveFamilyIds)
+          : undefined
+      )
+    );
+
+  // Somente o balanço apurado da sociedade (sem imóveis) — ver regra
+  // anti-dupla-contagem na documentação da função.
+  const [companyRow] = await db
+    .select({ balance: sum(companyDetails.estimatedMarketValue) })
+    .from(companyDetails)
+    .innerJoin(companies, eq(companies.id, companyDetails.companyId))
+    .where(
+      and(
+        allowedFamilyIds
+          ? inArray(companies.familyId, allowedFamilyIds)
+          : undefined,
+        inactiveFamilyIds.length
+          ? notInArray(companies.familyId, inactiveFamilyIds)
+          : undefined
+      )
+    );
+
+  const [assetRow] = await db
+    .select({ total: sum(otherAssets.declaredValue) })
+    .from(otherAssets)
+    .where(
+      and(
+        allowedFamilyIds
+          ? inArray(otherAssets.familyId, allowedFamilyIds)
+          : undefined,
+        inactiveFamilyIds.length
+          ? notInArray(otherAssets.familyId, inactiveFamilyIds)
+          : undefined
+      )
+    );
+
+  const propertiesTotal = toNumberOrNull(propertyRow?.total) ?? 0;
+  const companiesTotal = toNumberOrNull(companyRow?.balance) ?? 0;
+  const otherAssetsTotal = toNumberOrNull(assetRow?.total) ?? 0;
+
+  return {
+    properties: round2(propertiesTotal),
+    companies: round2(companiesTotal),
+    otherAssets: round2(otherAssetsTotal),
+    total: round2(propertiesTotal + companiesTotal + otherAssetsTotal),
+  };
+}
+
+/** Patrimônio sob gestão restrito às famílias de um usuário CLIENTE. */
+export async function getClientManagedWealth(userId: number) {
+  return getManagedWealth(await getClientFamilyIds(userId));
 }
 
 /**

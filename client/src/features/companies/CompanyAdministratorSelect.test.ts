@@ -1,7 +1,11 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { CompanyAdministratorSelect } from "./CompanyAdministratorSelect";
+import {
+  CompanyAdministratorSelect,
+  THIRD_PARTY_VALUE,
+  resolveAdministratorMode,
+} from "./CompanyAdministratorSelect";
 
 describe("CompanyAdministratorSelect", () => {
   const people = [
@@ -26,7 +30,7 @@ describe("CompanyAdministratorSelect", () => {
     expect(markup).toContain("Não informado");
     expect(markup).toContain("Ana Silva");
     expect(markup).toContain("Bruno Silva");
-    expect(markup).toContain("Terceiro (não-membro)");
+    expect(markup).toContain(">Terceiro<");
     // Campo de texto de terceiro não é exibido quando não está selecionado
     expect(markup).not.toContain("Nome completo do terceiro");
   });
@@ -46,6 +50,19 @@ describe("CompanyAdministratorSelect", () => {
 
     expect(markup).toContain("Carlos Consultor");
     expect(markup).toContain("Nome completo do terceiro");
+  });
+
+  it("mantém \"Terceiro\" selecionado mesmo sem nome digitado", () => {
+    // Regressão: o modo era deduzido do nome, então escolher "Terceiro" com o
+    // campo vazio voltava para "Não informado" e o input nunca abria.
+    expect(resolveAdministratorMode(THIRD_PARTY_VALUE, "", "")).toBe(
+      THIRD_PARTY_VALUE
+    );
+    expect(resolveAdministratorMode("", "", "Carlos Consultor")).toBe(
+      THIRD_PARTY_VALUE
+    );
+    expect(resolveAdministratorMode("", "p1", "")).toBe("p1");
+    expect(resolveAdministratorMode("", "", "")).toBe("");
   });
 
   it("seleciona membro da família quando personIdValue está preenchido", () => {

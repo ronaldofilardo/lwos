@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
+  Calculator,
   CheckCircle2,
   FileStack,
   FolderKanban,
+  Landmark,
   Layers,
   Presentation,
   ShieldCheck,
@@ -20,15 +22,16 @@ import { DocumentPanel } from "@/features/documents/DocumentPanel";
 import { PropertyPanel } from "@/features/properties/PropertyPanel";
 import { CompanyPanel } from "@/features/companies/CompanyPanel";
 import { AssetsPanel } from "@/features/assets/AssetsPanel";
+import { CalculationsTab } from "@/features/calculations/CalculationsTab";
 import { LwrPanel } from "@/features/reports/LwrPanel";
 import { FinancialProposalPanel } from "@/features/proposals/FinancialProposalPanel";
 import { PortalPanel } from "@/features/portal/PortalPanel";
 import { AuditPanel } from "@/features/audit/AuditPanel";
-import { ProcessTimeline } from "./common/ProcessTimeline";
-import { UnifiedRequirementsMap } from "./common/UnifiedRequirementsMap";
+import { PatrimonySummary } from "./common/PatrimonySummary";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
 import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
 import { isClient } from "@shared/domain/permissions";
+import { ProjectHealthDashboard } from "./dashboard/ProjectHealthDashboard";
 import {
   projectObjectiveLabels,
   projectStatusLabels,
@@ -241,19 +244,31 @@ export function FamilyWorkspacePage() {
             value="due-diligence"
             className="data-[state=active]:bg-white data-[state=active]:text-lucathi-navy data-[state=active]:shadow-sm rounded-lg px-4 py-2 text-xs font-semibold gap-2"
           >
-            <Layers className="size-4" /> Due Diligence (4 Pilares)
-          </TabsTrigger>
-          <TabsTrigger
-            value="lwr-proposta"
-            className="data-[state=active]:bg-white data-[state=active]:text-lucathi-navy data-[state=active]:shadow-sm rounded-lg px-4 py-2 text-xs font-semibold gap-2"
-          >
-            <Presentation className="size-4" /> LWR & Proposta Financeira
+            <Layers className="size-4" /> Due Diligence
           </TabsTrigger>
           <TabsTrigger
             value="documentos"
             className="data-[state=active]:bg-white data-[state=active]:text-lucathi-navy data-[state=active]:shadow-sm rounded-lg px-4 py-2 text-xs font-semibold gap-2"
           >
             <FileStack className="size-4" /> Documentos e Certidões
+          </TabsTrigger>
+          <TabsTrigger
+            value="patrimonio"
+            className="data-[state=active]:bg-white data-[state=active]:text-lucathi-navy data-[state=active]:shadow-sm rounded-lg px-4 py-2 text-xs font-semibold gap-2"
+          >
+            <Landmark className="size-4" /> Patrimônio
+          </TabsTrigger>
+          <TabsTrigger
+            value="calculos"
+            className="data-[state=active]:bg-white data-[state=active]:text-lucathi-navy data-[state=active]:shadow-sm rounded-lg px-4 py-2 text-xs font-semibold gap-2"
+          >
+            <Calculator className="size-4" /> Cálculos
+          </TabsTrigger>
+          <TabsTrigger
+            value="lwr-proposta"
+            className="data-[state=active]:bg-white data-[state=active]:text-lucathi-navy data-[state=active]:shadow-sm rounded-lg px-4 py-2 text-xs font-semibold gap-2"
+          >
+            <Presentation className="size-4" /> LWR & Proposta Financeira
           </TabsTrigger>
           <TabsTrigger
             value="portal-auditoria"
@@ -269,35 +284,43 @@ export function FamilyWorkspacePage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ABA 1: DUE DILIGENCE (4 PILARES) */}
+        {/* ABA 1: DUE DILIGENCE */}
         <TabsContent value="due-diligence" className="space-y-6">
           <div className="rounded-2xl border border-lucathi-line/80 bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
               Planilha de Due Diligence Patrimonial & Sucessória
             </p>
             <p className="mt-1 text-sm text-lucathi-navy">
-              Organização unificada dos 4 pilares: <strong>Família</strong>,{" "}
-              <strong>Imóveis</strong>, <strong>Sociedades</strong> e{" "}
-              <strong>Demais Ativos</strong>.
+              Pilar <strong>Família</strong>: composição familiar, titulares e
+              requisitos de cada membro. Imóveis, sociedades e demais ativos
+              ficam na aba <strong>Patrimônio</strong>.
             </p>
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-2">
-            {/* Pilar 1: Família */}
-            <div className="space-y-6">
-              <PeoplePanel familyId={familyId} />
-              <CompanyPanel familyId={familyId} />
-            </div>
-
-            {/* Pilar 2 & 4: Imóveis e Ativos */}
-            <div className="space-y-6">
-              <PropertyPanel familyId={familyId} />
-              <AssetsPanel familyId={familyId} />
-            </div>
-          </div>
+          <PeoplePanel familyId={familyId} />
         </TabsContent>
 
-        {/* ABA 2: LWR & PROPOSTA FINANCEIRA */}
+        {/* ABA 2: DOCUMENTOS E CERTIDÕES */}
+        <TabsContent value="documentos" className="space-y-6">
+          <DocumentPanel familyId={familyId} />
+        </TabsContent>
+
+        {/* ABA 3: PATRIMÔNIO — visão consolidada do projeto */}
+        <TabsContent value="patrimonio" className="space-y-6">
+          <PatrimonySummary familyId={familyId} />
+          <div className="grid gap-6 xl:grid-cols-2">
+            <PropertyPanel familyId={familyId} />
+            <CompanyPanel familyId={familyId} />
+          </div>
+          <AssetsPanel familyId={familyId} />
+        </TabsContent>
+
+        {/* ABA 4: CÁLCULOS — patrimônio consolidado e motor tributário */}
+        <TabsContent value="calculos" className="space-y-6">
+          <CalculationsTab familyId={familyId} />
+        </TabsContent>
+
+        {/* ABA 5: LWR & PROPOSTA FINANCEIRA */}
         <TabsContent value="lwr-proposta" className="space-y-6">
           <div className="grid gap-6 xl:grid-cols-2">
             <LwrPanel familyId={familyId} />
@@ -305,12 +328,7 @@ export function FamilyWorkspacePage() {
           </div>
         </TabsContent>
 
-        {/* ABA 3: DOCUMENTOS E CERTIDÕES */}
-        <TabsContent value="documentos" className="space-y-6">
-          <DocumentPanel familyId={familyId} />
-        </TabsContent>
-
-        {/* ABA 4: PORTAL & AUDITORIA */}
+        {/* ABA 6: PORTAL & AUDITORIA */}
         <TabsContent value="portal-auditoria" className="space-y-6">
           <div className="grid gap-6 xl:grid-cols-2">
             <PortalPanel familyId={familyId} />
@@ -318,10 +336,9 @@ export function FamilyWorkspacePage() {
           </div>
         </TabsContent>
 
-        {/* ABA 5: VISÃO UNIFICADA COMPLETA — mapa visual + timeline */}
+        {/* ABA 7: VISÃO UNIFICADA COMPLETA — dashboard executivo do projeto */}
         <TabsContent value="visao-unificada" className="space-y-6">
-          <UnifiedRequirementsMap familyId={familyId} />
-          <ProcessTimeline familyId={familyId} />
+          <ProjectHealthDashboard familyId={familyId} />
         </TabsContent>
       </Tabs>
     </section>

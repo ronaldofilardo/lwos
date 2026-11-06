@@ -148,13 +148,7 @@ export function ProcessTimeline({ familyId }: { familyId: string }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
             Visão Unificada Completa
           </p>
-          <h2 className="mt-1 font-display text-xl text-lucathi-navy">
-            Linha do tempo do processo
-          </h2>
-          <p className="mt-1 text-sm text-lucathi-gray">
-            Da origem do interesse até o momento atual da família — resumo das
-            etapas, sem repetir a matriz documental.
-          </p>
+
         </div>
         <div className="min-w-[10rem] rounded-xl bg-lucathi-mist px-4 py-3 text-center">
           <p className="text-2xl font-semibold text-lucathi-navy">

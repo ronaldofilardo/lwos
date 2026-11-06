@@ -25,7 +25,13 @@ export function PropertyOwnerForm({
   propertyId: string;
 }) {
   const utils = trpc.useUtils();
-  const refresh = () => utils.properties.owners.invalidate({ propertyId });
+  // Titularidade mudou: o valor dos imóveis (e o mercado) das sociedades muda junto.
+  const refresh = () => {
+    utils.properties.owners.invalidate({ propertyId });
+    utils.companies.list.invalidate({ familyId });
+    utils.companies.getDetails.invalidate();
+    utils.families.getManagedWealth.invalidate();
+  };
 
   const people = trpc.people.list.useQuery({ familyId });
   const companies = trpc.companies.list.useQuery({ familyId });

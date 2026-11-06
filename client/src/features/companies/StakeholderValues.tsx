@@ -1,6 +1,16 @@
 import type { ValuationTriple } from "@shared/domain/company-valuation";
 import { formatAmount } from "./holdingDetails";
 
+const VALUE_FIELDS: {
+  key: keyof ValuationTriple;
+  shortLabel: string;
+  tooltip: string;
+}[] = [
+  { key: "contabil", shortLabel: "V.C.", tooltip: "Valor Contábil" },
+  { key: "patrimonial", shortLabel: "V.P.", tooltip: "Valor Patrimonial" },
+  { key: "mercado", shortLabel: "V.M.", tooltip: "Valor de Mercado" },
+];
+
 /** Participação do sócio em valor contábil, patrimonial e de mercado (moeda da sociedade). */
 export function StakeholderValues({
   values,
@@ -13,11 +23,15 @@ export function StakeholderValues({
 }) {
   return (
     <p className={className}>
-      <span>Contábil {formatAmount(values.contabil, international)}</span>
-      {" · "}
-      <span>Patrimonial {formatAmount(values.patrimonial, international)}</span>
-      {" · "}
-      <span>Mercado {formatAmount(values.mercado, international)}</span>
+      {VALUE_FIELDS.map((field, index) => (
+        <span key={field.key}>
+          {index > 0 ? " – " : null}
+          <span className="cursor-help font-medium" title={field.tooltip}>
+            {field.shortLabel}
+          </span>{" "}
+          {formatAmount(values[field.key], international)}
+        </span>
+      ))}
     </p>
   );
 }

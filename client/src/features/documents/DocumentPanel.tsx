@@ -1,4 +1,4 @@
-import { ChevronDown, FileStack, RefreshCw, User, Building2 } from "lucide-react";
+import { BarChart3, ChevronDown, FileStack, RefreshCw, User, Building2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -13,6 +13,7 @@ import {
   certidaoStatusValues,
 } from "@/features/certidoes/types";
 import { DocumentActions } from "./common/DocumentActions";
+import { DocumentSummary } from "./common/DocumentSummary";
 import { DocumentVersionHistory } from "./common/DocumentVersionHistory";
 import { useDocumentActions } from "./hooks/useDocumentActions";
 import { useDocuments } from "./hooks/useDocuments";
@@ -37,6 +38,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
   const [sameAddressState, setSameAddressState] = useState<Record<string, boolean>>({});
   const [selectedMember, setSelectedMember] = useState<{ type: "PESSOA" | "SOCIEDADE"; id: string } | null>(null);
   const [viewType, setViewType] = useState<"DOCUMENTOS" | "CERTIDOES">("DOCUMENTOS");
+  const [showSummary, setShowSummary] = useState(false);
   // Blocos e membros começam contraídos (Fase 8): estado por chave.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -179,6 +181,13 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
               <Building2 className="mr-2 size-3.5" /> Certidões
             </ToggleGroupItem>
           </ToggleGroup>
+          <Button
+            variant={showSummary ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowSummary(open => !open)}
+          >
+            <BarChart3 className="mr-1.5 size-4" /> Resumo
+          </Button>
           {canEditFlag ? (
             <Button
               variant="outline"
@@ -204,6 +213,15 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
           ) : null}
         </div>
       </div>
+
+      {showSummary ? (
+        <div className="mt-4">
+          <DocumentSummary
+            documents={matrixDocuments.filter(doc => !("isCertidao" in doc))}
+            certidoes={certidoes.data ?? []}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-5 space-y-5">
         {loading ? (

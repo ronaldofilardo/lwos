@@ -13,6 +13,8 @@ const familyRepoMocks = vi.hoisted(() => ({
   getDashboardData: vi.fn(),
   listStorageFiles: vi.fn(),
   getClientDashboardData: vi.fn(),
+  getManagedWealth: vi.fn(),
+  getClientManagedWealth: vi.fn(),
   listClientStorageFiles: vi.fn(),
   setProjectStatusRecord: vi.fn(),
 }));
@@ -147,11 +149,25 @@ describe("family-router consultas", () => {
     expect(familyRepoMocks.listStorageFiles).toHaveBeenCalled();
   });
 
+  it("expõe o patrimônio sob gestão conforme o papel", async () => {
+    familyRepoMocks.getClientManagedWealth.mockResolvedValue({ total: 10 });
+    familyRepoMocks.getManagedWealth.mockResolvedValue({ total: 99 });
+
+    await expect(caller("CLIENTE").getManagedWealth()).resolves.toEqual({ total: 10 });
+    expect(familyRepoMocks.getClientManagedWealth).toHaveBeenCalledWith(7);
+
+    await expect(caller("SOCIO").getManagedWealth()).resolves.toEqual({ total: 99 });
+    await expect(caller("ADMIN").getManagedWealth()).resolves.toEqual({ total: 99 });
+    expect(familyRepoMocks.getManagedWealth).toHaveBeenCalledTimes(2);
+  });
+
   it("bloqueia analista no painel e no armazenamento", async () => {
     await expect(caller("ANALISTA").getDashboard()).rejects.toThrow("Permissão insuficiente.");
     await expect(caller("ANALISTA").listStorage()).rejects.toThrow("Permissão insuficiente.");
+    await expect(caller("ANALISTA").getManagedWealth()).rejects.toThrow("Permissão insuficiente.");
     expect(familyRepoMocks.getDashboardData).not.toHaveBeenCalled();
     expect(familyRepoMocks.listStorageFiles).not.toHaveBeenCalled();
+    expect(familyRepoMocks.getManagedWealth).not.toHaveBeenCalled();
   });
 });
 

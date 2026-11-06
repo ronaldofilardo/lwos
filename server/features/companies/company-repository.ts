@@ -1,12 +1,14 @@
-import { and, eq } from "drizzle-orm";
+import { and, count, eq, isNotNull, sql } from "drizzle-orm";
 import {
   certidoes,
   companies,
   companyDetails,
   companyStakeholders,
   documents,
+  properties,
   propertyOwners,
 } from "../../../drizzle/schema";
+import { toNumberOrNull } from "../../../shared/domain/company-valuation";
 import { requireDatabase } from "../_shared/database";
 import { createId } from "../_shared/ids";
 import type { z } from "zod";
@@ -80,9 +82,56 @@ export async function getCompanyRecord(companyId: string) {
   return result[0] ?? null;
 }
 
+export type CompanyPropertyLink = {
+  /** Quantidade de imóveis em que a sociedade figura como titular. */
+  propertyCount: number;
+  /** Soma do valor de mercado ponderada pela participação (%) da sociedade. */
+  propertyValue: number;
+};
+
+const EMPTY_PROPERTY_LINK: CompanyPropertyLink = { propertyCount: 0, propertyValue: 0 };
+
+/**
+ * Imóveis em que a sociedade é titular, agregados por sociedade. O valor é
+ * proporcional à participação dela (`ownershipPercentage`) — um imóvel de
+ * 1 mi com 50% da holding soma 500 mil ao valor mercado da holding. É a fonte
+ * única do "Valor dos imóveis" da ficha e do valor mercado do card, e NUNCA é
+ * gravado em `companyDetails.estimatedMarketValue` (que guarda só o balanço),
+ * para o patrimônio sob gestão não contar o mesmo imóvel duas vezes.
+ */
+export async function listCompanyPropertyLinks(familyId: string) {
+  const db = await requireDatabase();
+  const rows = await db
+    .select({
+      companyId: propertyOwners.companyId,
+      propertyCount: count(propertyOwners.id),
+      propertyValue: sql<string | null>`sum(${properties.marketValue} * ${propertyOwners.ownershipPercentage} / 100)`,
+    })
+    .from(propertyOwners)
+    .innerJoin(properties, eq(properties.id, propertyOwners.propertyId))
+    .where(and(eq(properties.familyId, familyId), isNotNull(propertyOwners.companyId)))
+    .groupBy(propertyOwners.companyId);
+
+  const links = new Map<string, CompanyPropertyLink>();
+  for (const row of rows) {
+    if (!row.companyId) continue;
+    links.set(row.companyId, {
+      propertyCount: Number(row.propertyCount ?? 0),
+      propertyValue: toNumberOrNull(row.propertyValue) ?? 0,
+    });
+  }
+  return links;
+}
+
+/** Imóveis de uma sociedade (usado na ficha de detalhes). */
+export async function getCompanyPropertyLink(familyId: string, companyId: string) {
+  const links = await listCompanyPropertyLinks(familyId);
+  return links.get(companyId) ?? EMPTY_PROPERTY_LINK;
+}
+
 export async function listCompanyRecords(familyId: string) {
   const db = await requireDatabase();
-  return db
+  const rows = await db
     .select({
       id: companies.id,
       familyId: companies.familyId,
@@ -109,6 +158,12 @@ export async function listCompanyRecords(familyId: string) {
     .from(companies)
     .leftJoin(companyDetails, eq(companyDetails.companyId, companies.id))
     .where(eq(companies.familyId, familyId));
+
+  const propertyLinks = await listCompanyPropertyLinks(familyId);
+  return rows.map(row => ({
+    ...row,
+    ...(propertyLinks.get(row.id) ?? EMPTY_PROPERTY_LINK),
+  }));
 }
 
 export async function listStakeholderRecords(companyId: string) {

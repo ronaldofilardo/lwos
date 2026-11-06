@@ -24,6 +24,8 @@ import {
   getDashboardData,
   listStorageFiles,
   getClientDashboardData,
+  getManagedWealth,
+  getClientManagedWealth,
   listClientStorageFiles,
   setProjectStatusRecord,
 } from "./family-repository";
@@ -251,6 +253,13 @@ export const familyRouter = router({
     if (user.role === "CLIENTE") return getClientDashboardData(user.id);
     requirePermission(ctx, Permission.FAMILY_GET_DASHBOARD);
     return getDashboardData();
+  }),
+  /** Patrimônio sob Gestão da Home: imóveis + sociedades + demais ativos. */
+  getManagedWealth: protectedProcedure.query(async ({ ctx }) => {
+    const user = ctx.user!;
+    if (user.role === "CLIENTE") return getClientManagedWealth(user.id);
+    requirePermission(ctx, Permission.FAMILY_GET_DASHBOARD);
+    return getManagedWealth();
   }),
   listStorage: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user!;

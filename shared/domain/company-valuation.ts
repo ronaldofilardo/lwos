@@ -1,10 +1,16 @@
 /**
  * Valoração da sociedade (fonte única para cliente e servidor).
  *
- * Valor estimado da empresa = Caixa + Estoque + Créditos a receber +
- * Investimentos + Ativo Imobilizado + Lucros Acumulados
- *   − Obrigações trabalhistas − Obrigações tributárias − Financiamentos.
+ * Balanço apurado = Caixa + Estoque + Créditos a receber + Investimentos +
+ * Ativo Imobilizado + Lucros Acumulados − Obrigações trabalhistas −
+ * Obrigações tributárias − Financiamentos.
  * O PL NÃO entra na conta. O campo não é digitado: sempre derivado.
+ *
+ * Valor mercado = balanço apurado + valor dos imóveis em nome da sociedade.
+ * Os imóveis NÃO entram no balanço (nem no ativo imobilizado): são somados na
+ * leitura, a partir de `propertyOwners`, para que editar um imóvel não deixe o
+ * valor da sociedade desatualizado e para que o patrimônio sob gestão some
+ * cada imóvel uma única vez.
  */
 
 type Num = number | string | null | undefined;
@@ -64,18 +70,34 @@ export function computeEstimatedValue(input: EstimatedValueInput): number | null
   return round2(sum(assets) - sum(liabilities));
 }
 
+/**
+ * Valor mercado da sociedade: balanço apurado + imóveis em seu nome.
+ * `propertyValue` é a soma de `marketValue` ponderada pela participação
+ * (propertyOwners) e nunca é gravada na coluna do balanço.
+ */
+export function computeMarketValue(
+  balanceValue: number | null,
+  propertyValue: Num
+): number | null {
+  const properties = toNumberOrNull(propertyValue) ?? 0;
+  if (balanceValue === null && properties === 0) return null;
+  return round2((balanceValue ?? 0) + properties);
+}
+
 /** Totais da sociedade a partir de uma linha de detalhes (valores numéricos ou texto do banco). */
 export function companyTotalsFromRow(
   row: (EstimatedValueInput & {
     capitalSocial?: Num;
     equity?: Num;
     shareQuantity?: Num;
-  }) | null | undefined
+  }) | null | undefined,
+  propertyValue?: Num
 ): CompanyTotals {
+  const balanceValue = row ? computeEstimatedValue(row) : null;
   return {
     capitalSocial: toNumberOrNull(row?.capitalSocial),
     equity: toNumberOrNull(row?.equity),
-    estimatedValue: row ? computeEstimatedValue(row) : null,
+    estimatedValue: computeMarketValue(balanceValue, propertyValue),
     shareQuantity: toNumberOrNull(row?.shareQuantity),
   };
 }

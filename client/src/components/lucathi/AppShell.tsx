@@ -6,6 +6,7 @@ import {
   UsersRound,
   LayoutDashboard,
   UserPlus,
+  Settings2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useRoute } from "wouter";
@@ -38,6 +39,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     : navigationItems.filter(
         item => item.path !== "/aniversarios" || user?.role === "SOCIO"
       );
+  // 1ª posição do menu: Home (as ações administrativas vêm depois dela).
+  const [homeItem, ...otherNavItems] = navItems;
   return (
     <div className="min-h-screen bg-lucathi-canvas text-lucathi-ink">
       {!isClient(user?.role) && (
@@ -45,9 +48,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <BrandMark />
           {projectTitle ? <div className="mt-8 rounded-xl bg-lucathi-mist px-3 py-2"><p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-lucathi-gray">Projeto ativo</p><p className="mt-1 truncate text-sm font-medium text-lucathi-navy">{projectTitle}</p></div> : null}
           <nav className="mt-12 space-y-1" aria-label="Navegação principal">
+            <Button key={homeItem.path} variant="ghost" onClick={() => navigate(homeItem.path)} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy">
+              <homeItem.icon className="size-4" />
+              {homeItem.label}
+            </Button>
             {isAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/dashboard")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><LayoutDashboard className="size-4" />Dashboard</Button> : null}
             {isAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/interessados")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><UserPlus className="size-4" />Interessados</Button> : null}
-            {navItems.map(item => (
+            {isAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/setup")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><Settings2 className="size-4" />Setup</Button> : null}
+            {otherNavItems.map(item => (
               <Button key={item.path} variant="ghost" onClick={() => navigate(item.path)} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy">
                 <item.icon className="size-4" />
                 {item.label}

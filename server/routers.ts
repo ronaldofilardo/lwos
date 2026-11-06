@@ -18,8 +18,10 @@ import { assetRouter } from "./features/assets/assets-router";
 import { proposalRouter } from "./features/proposals/proposal-router";
 import { leadRouter } from "./features/leads/lead-router";
 import { certidaoRouter } from "./features/certidoes/certidao-router";
+import { calculationsRouter } from "./features/calculations/calculations-router";
 import { addressRouter } from "./features/address/address-router";
 import { birthdayRouter } from "./features/birthdays/birthday-router";
+import { setupRouter } from "./features/setup/setup-router";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -47,6 +49,7 @@ export const appRouter = router({
   certidoes: certidaoRouter,
   properties: propertyRouter,
   companies: companyRouter,
+  calculations: calculationsRouter,
   assets: assetRouter,
   proposals: proposalRouter,
   leads: leadRouter,
@@ -54,6 +57,7 @@ export const appRouter = router({
   lwr: lwrRouter,
   users: userRouter,
   audit: auditRouter,
+  setup: setupRouter,
 });
 
 export type AppRouter = typeof appRouter;

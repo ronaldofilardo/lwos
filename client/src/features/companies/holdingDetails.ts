@@ -3,6 +3,7 @@
 import { parseNumeroPtBR } from "@shared/validation/dinheiro";
 import {
   computeEstimatedValue,
+  computeMarketValue,
   computeUnitValues,
   type CompanyTotals,
 } from "@shared/domain/company-valuation";
@@ -242,19 +243,32 @@ export function estimatedValueFromForm(form: HoldingFormState): number | null {
   });
 }
 
-/** Totais da sociedade (capital, PL, valor estimado, quotas) a partir do formulário. */
-export function holdingTotalsFromForm(form: HoldingFormState): CompanyTotals {
+/**
+ * Totais da sociedade (capital, PL, valor mercado, quotas) a partir do
+ * formulário. `propertyValue` é o valor dos imóveis em nome da sociedade,
+ * somado ao balanço apurado para chegar ao valor mercado.
+ */
+export function holdingTotalsFromForm(
+  form: HoldingFormState,
+  propertyValue?: number | null
+): CompanyTotals {
   return {
     capitalSocial: parseAmount(form.capitalSocial),
     equity: parseAmount(form.equity),
-    estimatedValue: estimatedValueFromForm(form),
+    estimatedValue: computeMarketValue(
+      estimatedValueFromForm(form),
+      propertyValue ?? null
+    ),
     shareQuantity: parseAmount(form.shareQuantity),
   };
 }
 
 /** Valores por quota/ação calculados ao vivo no formulário. */
-export function computePerShare(form: HoldingFormState) {
-  return computeUnitValues(holdingTotalsFromForm(form));
+export function computePerShare(
+  form: HoldingFormState,
+  propertyValue?: number | null
+) {
+  return computeUnitValues(holdingTotalsFromForm(form, propertyValue));
 }
 
 export function formatAmount(

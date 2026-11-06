@@ -13,7 +13,11 @@ const idMocks = vi.hoisted(() => ({ createId: vi.fn() }));
 vi.mock("../_shared/database", () => databaseMocks);
 vi.mock("../_shared/ids", () => idMocks);
 
-import { companies, companyStakeholders } from "../../../drizzle/schema";
+import {
+  companies,
+  companyStakeholders,
+  propertyOwners,
+} from "../../../drizzle/schema";
 import {
   createCompanyRecord,
   createStakeholderRecord,
@@ -201,6 +205,8 @@ type FullConfig = {
   stakeholderRows?: StakeholderRow[];
   currentRows?: StakeholderRow[];
   removedRows?: { id: string; companyId: string }[];
+  /** Linhas agregadas de imóveis por sociedade (propertyOwners ⋈ properties). */
+  propertyOwnerRows?: { companyId: string; propertyCount: number; propertyValue: string | null }[];
 };
 
 function fullDb(config: FullConfig = {}) {
@@ -214,14 +220,21 @@ function fullDb(config: FullConfig = {}) {
   const select = vi.fn(() => ({
     from: vi.fn((table: unknown) => {
       const baseRows = (): unknown[] =>
-        table === companies ? config.companyRows ?? [] : config.stakeholderRows ?? [];
+        table === propertyOwners
+          ? config.propertyOwnerRows ?? []
+          : table === companies
+            ? config.companyRows ?? []
+            : config.stakeholderRows ?? [];
       const limit = vi.fn(async () => (table === companies ? baseRows() : config.currentRows ?? []));
       const leftJoin = vi.fn(() => ({
         where: vi.fn(() => ({ then: (resolve: (value: unknown) => unknown) => resolve(baseRows()) })),
       }));
+      const groupBy = vi.fn(() => ({ then: (resolve: (value: unknown) => unknown) => resolve(baseRows()) }));
+      const innerJoin = vi.fn(() => ({ where: vi.fn(() => ({ groupBy })), groupBy }));
       return {
         limit,
         leftJoin,
+        innerJoin,
         where: vi.fn(() => ({ limit, leftJoin, then: (resolve: (value: unknown) => unknown) => resolve(baseRows()) })),
         then: (resolve: (value: unknown) => unknown) => resolve(baseRows()),
       };
@@ -279,8 +292,25 @@ describe("company-repository — escrita e consultas básicas", () => {
     });
     databaseMocks.requireDatabase.mockResolvedValue(db);
 
-    await expect(listCompanyRecords("fam-1")).resolves.toEqual([{ id: "hold-1" }]);
+    await expect(listCompanyRecords("fam-1")).resolves.toEqual([
+      { id: "hold-1", propertyCount: 0, propertyValue: 0 },
+    ]);
     await expect(listStakeholderRecords("hold-1")).resolves.toHaveLength(1);
+  });
+
+  it("leva para o card o valor dos imóveis e a contagem de titularidades", async () => {
+    const { db } = fullDb({
+      companyRows: [{ id: "hold-1" }, { id: "hold-2" }],
+      propertyOwnerRows: [
+        { companyId: "hold-1", propertyCount: 2, propertyValue: "750000.50" },
+      ],
+    });
+    databaseMocks.requireDatabase.mockResolvedValue(db);
+
+    await expect(listCompanyRecords("fam-1")).resolves.toEqual([
+      { id: "hold-1", propertyCount: 2, propertyValue: 750000.5 },
+      { id: "hold-2", propertyCount: 0, propertyValue: 0 },
+    ]);
   });
 });
 

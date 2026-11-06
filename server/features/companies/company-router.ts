@@ -15,6 +15,7 @@ import { listPeopleByFamily } from "../people/person-repository";
 import {
   createCompanyRecord,
   createStakeholderRecord,
+  getCompanyPropertyLink,
   getCompanyRecord,
   listCompanyRecords,
   listStakeholderRecords,
@@ -233,11 +234,15 @@ export const companyRouter = router({
   getDetails: protectedProcedure.input(companyDetailsIdSchema).query(async ({ ctx, input }) => {
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
-    const [details, stakeholders, certidoes, people] = await Promise.all([
+    const [details, stakeholders, certidoes, people, propertyLink] = await Promise.all([
       getCompanyDetailsRecord(company.id).catch(() => null),
       listStakeholderRecords(company.id).catch(() => []),
       listCertidaoRecords(company.familyId).catch(() => []),
       listPeopleByFamily(company.familyId).catch(() => []),
+      getCompanyPropertyLink(company.familyId, company.id).catch(() => ({
+        propertyCount: 0,
+        propertyValue: 0,
+      })),
     ]);
     const names = new Map(people.map(person => [person.id, person.fullName]));
     return {
@@ -248,6 +253,9 @@ export const companyRouter = router({
         isOffshore: company.isOffshore,
       },
       details,
+      // Imóveis em nome da sociedade: compõem o valor mercado na leitura.
+      propertyCount: propertyLink.propertyCount,
+      propertyValue: propertyLink.propertyValue,
       stakeholders: stakeholders.map(stakeholder => ({
         ...stakeholder,
         displayName:

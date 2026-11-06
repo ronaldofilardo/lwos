@@ -163,14 +163,6 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
     });
   }, [allDocs, selectedEntity, viewType, certidaoOwner.subjectByDocId]);
 
-  if (documents.isLoading) {
-    return (
-      <div className="rounded-2xl border border-lucathi-line bg-white p-6">
-        <p className="text-sm text-lucathi-gray">Carregando mapa de requisitos…</p>
-      </div>
-    );
-  }
-
   const entityLabel = useMemo(() => {
     if (!selectedEntity) return "Selecione uma entidade";
     if (selectedEntity.type === "PESSOA") return personName.get(selectedEntity.id) ?? "Pessoa";
@@ -179,6 +171,14 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
     return "";
   }, [selectedEntity, personName, propertyName, companyName]);
 
+  if (documents.isLoading) {
+    return (
+      <div className="rounded-2xl border border-lucathi-line bg-white p-6">
+        <p className="text-sm text-lucathi-gray">Carregando mapa de requisitos…</p>
+      </div>
+    );
+  }
+
   return (
     <section className="space-y-4 rounded-2xl border border-lucathi-line/80 bg-white p-5 shadow-sm">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -186,12 +186,7 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
             <FileStack className="mr-1 inline size-3.5" /> Mapa visual de requisitos
           </p>
-          <h2 className="mt-1 font-display text-xl text-lucathi-navy">
-            O que já existe e o que ainda falta
-          </h2>
-          <p className="mt-1 text-sm text-lucathi-gray">
-            Itens concluídos aparecem de forma opaca; pendentes e rejeitados destacados para orientar o trabalho do Sócio.
-          </p>
+
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="rounded-xl bg-lucathi-mist px-3 py-2 text-center">

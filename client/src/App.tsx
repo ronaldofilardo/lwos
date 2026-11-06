@@ -20,6 +20,7 @@ const Leads = lazy(() => import("./pages/Leads"));
 const ClientFamilyPage = lazy(() => import("./pages/ClientFamilyPage"));
 const ClientFamilyIndex = lazy(() => import("./pages/ClientFamilyPage").then(m => ({ default: m.ClientFamilyIndex })));
 const BirthdaysPage = lazy(() => import("@/features/birthdays/BirthdaysPage").then(m => ({ default: m.BirthdaysPage })));
+const SetupPage = lazy(() => import("@/features/setup/SetupPage").then(m => ({ default: m.SetupPage })));
 
 function PageLoader() {
   return (
@@ -47,6 +48,7 @@ function Router() {
         <Route path={"/familias"}>{() => <AuthGate><AppShell><FamilyPage /></AppShell></AuthGate>}</Route>
         <Route path={"/patrimonio"}>{() => <AppShell><PlaceholderPage title="Patrimônio" description="Imóveis, gravames, sociedades e integralizações já possuem contratos de servidor e receberão a camada operacional nesta rota." /></AppShell>}</Route>
         <Route path={"/aniversarios"}>{() => <AuthGate><AppShell><BirthdaysPage /></AppShell></AuthGate>}</Route>
+        <Route path={"/setup"}>{() => <AuthGate><AppShell><SetupPage /></AppShell></AuthGate>}</Route>
         <Route path={"/404"} component={NotFound} />
         {/* Final fallback route */}
         <Route component={NotFound} />

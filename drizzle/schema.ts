@@ -793,3 +793,25 @@ export const sessionRevocations = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+export const itcmdBrackets = pgTable(
+  "itcmdBrackets",
+    {
+      id: varchar("id", { length: 36 }).primaryKey(),
+      uf: varchar("uf", { length: 2 }).notNull(),
+      bracketOrder: integer("bracketOrder").notNull(),
+      limitValue: decimal("limitValue", { precision: 15, scale: 2 }).notNull(),
+      rate: decimal("rate", { precision: 6, scale: 4 }).notNull(),
+      accumulatedTax: decimal("accumulatedTax", { precision: 15, scale: 2 }).default("0.00"),
+      deductionValue: decimal("deductionValue", { precision: 15, scale: 2 }).default("0.00"),
+      indexedUnitName: varchar("indexedUnitName", { length: 30 }),
+      indexedUnitValue: decimal("indexedUnitValue", { precision: 10, scale: 4 }),
+      updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+    },
+    table => [
+      index("itcmd_brackets_uf_idx").on(table.uf),
+    ]
+  );
+
+export type ItcmdBracket = typeof itcmdBrackets.$inferSelect;
+export type InsertItcmdBracket = typeof itcmdBrackets.$inferInsert;

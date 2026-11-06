@@ -19,6 +19,8 @@ export function PropertyPanel({ familyId }: { familyId: string }) {
   const create = trpc.properties.create.useMutation({
     onSuccess: () => {
       utils.properties.list.invalidate({ familyId });
+      utils.companies.list.invalidate({ familyId });
+      utils.families.getManagedWealth.invalidate();
       setCreating(false);
       toast.success("Imóvel cadastrado na Due Diligence.");
     },

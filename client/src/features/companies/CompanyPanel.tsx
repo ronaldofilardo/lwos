@@ -5,6 +5,7 @@ import { mascaraCnpj, mascaraCpf } from "@shared/validation";
 import {
   companyTotalsFromRow,
   computeStakeholderValues,
+  toNumberOrNull,
   type CompanyTotals,
 } from "@shared/domain/company-valuation";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { trpc } from "@/lib/trpc";
 import { errorMessage } from "@/lib/trpcError";
 import { CompanyDetailsModal } from "./CompanyDetailsModal";
 import { StakeholderValues } from "./StakeholderValues";
+import { formatAmount } from "./holdingDetails";
 import { AlertIndicator } from "@/features/alerts/AlertIndicator";
 import { levelFor } from "@/features/alerts/alerts";
 import { useProjectAlerts } from "@/features/alerts/useProjectAlerts";
@@ -38,7 +40,7 @@ function StakeholderManager({
   companyId: string;
   familyId: string;
   people: Person[];
-  /** Capital, PL e valor estimado da sociedade (base dos valores de cada sócio). */
+  /** Capital, PL e valor mercado da sociedade (base dos valores de cada sócio). */
   totals: CompanyTotals;
   international: boolean;
 }) {
@@ -307,6 +309,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
   const [removingCompany, setRemovingCompany] = useState<{
     id: string;
     legalName: string;
+    propertyCount: number;
   } | null>(null);
 
   const list = trpc.companies.list.useQuery({ familyId });
@@ -316,8 +319,10 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
   const removeCompany = trpc.companies.remove.useMutation({
     onSuccess: () => {
       utils.companies.list.invalidate({ familyId });
+      utils.companies.getDetails.invalidate();
       utils.certidoes.list.invalidate({ familyId });
       utils.documents.list.invalidate({ familyId });
+      utils.families.getManagedWealth.invalidate();
       setRemovingCompany(null);
       toast.success("Sociedade excluída.");
     },
@@ -329,6 +334,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
       utils.companies.list.invalidate({ familyId });
       utils.certidoes.list.invalidate({ familyId });
       utils.documents.list.invalidate({ familyId });
+      utils.families.getManagedWealth.invalidate();
       setName("");
       setTaxNumber("");
       if (result.fromApi) {
@@ -357,14 +363,9 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
     <section className="rounded-2xl border border-lucathi-line bg-white p-6">
       <div className="flex items-center gap-3">
         <Building2 className="size-5 text-lucathi-navy" />
-        <div>
-          <h2 className="font-display text-2xl text-lucathi-navy">
-            Sociedades
-          </h2>
-          <p className="text-sm text-lucathi-gray">
-            Nacionais e offshore, com quadro societário somando 100%.
-          </p>
-        </div>
+        <h2 className="font-display text-2xl text-lucathi-navy">
+          Sociedades
+        </h2>
       </div>
 
       <div className="mt-4 grid items-end gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
@@ -428,22 +429,54 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
               key={item.id}
               className={
                 simples
-                  ? "rounded-xl border-2 border-emerald-400 bg-lucathi-mist px-4 py-3"
+                  ? "rounded-xl border-2 border-red-500 bg-red-50/40 px-4 py-3"
                   : "rounded-xl bg-lucathi-mist px-4 py-3"
               }
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="flex items-center gap-1.5 text-sm font-medium">
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                     {item.legalName}
+                    {simples ? (
+                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                        Simples Nacional
+                      </span>
+                    ) : null}
                     <AlertIndicator
                       level={levelFor(bySubject, "SOCIEDADE", item.id)}
                     />
                   </p>
+                  {item.isOffshore ? (
+                    <p className="text-xs font-medium text-lucathi-gray">
+                      Offshore
+                    </p>
+                  ) : null}
+                  {item.isOffshore ? null : (
+                    <p className="text-xs text-lucathi-gray">
+                      {item.taxNumber
+                        ? `CNPJ ${mascaraCnpj(item.taxNumber)}`
+                        : "CNPJ não informado"}
+                    </p>
+                  )}
                   <p className="text-xs text-lucathi-gray">
-                    {item.isOffshore ? "Offshore" : "Nacional"}
-                    {item.taxNumber ? ` · CNPJ ${mascaraCnpj(item.taxNumber)}` : ""}
-                    {simples ? " · Simples Nacional" : ""}
+                    Capital Social Total:{" "}
+                    {formatAmount(toNumberOrNull(item.capitalSocial), item.isOffshore)}
+                  </p>
+                  <p className="text-xs text-lucathi-gray">
+                    PL: {formatAmount(toNumberOrNull(item.equity), item.isOffshore)}
+                  </p>
+                  <p className="text-xs text-lucathi-gray">
+                    Valor Imóveis:{" "}
+                    {formatAmount(item.propertyValue, item.isOffshore)}{" "}
+                    ({item.propertyCount}{" "}
+                    {item.propertyCount === 1 ? "imóvel" : "imóveis"})
+                  </p>
+                  <p className="text-xs text-lucathi-gray">
+                    Valor de Mercado da Sociedade:{" "}
+                    {formatAmount(
+                      companyTotalsFromRow(item, item.propertyValue).estimatedValue,
+                      item.isOffshore
+                    )}
                   </p>
                   {item.notes ? (
                     <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs text-lucathi-gray">
@@ -466,7 +499,11 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
                     variant="outline"
                     className="h-8 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
                     onClick={() =>
-                      setRemovingCompany({ id: item.id, legalName: item.legalName })
+                      setRemovingCompany({
+                        id: item.id,
+                        legalName: item.legalName,
+                        propertyCount: item.propertyCount,
+                      })
                     }
                     title="Excluir sociedade"
                   >
@@ -478,7 +515,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
                 companyId={item.id}
                 familyId={familyId}
                 people={people.data ?? []}
-                totals={companyTotalsFromRow(item)}
+                totals={companyTotalsFromRow(item, item.propertyValue)}
                 international={item.isOffshore}
               />
             </div>
@@ -509,6 +546,12 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
               ação removerá a ficha da sociedade e o quadro societário vinculado.
               Documentos enviados permanecem arquivados.
             </DialogDescription>
+            {(removingCompany?.propertyCount ?? 0) > 0 ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                Esta sociedade é titular de {removingCompany?.propertyCount}{" "}
+                imóvel(is): remova a titularidade nos imóveis antes de excluí-la.
+              </p>
+            ) : null}
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button
@@ -520,7 +563,9 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
             </Button>
             <Button
               variant="destructive"
-              disabled={removeCompany.isPending}
+              disabled={
+                removeCompany.isPending || (removingCompany?.propertyCount ?? 0) > 0
+              }
               onClick={() => {
                 if (!removingCompany) return;
                 removeCompany.mutate({

@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const repoMocks = vi.hoisted(() => ({
   createCompanyRecord: vi.fn(),
   createStakeholderRecord: vi.fn(),
+  getCompanyPropertyLink: vi.fn(),
   getCompanyRecord: vi.fn(),
   listCompanyRecords: vi.fn(),
   listStakeholderRecords: vi.fn(),
@@ -67,6 +68,7 @@ describe("company-router consultas", () => {
     repoMocks.getCompanyRecord.mockResolvedValue(company);
     repoMocks.listCompanyRecords.mockResolvedValue([company]);
     repoMocks.listStakeholderRecords.mockResolvedValue([]);
+    repoMocks.getCompanyPropertyLink.mockResolvedValue({ propertyCount: 0, propertyValue: 0 });
     certidaoMocks.listCertidaoRecords.mockResolvedValue([]);
     peopleMocks.listPeopleByFamily.mockResolvedValue([]);
     detailsMocks.getCompanyDetailsRecord.mockResolvedValue(null);

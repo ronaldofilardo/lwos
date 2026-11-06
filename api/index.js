@@ -92,7 +92,7 @@ import {
   varchar
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-var ids, auditTime, updatedAtCol, civilStatusValues, maritalRegimeValues, documentStatusValues, assetCategoryValues, proposalStatusValues, leadStatusValues, vinculoValues, entityTypeValues, projectStatusValues, projectObjectiveValues, propertyKindValues, propertyUtilityValues, societaryTypeValues, taxRegimeValues, encumbranceTypeValues, certidaoScopeValues, certidaoTypeValues, certidaoStatusValues, companyJurisdictionValues, roleEnum, civilStatusEnum, maritalRegimeEnum, documentStatusEnum, assetCategoryEnum, leadStatusEnum, vinculoEnum, proposalStatusEnum, projectStatusEnum, projectObjectiveEnum, accessRoleEnum, entityTypeEnum, rightTypeEnum, propertyKindEnum, propertyUtilityEnum, encumbranceTypeEnum, societaryTypeEnum, taxRegimeEnum, ufEnum, certidaoScopeEnum, certidaoTypeEnum, certidaoStatusEnum, companyJurisdictionEnum, users, families, projects, projectObjectives, familyAccess, leads, people, documents, documentVersions, properties, propertyOwners, companies, companyStakeholders, otherAssets, certidoes, companyDetails, financialProposals, portalLinks, firstAccessLinks, lwrReports, auditLogs, fileBlobs, sessionRevocations;
+var ids, auditTime, updatedAtCol, civilStatusValues, maritalRegimeValues, documentStatusValues, assetCategoryValues, proposalStatusValues, leadStatusValues, vinculoValues, entityTypeValues, projectStatusValues, projectObjectiveValues, propertyKindValues, propertyUtilityValues, societaryTypeValues, taxRegimeValues, encumbranceTypeValues, certidaoScopeValues, certidaoTypeValues, certidaoStatusValues, companyJurisdictionValues, roleEnum, civilStatusEnum, maritalRegimeEnum, documentStatusEnum, assetCategoryEnum, leadStatusEnum, vinculoEnum, proposalStatusEnum, projectStatusEnum, projectObjectiveEnum, accessRoleEnum, entityTypeEnum, rightTypeEnum, propertyKindEnum, propertyUtilityEnum, encumbranceTypeEnum, societaryTypeEnum, taxRegimeEnum, ufEnum, certidaoScopeEnum, certidaoTypeEnum, certidaoStatusEnum, companyJurisdictionEnum, users, families, projects, projectObjectives, familyAccess, leads, people, documents, documentVersions, properties, propertyOwners, companies, companyStakeholders, otherAssets, certidoes, companyDetails, financialProposals, portalLinks, firstAccessLinks, lwrReports, auditLogs, fileBlobs, sessionRevocations, itcmdBrackets;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -780,6 +780,24 @@ var init_schema = __esm({
       },
       (table) => [uniqueIndex("session_revocations_jti_key").on(table.jti)]
     );
+    itcmdBrackets = pgTable(
+      "itcmdBrackets",
+      {
+        id: varchar("id", { length: 36 }).primaryKey(),
+        uf: varchar("uf", { length: 2 }).notNull(),
+        bracketOrder: integer("bracketOrder").notNull(),
+        limitValue: decimal("limitValue", { precision: 15, scale: 2 }).notNull(),
+        rate: decimal("rate", { precision: 6, scale: 4 }).notNull(),
+        accumulatedTax: decimal("accumulatedTax", { precision: 15, scale: 2 }).default("0.00"),
+        deductionValue: decimal("deductionValue", { precision: 15, scale: 2 }).default("0.00"),
+        indexedUnitName: varchar("indexedUnitName", { length: 30 }),
+        indexedUnitValue: decimal("indexedUnitValue", { precision: 10, scale: 4 }),
+        updatedAt: timestamp("updatedAt").defaultNow().notNull()
+      },
+      (table) => [
+        index("itcmd_brackets_uf_idx").on(table.uf)
+      ]
+    );
   }
 });
 
@@ -1336,8 +1354,8 @@ async function storedFileExists(relKey) {
   }
   const db = getDb2();
   if (!db) return false;
-  const count3 = await db.select({ count: db.$count(fileBlobs) }).from(fileBlobs).where(eq2(fileBlobs.key, key));
-  return count3[0]?.count > 0;
+  const count4 = await db.select({ count: db.$count(fileBlobs) }).from(fileBlobs).where(eq2(fileBlobs.key, key));
+  return count4[0]?.count > 0;
 }
 async function moveFolder(oldRelKey, newRelKey) {
   const oldPrefix = assertSafeRelativeKey(oldRelKey) + "/";
@@ -2145,6 +2163,13 @@ function requireUser(ctx) {
   }
   return ctx.user;
 }
+function requireRole(ctx, allowed) {
+  const user = requireUser(ctx);
+  if (!allowed.includes(user.role)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Permiss\xE3o insuficiente." });
+  }
+  return user;
+}
 function requirePermission(ctx, permission) {
   const user = requireUser(ctx);
   if (!hasPermission(user.role, permission)) {
@@ -2333,7 +2358,37 @@ import { and as and8, eq as eq11, ne as ne2 } from "drizzle-orm";
 
 // server/features/families/family-repository.ts
 init_schema();
-import { desc as desc3, eq as eq8, count, inArray as inArray2, and as and6 } from "drizzle-orm";
+import { desc as desc3, eq as eq8, count, inArray as inArray2, and as and6, notInArray, sum } from "drizzle-orm";
+
+// shared/domain/company-valuation.ts
+var ESTIMATED_VALUE_ASSET_KEYS = [
+  "cashAndEquivalents",
+  "inventory",
+  "accountsReceivable",
+  "investments",
+  "fixedAssets",
+  "retainedEarnings"
+];
+var ESTIMATED_VALUE_LIABILITY_KEYS = [
+  "laborLiabilities",
+  "taxLiabilities",
+  "financing"
+];
+var round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+function toNumberOrNull(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+function computeEstimatedValue(input) {
+  const assets = ESTIMATED_VALUE_ASSET_KEYS.map((key) => toNumberOrNull(input[key]));
+  const liabilities = ESTIMATED_VALUE_LIABILITY_KEYS.map((key) => toNumberOrNull(input[key]));
+  if ([...assets, ...liabilities].every((value) => value === null)) return null;
+  const sum2 = (values) => values.reduce((total, value) => total + (value ?? 0), 0);
+  return round2(sum2(assets) - sum2(liabilities));
+}
+
+// server/features/families/family-repository.ts
 init_database();
 async function createFamilyRecord(input, createdBy) {
   const db = await requireDatabase();
@@ -2434,6 +2489,51 @@ async function getDashboardData(allowedFamilyIds) {
 async function getClientDashboardData(userId) {
   const allowedFamilyIds = await getClientFamilyIds(userId);
   return getDashboardData(allowedFamilyIds);
+}
+var EMPTY_MANAGED_WEALTH = {
+  properties: 0,
+  companies: 0,
+  otherAssets: 0,
+  total: 0
+};
+var round22 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+async function getManagedWealth(allowedFamilyIds) {
+  const db = await requireDatabase();
+  if (allowedFamilyIds !== void 0 && allowedFamilyIds.length === 0) {
+    return { ...EMPTY_MANAGED_WEALTH };
+  }
+  const projectRows = await db.select({ familyId: projects.familyId, status: projects.status }).from(projects);
+  const inactiveFamilyIds = projectRows.filter((row) => row.status !== "ATIVO").map((row) => row.familyId);
+  const [propertyRow] = await db.select({ total: sum(properties.marketValue) }).from(properties).where(
+    and6(
+      allowedFamilyIds ? inArray2(properties.familyId, allowedFamilyIds) : void 0,
+      inactiveFamilyIds.length ? notInArray(properties.familyId, inactiveFamilyIds) : void 0
+    )
+  );
+  const [companyRow] = await db.select({ balance: sum(companyDetails.estimatedMarketValue) }).from(companyDetails).innerJoin(companies, eq8(companies.id, companyDetails.companyId)).where(
+    and6(
+      allowedFamilyIds ? inArray2(companies.familyId, allowedFamilyIds) : void 0,
+      inactiveFamilyIds.length ? notInArray(companies.familyId, inactiveFamilyIds) : void 0
+    )
+  );
+  const [assetRow] = await db.select({ total: sum(otherAssets.declaredValue) }).from(otherAssets).where(
+    and6(
+      allowedFamilyIds ? inArray2(otherAssets.familyId, allowedFamilyIds) : void 0,
+      inactiveFamilyIds.length ? notInArray(otherAssets.familyId, inactiveFamilyIds) : void 0
+    )
+  );
+  const propertiesTotal = toNumberOrNull(propertyRow?.total) ?? 0;
+  const companiesTotal = toNumberOrNull(companyRow?.balance) ?? 0;
+  const otherAssetsTotal = toNumberOrNull(assetRow?.total) ?? 0;
+  return {
+    properties: round22(propertiesTotal),
+    companies: round22(companiesTotal),
+    otherAssets: round22(otherAssetsTotal),
+    total: round22(propertiesTotal + companiesTotal + otherAssetsTotal)
+  };
+}
+async function getClientManagedWealth(userId) {
+  return getManagedWealth(await getClientFamilyIds(userId));
 }
 async function listStorageFiles(allowedFolders) {
   const db = await requireDatabase();
@@ -3333,8 +3433,8 @@ async function reconcileFamilyDocumentRequirements(familyId) {
 
 // server/features/companies/company-repository.ts
 init_schema();
+import { and as and10, count as count2, eq as eq13, isNotNull, sql as sql5 } from "drizzle-orm";
 init_database();
-import { and as and10, eq as eq13 } from "drizzle-orm";
 
 // server/_shared/advisory-lock.ts
 import { sql as sql4 } from "drizzle-orm";
@@ -3379,7 +3479,7 @@ function hashString(str) {
 // server/features/companies/company-repository.ts
 var PCT_EPSILON = 1e-3;
 function totalPercentage(rows) {
-  return rows.reduce((sum, row) => sum + Number(row.percentage ?? 0), 0);
+  return rows.reduce((sum2, row) => sum2 + Number(row.percentage ?? 0), 0);
 }
 function normalizeName(name) {
   const withoutAccents = (name ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -3407,9 +3507,31 @@ async function getCompanyRecord(companyId) {
   const result = await db.select().from(companies).where(eq13(companies.id, companyId)).limit(1);
   return result[0] ?? null;
 }
+var EMPTY_PROPERTY_LINK = { propertyCount: 0, propertyValue: 0 };
+async function listCompanyPropertyLinks(familyId) {
+  const db = await requireDatabase();
+  const rows = await db.select({
+    companyId: propertyOwners.companyId,
+    propertyCount: count2(propertyOwners.id),
+    propertyValue: sql5`sum(${properties.marketValue} * ${propertyOwners.ownershipPercentage} / 100)`
+  }).from(propertyOwners).innerJoin(properties, eq13(properties.id, propertyOwners.propertyId)).where(and10(eq13(properties.familyId, familyId), isNotNull(propertyOwners.companyId))).groupBy(propertyOwners.companyId);
+  const links = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    if (!row.companyId) continue;
+    links.set(row.companyId, {
+      propertyCount: Number(row.propertyCount ?? 0),
+      propertyValue: toNumberOrNull(row.propertyValue) ?? 0
+    });
+  }
+  return links;
+}
+async function getCompanyPropertyLink(familyId, companyId) {
+  const links = await listCompanyPropertyLinks(familyId);
+  return links.get(companyId) ?? EMPTY_PROPERTY_LINK;
+}
 async function listCompanyRecords(familyId) {
   const db = await requireDatabase();
-  return db.select({
+  const rows = await db.select({
     id: companies.id,
     familyId: companies.familyId,
     legalName: companies.legalName,
@@ -3432,6 +3554,11 @@ async function listCompanyRecords(familyId) {
     financing: companyDetails.financing,
     notes: companyDetails.notes
   }).from(companies).leftJoin(companyDetails, eq13(companyDetails.companyId, companies.id)).where(eq13(companies.familyId, familyId));
+  const propertyLinks = await listCompanyPropertyLinks(familyId);
+  return rows.map((row) => ({
+    ...row,
+    ...propertyLinks.get(row.id) ?? EMPTY_PROPERTY_LINK
+  }));
 }
 async function listStakeholderRecords(companyId) {
   const db = await requireDatabase();
@@ -3678,36 +3805,6 @@ var companyDetailsUpsertSchema = companyDetailsIdSchema.extend({
 init_schema();
 init_database();
 import { eq as eq14 } from "drizzle-orm";
-
-// shared/domain/company-valuation.ts
-var ESTIMATED_VALUE_ASSET_KEYS = [
-  "cashAndEquivalents",
-  "inventory",
-  "accountsReceivable",
-  "investments",
-  "fixedAssets",
-  "retainedEarnings"
-];
-var ESTIMATED_VALUE_LIABILITY_KEYS = [
-  "laborLiabilities",
-  "taxLiabilities",
-  "financing"
-];
-var round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
-function toNumberOrNull(value) {
-  if (value === null || value === void 0 || value === "") return null;
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-function computeEstimatedValue(input) {
-  const assets = ESTIMATED_VALUE_ASSET_KEYS.map((key) => toNumberOrNull(input[key]));
-  const liabilities = ESTIMATED_VALUE_LIABILITY_KEYS.map((key) => toNumberOrNull(input[key]));
-  if ([...assets, ...liabilities].every((value) => value === null)) return null;
-  const sum = (values) => values.reduce((total, value) => total + (value ?? 0), 0);
-  return round2(sum(assets) - sum(liabilities));
-}
-
-// server/features/companies/company-details-repository.ts
 function detailValues(fields) {
   const text3 = (value) => value ?? null;
   const amount = (value) => value === void 0 || value === null ? null : value.toFixed(2);
@@ -4099,11 +4196,15 @@ var companyRouter = router({
   getDetails: protectedProcedure.input(companyDetailsIdSchema).query(async ({ ctx, input }) => {
     const company = await requireCompanyFamily(input.companyId);
     await assertFamilyAccess(ctx, company.familyId);
-    const [details, stakeholders, certidoes2, people2] = await Promise.all([
+    const [details, stakeholders, certidoes2, people2, propertyLink] = await Promise.all([
       getCompanyDetailsRecord(company.id).catch(() => null),
       listStakeholderRecords(company.id).catch(() => []),
       listCertidaoRecords(company.familyId).catch(() => []),
-      listPeopleByFamily(company.familyId).catch(() => [])
+      listPeopleByFamily(company.familyId).catch(() => []),
+      getCompanyPropertyLink(company.familyId, company.id).catch(() => ({
+        propertyCount: 0,
+        propertyValue: 0
+      }))
     ]);
     const names = new Map(people2.map((person) => [person.id, person.fullName]));
     return {
@@ -4114,6 +4215,9 @@ var companyRouter = router({
         isOffshore: company.isOffshore
       },
       details,
+      // Imóveis em nome da sociedade: compõem o valor mercado na leitura.
+      propertyCount: propertyLink.propertyCount,
+      propertyValue: propertyLink.propertyValue,
       stakeholders: stakeholders.map((stakeholder) => ({
         ...stakeholder,
         displayName: stakeholder.externalName ?? (stakeholder.personId ? names.get(stakeholder.personId) ?? null : null)
@@ -4716,7 +4820,7 @@ async function listProjectAlertLevels(familyIds) {
 // server/features/families/family-timeline-repository.ts
 init_schema();
 init_database();
-import { and as and12, count as count2, desc as desc5, eq as eq19, gt, isNull } from "drizzle-orm";
+import { and as and12, count as count3, desc as desc5, eq as eq19, gt, isNull } from "drizzle-orm";
 
 // shared/domain/document-status.ts
 var RESOLVED_DOCUMENT_STATUSES = [
@@ -4889,7 +4993,7 @@ function buildProcessTimeline(input) {
     return 0;
   };
   const overallPercent = stages.length === 0 ? 0 : Math.round(
-    stages.reduce((sum, s) => sum + weight(s), 0) / stages.length * 100
+    stages.reduce((sum2, s) => sum2 + weight(s), 0) / stages.length * 100
   );
   return {
     stages,
@@ -4915,28 +5019,28 @@ async function getFamilyTimelineRecord(familyId) {
     createdAt: leads.createdAt,
     updatedAt: leads.updatedAt
   }).from(leads).where(eq19(leads.familyId, familyId)).orderBy(desc5(leads.createdAt)).limit(1);
-  const [{ total: peopleTotal }] = await db.select({ total: count2() }).from(people).where(eq19(people.familyId, familyId));
-  const [{ total: titularCount }] = await db.select({ total: count2() }).from(people).where(
+  const [{ total: peopleTotal }] = await db.select({ total: count3() }).from(people).where(eq19(people.familyId, familyId));
+  const [{ total: titularCount }] = await db.select({ total: count3() }).from(people).where(
     and12(eq19(people.familyId, familyId), eq19(people.isPrimaryContact, true))
   );
-  const [{ total: propertiesTotal }] = await db.select({ total: count2() }).from(properties).where(eq19(properties.familyId, familyId));
-  const [{ total: companiesTotal }] = await db.select({ total: count2() }).from(companies).where(eq19(companies.familyId, familyId));
-  const [{ total: assetsTotal }] = await db.select({ total: count2() }).from(otherAssets).where(eq19(otherAssets.familyId, familyId));
+  const [{ total: propertiesTotal }] = await db.select({ total: count3() }).from(properties).where(eq19(properties.familyId, familyId));
+  const [{ total: companiesTotal }] = await db.select({ total: count3() }).from(companies).where(eq19(companies.familyId, familyId));
+  const [{ total: assetsTotal }] = await db.select({ total: count3() }).from(otherAssets).where(eq19(otherAssets.familyId, familyId));
   const documentRows = await db.select({ status: documents.status }).from(documents).where(eq19(documents.familyId, familyId));
-  const [{ total: lwrVersions }] = await db.select({ total: count2() }).from(lwrReports).where(eq19(lwrReports.familyId, familyId));
+  const [{ total: lwrVersions }] = await db.select({ total: count3() }).from(lwrReports).where(eq19(lwrReports.familyId, familyId));
   const [proposal] = await db.select({
     id: financialProposals.id,
     status: financialProposals.status,
     createdAt: financialProposals.createdAt,
     acceptedAt: financialProposals.acceptedAt
   }).from(financialProposals).where(eq19(financialProposals.familyId, familyId)).orderBy(desc5(financialProposals.createdAt)).limit(1);
-  const [{ total: clientAccessCount }] = await db.select({ total: count2() }).from(familyAccess).where(
+  const [{ total: clientAccessCount }] = await db.select({ total: count3() }).from(familyAccess).where(
     and12(
       eq19(familyAccess.familyId, familyId),
       eq19(familyAccess.accessRole, "CLIENTE")
     )
   );
-  const [{ total: activePortalLinks }] = await db.select({ total: count2() }).from(portalLinks).where(
+  const [{ total: activePortalLinks }] = await db.select({ total: count3() }).from(portalLinks).where(
     and12(
       eq19(portalLinks.familyId, familyId),
       isNull(portalLinks.revokedAt),
@@ -5157,6 +5261,13 @@ var familyRouter = router({
     if (user.role === "CLIENTE") return getClientDashboardData(user.id);
     requirePermission(ctx, Permission.FAMILY_GET_DASHBOARD);
     return getDashboardData();
+  }),
+  /** Patrimônio sob Gestão da Home: imóveis + sociedades + demais ativos. */
+  getManagedWealth: protectedProcedure.query(async ({ ctx }) => {
+    const user = ctx.user;
+    if (user.role === "CLIENTE") return getClientManagedWealth(user.id);
+    requirePermission(ctx, Permission.FAMILY_GET_DASHBOARD);
+    return getManagedWealth();
   }),
   listStorage: protectedProcedure.query(async ({ ctx }) => {
     const user = ctx.user;
@@ -5446,7 +5557,7 @@ init_database();
 import { desc as desc8, eq as eq23, and as and15 } from "drizzle-orm";
 var PCT_EPSILON2 = 1e-3;
 function totalOwnership(rows) {
-  return rows.reduce((sum, row) => sum + Number(row.ownershipPercentage ?? 0), 0);
+  return rows.reduce((sum2, row) => sum2 + Number(row.ownershipPercentage ?? 0), 0);
 }
 function money2(value) {
   return value === void 0 ? null : value.toFixed(2);
@@ -6356,8 +6467,66 @@ var certidaoRouter = router({
   })
 });
 
-// server/features/address/address-router.ts
+// server/features/calculations/calculations-router.ts
 import { z as z30 } from "zod";
+
+// server/features/calculations/calculations-repository.ts
+init_schema();
+init_database();
+import { eq as eq29 } from "drizzle-orm";
+async function listFamilyPropertyOwners(familyId) {
+  const db = await requireDatabase();
+  return db.select({
+    propertyId: propertyOwners.propertyId,
+    personId: propertyOwners.personId,
+    companyId: propertyOwners.companyId,
+    ownershipPercentage: propertyOwners.ownershipPercentage
+  }).from(propertyOwners).innerJoin(properties, eq29(properties.id, propertyOwners.propertyId)).where(eq29(properties.familyId, familyId));
+}
+async function listFamilyCompanyShares(familyId) {
+  const db = await requireDatabase();
+  return db.select({
+    companyId: companyStakeholders.companyId,
+    personId: companyStakeholders.personId,
+    percentage: companyStakeholders.percentage
+  }).from(companyStakeholders).innerJoin(companies, eq29(companies.id, companyStakeholders.companyId)).where(eq29(companies.familyId, familyId));
+}
+async function getFamilyCalculationsData(familyId) {
+  const [people2, propertyRows, owners, companyRows, shares, assets] = await Promise.all([
+    listPeopleByFamily(familyId),
+    listPropertyRecords(familyId),
+    listFamilyPropertyOwners(familyId),
+    listCompanyRecords(familyId),
+    listFamilyCompanyShares(familyId),
+    listAssetRecords(familyId)
+  ]);
+  return {
+    people: people2.map((person) => ({
+      id: person.id,
+      fullName: person.fullName,
+      vinculo: person.vinculo,
+      isPrimaryContact: person.isPrimaryContact,
+      uf: person.uf
+    })),
+    properties: propertyRows,
+    owners,
+    companies: companyRows,
+    shares: shares.filter((share) => share.personId !== null),
+    assets
+  };
+}
+
+// server/features/calculations/calculations-router.ts
+var calculationsRouter = router({
+  /** Base dos cálculos patrimoniais e tributários do projeto (aba «Cálculos»). */
+  getData: protectedProcedure.input(z30.object({ familyId: z30.string() })).query(async ({ ctx, input }) => {
+    await assertFamilyAccess(ctx, input.familyId);
+    return getFamilyCalculationsData(input.familyId);
+  })
+});
+
+// server/features/address/address-router.ts
+import { z as z31 } from "zod";
 
 // server/features/address/viacep-client.ts
 var TIMEOUT_MS = 4e3;
@@ -6424,7 +6593,7 @@ async function lookupAddressByCep(rawCep) {
 
 // server/features/address/address-router.ts
 var addressRouter = router({
-  lookupCep: protectedProcedure.input(z30.object({ cep: z30.string().min(1, "Informe o CEP.") })).query(async ({ input }) => {
+  lookupCep: protectedProcedure.input(z31.object({ cep: z31.string().min(1, "Informe o CEP.") })).query(async ({ input }) => {
     return lookupAddressByCep(input.cep);
   })
 });
@@ -6435,7 +6604,7 @@ import { TRPCError as TRPCError6 } from "@trpc/server";
 // server/features/birthdays/birthday-repository.ts
 init_schema();
 init_database();
-import { asc as asc2, eq as eq29 } from "drizzle-orm";
+import { asc as asc2, eq as eq30 } from "drizzle-orm";
 async function listProjectBirthdays() {
   try {
     const db = await requireDatabase();
@@ -6445,7 +6614,7 @@ async function listProjectBirthdays() {
       birthDate: people.birthDate,
       vinculo: people.vinculo,
       projectName: families.name
-    }).from(people).leftJoin(families, eq29(people.familyId, families.id)).orderBy(asc2(people.fullName));
+    }).from(people).leftJoin(families, eq30(people.familyId, families.id)).orderBy(asc2(people.fullName));
   } catch (cause) {
     throw new Error("N\xE3o foi poss\xEDvel consultar os anivers\xE1rios dos projetos.", {
       cause
@@ -6464,6 +6633,419 @@ var birthdayRouter = router({
     }
     return listProjectBirthdays();
   })
+});
+
+// server/features/setup/itcmd-router.ts
+import { z as z32 } from "zod";
+
+// server/features/setup/itcmd-repository.ts
+init_schema();
+init_database();
+import { eq as eq31, sql as sql6 } from "drizzle-orm";
+
+// shared/domain/itcmd-seed-data.ts
+var DEFAULT_ITCMD_BASELINE = {
+  // AC - Acre
+  AC: [
+    { uf: "AC", bracketOrder: 1, limitValue: 5e4, rate: 0 },
+    { uf: "AC", bracketOrder: 2, limitValue: 15e5, rate: 4 },
+    { uf: "AC", bracketOrder: 3, limitValue: 25e5, rate: 5 },
+    { uf: "AC", bracketOrder: 4, limitValue: 35e5, rate: 6 },
+    { uf: "AC", bracketOrder: 5, limitValue: 999999999, rate: 7 }
+  ],
+  // AL - Alagoas (4% fixo)
+  AL: [{ uf: "AL", bracketOrder: 1, limitValue: 999999999, rate: 4 }],
+  // AM - Amazonas
+  AM: [
+    { uf: "AM", bracketOrder: 1, limitValue: 4e5, rate: 0 },
+    { uf: "AM", bracketOrder: 2, limitValue: 2e6, rate: 2 },
+    { uf: "AM", bracketOrder: 3, limitValue: 6e6, rate: 3 },
+    { uf: "AM", bracketOrder: 4, limitValue: 999999999, rate: 4 }
+  ],
+  // AP - Amapá (UPF = 4.6802)
+  AP: [
+    { uf: "AP", bracketOrder: 1, limitValue: 5e3, rate: 2, indexedUnitName: "UPF-AP", indexedUnitValue: 4.6802 },
+    { uf: "AP", bracketOrder: 2, limitValue: 5e4, rate: 3, indexedUnitName: "UPF-AP", indexedUnitValue: 4.6802 },
+    { uf: "AP", bracketOrder: 3, limitValue: 1e5, rate: 4, indexedUnitName: "UPF-AP", indexedUnitValue: 4.6802 },
+    { uf: "AP", bracketOrder: 4, limitValue: 2e5, rate: 5, indexedUnitName: "UPF-AP", indexedUnitValue: 4.6802 },
+    { uf: "AP", bracketOrder: 5, limitValue: 999999999, rate: 6, indexedUnitName: "UPF-AP", indexedUnitValue: 4.6802 }
+  ],
+  // BA - Bahia
+  BA: [
+    { uf: "BA", bracketOrder: 1, limitValue: 1e5, rate: 0 },
+    { uf: "BA", bracketOrder: 2, limitValue: 2e5, rate: 4 },
+    { uf: "BA", bracketOrder: 3, limitValue: 3e5, rate: 6 },
+    { uf: "BA", bracketOrder: 4, limitValue: 999999999, rate: 8 }
+  ],
+  // CE - Ceará (Ufirce = 6.02969)
+  CE: [
+    { uf: "CE", bracketOrder: 1, limitValue: 7e3, rate: 0, indexedUnitName: "Ufirce", indexedUnitValue: 6.02969 },
+    { uf: "CE", bracketOrder: 2, limitValue: 1e4, rate: 2, indexedUnitName: "Ufirce", indexedUnitValue: 6.02969 },
+    { uf: "CE", bracketOrder: 3, limitValue: 2e4, rate: 4, indexedUnitName: "Ufirce", indexedUnitValue: 6.02969 },
+    { uf: "CE", bracketOrder: 4, limitValue: 4e4, rate: 6, indexedUnitName: "Ufirce", indexedUnitValue: 6.02969 },
+    { uf: "CE", bracketOrder: 5, limitValue: 999999999, rate: 8, indexedUnitName: "Ufirce", indexedUnitValue: 6.02969 }
+  ],
+  // DF - Distrito Federal
+  DF: [
+    { uf: "DF", bracketOrder: 1, limitValue: 157831494e-2, rate: 4 },
+    { uf: "DF", bracketOrder: 2, limitValue: 315662987e-2, rate: 5 },
+    { uf: "DF", bracketOrder: 3, limitValue: 999999999, rate: 6 }
+  ],
+  // ES - Espírito Santo (4% fixo)
+  ES: [{ uf: "ES", bracketOrder: 1, limitValue: 999999999, rate: 4 }],
+  // GO - Goiás
+  GO: [
+    { uf: "GO", bracketOrder: 1, limitValue: 25e3, rate: 2 },
+    { uf: "GO", bracketOrder: 2, limitValue: 2e5, rate: 4 },
+    { uf: "GO", bracketOrder: 3, limitValue: 6e5, rate: 6 },
+    { uf: "GO", bracketOrder: 4, limitValue: 999999999, rate: 8 }
+  ],
+  // MA - Maranhão
+  MA: [
+    { uf: "MA", bracketOrder: 1, limitValue: 48576, rate: 0 },
+    { uf: "MA", bracketOrder: 2, limitValue: 3e5, rate: 3 },
+    { uf: "MA", bracketOrder: 3, limitValue: 6e5, rate: 4 },
+    { uf: "MA", bracketOrder: 4, limitValue: 9e5, rate: 5 },
+    { uf: "MA", bracketOrder: 5, limitValue: 12e5, rate: 6 },
+    { uf: "MA", bracketOrder: 6, limitValue: 999999999, rate: 7 }
+  ],
+  // MG - Minas Gerais (5% fixo)
+  MG: [{ uf: "MG", bracketOrder: 1, limitValue: 999999999, rate: 5 }],
+  // MS - Mato Grosso do Sul (isento até 100k, 6% acima)
+  MS: [
+    { uf: "MS", bracketOrder: 1, limitValue: 1e5, rate: 0 },
+    { uf: "MS", bracketOrder: 2, limitValue: 999999999, rate: 6 }
+  ],
+  // MT - Mato Grosso (UPF = 250.83 - atualização mensal)
+  MT: [
+    { uf: "MT", bracketOrder: 1, limitValue: 1500, rate: 0, indexedUnitName: "UPF-MT", indexedUnitValue: 250.83 },
+    { uf: "MT", bracketOrder: 2, limitValue: 4e3, rate: 2, indexedUnitName: "UPF-MT", indexedUnitValue: 250.83 },
+    { uf: "MT", bracketOrder: 3, limitValue: 8e3, rate: 4, indexedUnitName: "UPF-MT", indexedUnitValue: 250.83 },
+    { uf: "MT", bracketOrder: 4, limitValue: 16e3, rate: 6, indexedUnitName: "UPF-MT", indexedUnitValue: 250.83 },
+    { uf: "MT", bracketOrder: 5, limitValue: 999999999, rate: 8, indexedUnitName: "UPF-MT", indexedUnitValue: 250.83 }
+  ],
+  // PA - Pará (UPF-PA = 4.8013)
+  PA: [
+    { uf: "PA", bracketOrder: 1, limitValue: 15e3, rate: 2, indexedUnitName: "UPF-PA", indexedUnitValue: 4.8013 },
+    { uf: "PA", bracketOrder: 2, limitValue: 5e4, rate: 3, indexedUnitName: "UPF-PA", indexedUnitValue: 4.8013 },
+    { uf: "PA", bracketOrder: 3, limitValue: 15e4, rate: 4, indexedUnitName: "UPF-PA", indexedUnitValue: 4.8013 },
+    { uf: "PA", bracketOrder: 4, limitValue: 35e4, rate: 5, indexedUnitName: "UPF-PA", indexedUnitValue: 4.8013 },
+    { uf: "PA", bracketOrder: 5, limitValue: 999999999, rate: 6, indexedUnitName: "UPF-PA", indexedUnitValue: 4.8013 }
+  ],
+  // PB - Paraíba
+  PB: [
+    { uf: "PB", bracketOrder: 1, limitValue: 125e3, rate: 2 },
+    { uf: "PB", bracketOrder: 2, limitValue: 4e5, rate: 4 },
+    { uf: "PB", bracketOrder: 3, limitValue: 1e6, rate: 6 },
+    { uf: "PB", bracketOrder: 4, limitValue: 999999999, rate: 8 }
+  ],
+  // PE - Pernambuco
+  PE: [
+    { uf: "PE", bracketOrder: 1, limitValue: 5e4, rate: 0 },
+    { uf: "PE", bracketOrder: 2, limitValue: 317412.45, rate: 2 },
+    { uf: "PE", bracketOrder: 3, limitValue: 476118.68, rate: 4 },
+    { uf: "PE", bracketOrder: 4, limitValue: 634824.91, rate: 6 },
+    { uf: "PE", bracketOrder: 5, limitValue: 999999999, rate: 8 }
+  ],
+  // PI - Piauí (UPF-PI = 4.74)
+  PI: [
+    { uf: "PI", bracketOrder: 1, limitValue: 1e4, rate: 2, indexedUnitName: "UPF-PI", indexedUnitValue: 4.74 },
+    { uf: "PI", bracketOrder: 2, limitValue: 15e4, rate: 4, indexedUnitName: "UPF-PI", indexedUnitValue: 4.74 },
+    { uf: "PI", bracketOrder: 3, limitValue: 999999999, rate: 6, indexedUnitName: "UPF-PI", indexedUnitValue: 4.74 }
+  ],
+  // PR - Paraná (4% fixo)
+  PR: [{ uf: "PR", bracketOrder: 1, limitValue: 999999999, rate: 4 }],
+  // RJ - Rio de Janeiro (UFIR-RJ = 4.7508)
+  RJ: [
+    { uf: "RJ", bracketOrder: 1, limitValue: 7e4, rate: 4, indexedUnitName: "UFIR-RJ", indexedUnitValue: 4.7508 },
+    { uf: "RJ", bracketOrder: 2, limitValue: 1e5, rate: 4.5, indexedUnitName: "UFIR-RJ", indexedUnitValue: 4.7508 },
+    { uf: "RJ", bracketOrder: 3, limitValue: 2e5, rate: 5, indexedUnitName: "UFIR-RJ", indexedUnitValue: 4.7508 },
+    { uf: "RJ", bracketOrder: 4, limitValue: 3e5, rate: 6, indexedUnitName: "UFIR-RJ", indexedUnitValue: 4.7508 },
+    { uf: "RJ", bracketOrder: 5, limitValue: 4e5, rate: 7, indexedUnitName: "UFIR-RJ", indexedUnitValue: 4.7508 },
+    { uf: "RJ", bracketOrder: 6, limitValue: 999999999, rate: 8, indexedUnitName: "UFIR-RJ", indexedUnitValue: 4.7508 }
+  ],
+  // RN - Rio Grande do Norte
+  RN: [
+    { uf: "RN", bracketOrder: 1, limitValue: 5e5, rate: 3 },
+    { uf: "RN", bracketOrder: 2, limitValue: 1e6, rate: 4 },
+    { uf: "RN", bracketOrder: 3, limitValue: 3e6, rate: 5 },
+    { uf: "RN", bracketOrder: 4, limitValue: 999999999, rate: 6 }
+  ],
+  // RO - Rondônia (UPF = 119.14)
+  RO: [
+    { uf: "RO", bracketOrder: 1, limitValue: 1250, rate: 2, indexedUnitName: "UPF", indexedUnitValue: 119.14 },
+    { uf: "RO", bracketOrder: 2, limitValue: 6170, rate: 3, indexedUnitName: "UPF", indexedUnitValue: 119.14 },
+    { uf: "RO", bracketOrder: 3, limitValue: 999999999, rate: 4, indexedUnitName: "UPF", indexedUnitValue: 119.14 }
+  ],
+  // RR - Roraima (4% fixo)
+  RR: [{ uf: "RR", bracketOrder: 1, limitValue: 999999999, rate: 4 }],
+  // RS - Rio Grande do Sul (UPF = 27.13)
+  RS: [
+    { uf: "RS", bracketOrder: 1, limitValue: 2e3, rate: 0, indexedUnitName: "UPF", indexedUnitValue: 27.13 },
+    { uf: "RS", bracketOrder: 2, limitValue: 1e4, rate: 3, indexedUnitName: "UPF", indexedUnitValue: 27.13 },
+    { uf: "RS", bracketOrder: 3, limitValue: 3e4, rate: 4, indexedUnitName: "UPF", indexedUnitValue: 27.13 },
+    { uf: "RS", bracketOrder: 4, limitValue: 5e4, rate: 5, indexedUnitName: "UPF", indexedUnitValue: 27.13 },
+    { uf: "RS", bracketOrder: 5, limitValue: 999999999, rate: 6, indexedUnitName: "UPF", indexedUnitValue: 27.13 }
+  ],
+  // SC - Santa Catarina
+  SC: [
+    { uf: "SC", bracketOrder: 1, limitValue: 2e4, rate: 1 },
+    { uf: "SC", bracketOrder: 2, limitValue: 5e4, rate: 3 },
+    { uf: "SC", bracketOrder: 3, limitValue: 15e4, rate: 5 },
+    { uf: "SC", bracketOrder: 4, limitValue: 999999999, rate: 7 }
+  ],
+  // SE - Sergipe (UFP = 72.61 - atualização mensal)
+  SE: [
+    { uf: "SE", bracketOrder: 1, limitValue: 500, rate: 0, indexedUnitName: "UFP", indexedUnitValue: 72.61 },
+    { uf: "SE", bracketOrder: 2, limitValue: 2417, rate: 3, indexedUnitName: "UFP", indexedUnitValue: 72.61 },
+    { uf: "SE", bracketOrder: 3, limitValue: 12086, rate: 6, indexedUnitName: "UFP", indexedUnitValue: 72.61 },
+    { uf: "SE", bracketOrder: 4, limitValue: 999999999, rate: 8, indexedUnitName: "UFP", indexedUnitValue: 72.61 }
+  ],
+  // SP - São Paulo (4% fixo)
+  SP: [{ uf: "SP", bracketOrder: 1, limitValue: 999999999, rate: 4, indexedUnitName: "UFESP", indexedUnitValue: 35.36 }],
+  // TO - Tocantins
+  TO: [
+    { uf: "TO", bracketOrder: 1, limitValue: 25e3, rate: 0 },
+    { uf: "TO", bracketOrder: 2, limitValue: 1e5, rate: 2 },
+    { uf: "TO", bracketOrder: 3, limitValue: 5e5, rate: 4 },
+    { uf: "TO", bracketOrder: 4, limitValue: 2e6, rate: 6 },
+    { uf: "TO", bracketOrder: 5, limitValue: 999999999, rate: 8 }
+  ]
+};
+function getBaselineBracketsForUf(uf) {
+  const norm = uf.trim().toUpperCase();
+  if (DEFAULT_ITCMD_BASELINE[norm]) {
+    return DEFAULT_ITCMD_BASELINE[norm];
+  }
+  return [{ uf: norm, bracketOrder: 1, limitValue: 999999999, rate: 4 }];
+}
+
+// server/features/setup/itcmd-repository.ts
+async function ensureItcmdTable() {
+  try {
+    const db = await requireDatabase();
+    await db.execute(sql6`
+      CREATE TABLE IF NOT EXISTS "itcmdBrackets" (
+        "id" varchar(36) PRIMARY KEY NOT NULL,
+        "uf" varchar(2) NOT NULL,
+        "bracketOrder" integer NOT NULL,
+        "limitValue" numeric(15, 2) NOT NULL,
+        "rate" numeric(6, 4) NOT NULL,
+        "accumulatedTax" numeric(15, 2) DEFAULT 0.00 NOT NULL,
+        "deductionValue" numeric(15, 2) DEFAULT 0.00 NOT NULL,
+        "indexedUnitName" varchar(30),
+        "indexedUnitValue" numeric(10, 4),
+        "updatedAt" timestamp DEFAULT now() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS "itcmd_brackets_uf_idx" ON "itcmdBrackets" ("uf");
+    `);
+  } catch {
+  }
+}
+async function getBracketsByUf(uf) {
+  const normUf = uf.trim().toUpperCase();
+  try {
+    const db = await requireDatabase();
+    const rows = await db.select().from(itcmdBrackets).where(eq31(itcmdBrackets.uf, normUf));
+    if (!rows || rows.length === 0) {
+      return getBaselineBracketsForUf(normUf);
+    }
+    return rows.map((r) => ({
+      id: r.id,
+      uf: r.uf,
+      bracketOrder: r.bracketOrder,
+      limitValue: Number(r.limitValue),
+      rate: Number(r.rate),
+      accumulatedTax: Number(r.accumulatedTax || 0),
+      deductionValue: Number(r.deductionValue || 0),
+      indexedUnitName: r.indexedUnitName,
+      indexedUnitValue: r.indexedUnitValue ? Number(r.indexedUnitValue) : null
+    }));
+  } catch {
+    await ensureItcmdTable();
+    return getBaselineBracketsForUf(normUf);
+  }
+}
+async function saveUfPolicy(uf, brackets) {
+  const normUf = uf.trim().toUpperCase();
+  await ensureItcmdTable();
+  const db = await requireDatabase();
+  await db.transaction(async (tx) => {
+    await tx.delete(itcmdBrackets).where(eq31(itcmdBrackets.uf, normUf));
+    if (brackets.length > 0) {
+      await tx.insert(itcmdBrackets).values(
+        brackets.map((b, idx) => ({
+          id: createId(),
+          uf: normUf,
+          bracketOrder: idx + 1,
+          limitValue: String(b.limitValue),
+          rate: String(b.rate),
+          accumulatedTax: String(b.accumulatedTax || 0),
+          deductionValue: String(b.deductionValue || 0),
+          indexedUnitName: b.indexedUnitName ?? null,
+          indexedUnitValue: b.indexedUnitValue ? String(b.indexedUnitValue) : null,
+          updatedAt: /* @__PURE__ */ new Date()
+        }))
+      );
+    }
+  });
+  return getBracketsByUf(normUf);
+}
+
+// shared/domain/itcmd-engine.ts
+var round23 = (val) => Math.round((val + Number.EPSILON) * 100) / 100;
+function convertIndexedLimits(brackets) {
+  return brackets.map((b) => {
+    const unitVal = Number(b.indexedUnitValue);
+    if (unitVal && unitVal > 0 && b.indexedUnitName) {
+      return {
+        ...b,
+        limitValue: round23(Number(b.limitValue) * unitVal),
+        deductionValue: b.deductionValue ? round23(Number(b.deductionValue) * unitVal) : 0
+      };
+    }
+    return { ...b, limitValue: Number(b.limitValue) };
+  });
+}
+function calculateItcmdForUf(patrimony, rawBrackets) {
+  const base = Math.max(0, Number(patrimony) || 0);
+  if (!rawBrackets || rawBrackets.length === 0 || base === 0) {
+    return {
+      uf: rawBrackets[0]?.uf ?? "",
+      patrimonyBase: base,
+      totalTax: 0,
+      effectiveRate: 0,
+      slices: []
+    };
+  }
+  const converted = convertIndexedLimits(rawBrackets);
+  const sorted = [...converted].sort((a, b) => a.bracketOrder - b.bracketOrder);
+  const slices = [];
+  let remaining = base;
+  let prevLimit = 0;
+  let totalTax = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const b = sorted[i];
+    const isLast = i === sorted.length - 1;
+    const limit = Number(b.limitValue);
+    const bracketCeiling = isLast && limit <= prevLimit ? Infinity : limit;
+    const sliceCapacity = bracketCeiling - prevLimit;
+    if (remaining > 0 && sliceCapacity > 0) {
+      const sliceBase = Math.min(remaining, sliceCapacity);
+      const numRate = Number(b.rate) || 0;
+      const ratePct = numRate > 0 && numRate <= 0.2 ? round23(numRate * 100) : numRate;
+      const tax = round23(sliceBase * ratePct / 100);
+      slices.push({
+        order: b.bracketOrder,
+        fromValue: prevLimit,
+        toValue: bracketCeiling === Infinity ? base : bracketCeiling,
+        sliceBase: round23(sliceBase),
+        rate: ratePct,
+        taxAmount: tax
+      });
+      totalTax = round23(totalTax + tax);
+      remaining = Math.max(0, remaining - sliceBase);
+      prevLimit = bracketCeiling;
+    }
+  }
+  const effectiveRate = base > 0 ? round23(totalTax / base * 100) : 0;
+  const first = rawBrackets[0];
+  return {
+    uf: first.uf,
+    patrimonyBase: round23(base),
+    totalTax,
+    effectiveRate,
+    slices,
+    indexedUnitName: first.indexedUnitName,
+    indexedUnitValue: first.indexedUnitValue ? Number(first.indexedUnitValue) : null
+  };
+}
+
+// server/features/setup/itcmd-router.ts
+var UFS2 = [
+  "AC",
+  "AL",
+  "AP",
+  "AM",
+  "BA",
+  "CE",
+  "DF",
+  "ES",
+  "GO",
+  "MA",
+  "MT",
+  "MS",
+  "MG",
+  "PA",
+  "PB",
+  "PR",
+  "PE",
+  "PI",
+  "RJ",
+  "RN",
+  "RS",
+  "RO",
+  "RR",
+  "SC",
+  "SP",
+  "SE",
+  "TO"
+];
+var bracketInputSchema = z32.object({
+  bracketOrder: z32.number().int().min(1),
+  limitValue: z32.number().min(0),
+  rate: z32.number().min(0).max(100),
+  accumulatedTax: z32.number().optional().default(0),
+  deductionValue: z32.number().optional().default(0),
+  indexedUnitName: z32.string().nullable().optional(),
+  indexedUnitValue: z32.number().nullable().optional()
+});
+var itcmdRouter = router({
+  listUfs: protectedProcedure.query(async () => {
+    const list = await Promise.all(
+      UFS2.map(async (uf) => {
+        const brackets = await getBracketsByUf(uf);
+        const rates = brackets.map((b) => b.rate);
+        return {
+          uf,
+          bracketCount: brackets.length,
+          minRate: rates.length > 0 ? Math.min(...rates) : 4,
+          maxRate: rates.length > 0 ? Math.max(...rates) : 4,
+          indexedUnitName: brackets[0]?.indexedUnitName ?? null,
+          indexedUnitValue: brackets[0]?.indexedUnitValue ?? null
+        };
+      })
+    );
+    return list;
+  }),
+  getByUf: protectedProcedure.input(z32.object({ uf: z32.string().min(2).max(2) })).query(async ({ input }) => {
+    const brackets = await getBracketsByUf(input.uf);
+    return { uf: input.uf.toUpperCase(), brackets };
+  }),
+  updatePolicy: protectedProcedure.input(
+    z32.object({
+      uf: z32.string().min(2).max(2),
+      brackets: z32.array(bracketInputSchema)
+    })
+  ).mutation(async ({ ctx, input }) => {
+    requireRole(ctx, ["SOCIO", "ADMIN"]);
+    const updated = await saveUfPolicy(input.uf, input.brackets);
+    return { uf: input.uf.toUpperCase(), brackets: updated };
+  }),
+  calculate: protectedProcedure.input(
+    z32.object({
+      uf: z32.string().min(2).max(2),
+      patrimony: z32.number().min(0)
+    })
+  ).query(async ({ input }) => {
+    const brackets = await getBracketsByUf(input.uf);
+    return calculateItcmdForUf(input.patrimony, brackets);
+  })
+});
+
+// server/features/setup/setup-router.ts
+var setupRouter = router({
+  itcmd: itcmdRouter
 });
 
 // server/routers.ts
@@ -6492,13 +7074,15 @@ var appRouter = router({
   certidoes: certidaoRouter,
   properties: propertyRouter,
   companies: companyRouter,
+  calculations: calculationsRouter,
   assets: assetRouter,
   proposals: proposalRouter,
   leads: leadRouter,
   portal: portalRouter,
   lwr: lwrRouter,
   users: userRouter,
-  audit: auditRouter
+  audit: auditRouter,
+  setup: setupRouter
 });
 
 // server/_core/context.ts
