@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Save } from "lucide-react";
+import { UfBracketFormData } from "./types";
+import { useItcmdPolicySync } from "./hooks/useItcmdPolicySync";
+import { ItcmdHeaderActions } from "./ItcmdHeaderActions";
 import { UfSelectorBar } from "./UfSelectorBar";
 import { UfBracketTable } from "./UfBracketTable";
 import { UfBracketFormModal } from "./UfBracketFormModal";
-import { UfBracketFormData } from "./types";
 
 export function ItcmdPanel() {
   const [selectedUf, setSelectedUf] = useState("SP");
@@ -16,46 +14,31 @@ export function ItcmdPanel() {
   const [unitName, setUnitName] = useState("");
   const [unitValue, setUnitValue] = useState("");
 
-  const utils = trpc.useUtils();
-  const summariesQuery = trpc.setup.itcmd.listUfs.useQuery();
-  const ufQuery = trpc.setup.itcmd.getByUf.useQuery({ uf: selectedUf });
+  const {
+    summaries,
+    serverBrackets,
+    initialUnitName,
+    initialUnitValue,
+    saveMutation,
+    handleSavePolicy,
+  } = useItcmdPolicySync({ selectedUf });
 
   useEffect(() => {
-    if (ufQuery.data) {
-      setBrackets(ufQuery.data.brackets);
-      setUnitName(ufQuery.data.brackets[0]?.indexedUnitName ?? "");
-      setUnitValue(ufQuery.data.brackets[0]?.indexedUnitValue ? String(ufQuery.data.brackets[0].indexedUnitValue) : "");
+    if (serverBrackets.length > 0) {
+      setBrackets(serverBrackets);
+      setUnitName(initialUnitName);
+      setUnitValue(initialUnitValue);
     }
-  }, [ufQuery.data]);
-
-  const saveMutation = trpc.setup.itcmd.updatePolicy.useMutation({
-    onSuccess: () => {
-      toast.success(`Políticas de ITCMD para ${selectedUf} salvas com sucesso!`);
-      utils.setup.itcmd.listUfs.invalidate();
-      utils.setup.itcmd.getByUf.invalidate({ uf: selectedUf });
-    },
-    onError: err => toast.error(`Erro ao salvar: ${err.message}`),
-  });
+  }, [serverBrackets, initialUnitName, initialUnitValue]);
 
   const handleSaveModal = (data: UfBracketFormData) => {
     if (editIndex !== null) {
-      setBrackets(prev => prev.map((b, i) => (i === editIndex ? { ...b, ...data } : b)));
+      setBrackets(prev =>
+        prev.map((b, i) => (i === editIndex ? { ...b, ...data } : b))
+      );
     } else {
       setBrackets(prev => [...prev, { ...data, bracketOrder: prev.length + 1 }]);
     }
-  };
-
-  const handleSavePolicy = () => {
-    const payload = brackets.map((b, idx) => ({
-      bracketOrder: idx + 1,
-      limitValue: b.limitValue,
-      rate: b.rate,
-      accumulatedTax: 0,
-      deductionValue: 0,
-      indexedUnitName: unitName.trim() || null,
-      indexedUnitValue: parseFloat(unitValue) || null,
-    }));
-    saveMutation.mutate({ uf: selectedUf, brackets: payload });
   };
 
   return (
@@ -63,28 +46,13 @@ export function ItcmdPanel() {
       <UfSelectorBar
         selectedUf={selectedUf}
         onSelectUf={setSelectedUf}
-        summaries={summariesQuery.data ?? []}
+        summaries={summaries}
       />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-lucathi-navy">
-            Faixas de Tributação de {selectedUf}
-          </h2>
-          <p className="text-xs text-lucathi-gray">
-            Configure as alíquotas e indexadores estaduais para cálculo do imposto sucessório.
-          </p>
-        </div>
-        <Button
-          onClick={handleSavePolicy}
-          disabled={saveMutation.isPending}
-          className="gap-2 bg-lucathi-navy text-white hover:bg-lucathi-navy/90"
-        >
-          <Save className="size-4" />
-          {saveMutation.isPending ? "Salvando…" : "Salvar Alterações"}
-        </Button>
-      </div>
-
+      <ItcmdHeaderActions
+        selectedUf={selectedUf}
+        onSave={() => handleSavePolicy(brackets, unitName, unitValue)}
+        isPending={saveMutation.isPending}
+      />
       <UfBracketTable
         brackets={brackets}
         onAdd={() => { setEditIndex(null); setModalOpen(true); }}
@@ -92,9 +60,11 @@ export function ItcmdPanel() {
         onRemove={idx => setBrackets(prev => prev.filter((_, i) => i !== idx))}
         indexedUnitName={unitName}
         indexedUnitValue={unitValue}
-        onIndexedUnitChange={(name, val) => { setUnitName(name); setUnitValue(val); }}
+        onIndexedUnitChange={(name, val) => {
+          setUnitName(name);
+          setUnitValue(val);
+        }}
       />
-
       <UfBracketFormModal
         open={modalOpen}
         onOpenChange={setModalOpen}
@@ -104,4 +74,3 @@ export function ItcmdPanel() {
     </div>
   );
 }
-

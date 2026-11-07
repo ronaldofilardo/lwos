@@ -22,7 +22,7 @@ function LoginForm() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-lucathi-canvas p-6">
-      <section className="w-full max-w-md rounded-[28px] border border-lucathi-line bg-white p-8 shadow-sm shadow-lucathi-deep/5">
+      <section className="w-full max-w-md rounded-2xl border border-lucathi-line bg-white p-8 shadow-sm shadow-lucathi-deep/5">
         <BrandMark />
         <p className="mt-12 text-xs font-semibold uppercase tracking-[0.16em] text-lucathi-gray font-subtitle">
           Wealth & Legacy Engineering

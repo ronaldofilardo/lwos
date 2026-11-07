@@ -200,7 +200,7 @@ function ClientFamilyOverview({ family }: { family: FamilyRow }) {
 
   return (
     <section className="space-y-8">
-      <header className="rounded-[28px] bg-lucathi-deep p-7 text-white shadow-lg">
+      <header className="rounded-2xl bg-lucathi-deep p-7 text-white shadow-lg">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65 font-subtitle">

@@ -9,14 +9,18 @@ import {
   createProposalRecord,
   getProposalRecord,
   listProposalRecords,
+  removeProposalRecord,
   reviewCounterProposalRecord,
   submitCounterProposalRecord,
+  updateProposalRecord,
 } from "./proposal-repository";
 import {
   acceptProposalSchema,
   counterProposalSchema,
   createProposalSchema,
+  removeProposalSchema,
   reviewCounterProposalSchema,
+  updateProposalSchema,
 } from "./proposal-types";
 
 export const proposalRouter = router({
@@ -87,6 +91,37 @@ export const proposalRouter = router({
       actorUserId: user.id,
       familyId: proposal.familyId,
       metadata: { decision: input.decision, notes: input.notes || "" },
+    });
+    return { success: true };
+  }),
+  update: protectedProcedure.input(updateProposalSchema).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.PROPOSAL_UPDATE);
+    const proposal = await getProposalRecord(input.proposalId);
+    if (!proposal) throw new Error("Proposta financeira não encontrada.");
+    await assertFamilyAccess(ctx, proposal.familyId);
+    await updateProposalRecord(input);
+    await recordAudit({
+      action: "PROPOSTA_FINANCEIRA_ATUALIZADA",
+      entityType: "PROPOSTA_FINANCEIRA",
+      entityId: input.proposalId,
+      actorUserId: user.id,
+      familyId: proposal.familyId,
+      metadata: input,
+    });
+    return { success: true };
+  }),
+  remove: protectedProcedure.input(removeProposalSchema).mutation(async ({ ctx, input }) => {
+    const user = requirePermission(ctx, Permission.PROPOSAL_REMOVE);
+    const proposal = await getProposalRecord(input.proposalId);
+    if (!proposal) throw new Error("Proposta financeira não encontrada.");
+    await assertFamilyAccess(ctx, proposal.familyId);
+    await removeProposalRecord(input.proposalId);
+    await recordAudit({
+      action: "PROPOSTA_FINANCEIRA_EXCLUIDA",
+      entityType: "PROPOSTA_FINANCEIRA",
+      entityId: input.proposalId,
+      actorUserId: user.id,
+      familyId: proposal.familyId,
     });
     return { success: true };
   }),

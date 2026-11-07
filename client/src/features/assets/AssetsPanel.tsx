@@ -373,9 +373,9 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
               <div className="flex items-center gap-3">
                 <div className="text-right text-xs">
                   {asset.declaredValue ? (
-                    <p className="text-lucathi-gray">
-                      {formatAssetValue(asset.declaredValue, asset.category)}
-                    </p>
+                  <p className="text-lucathi-gray tabular-nums">
+                    {formatAssetValue(asset.declaredValue, asset.category)}
+                  </p>
                   ) : null}
                 </div>
                 <Button

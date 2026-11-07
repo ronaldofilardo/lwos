@@ -105,11 +105,12 @@ describe("AppShell menu Setup", () => {
     appShellMocks.useRoute.mockReturnValue([false, {}]);
   });
 
-  it("mostra o item Setup apenas para ADMIN", () => {
+  it("mostra o item Setup para ADMIN e SOCIO", () => {
     expect(renderAppShell("ADMIN")).toContain(">Setup</button>");
+    expect(renderAppShell("SOCIO")).toContain(">Setup</button>");
   });
 
-  it.each(["SOCIO", "ANALISTA", "CLIENTE"])(
+  it.each(["ANALISTA", "CLIENTE"])(
     "esconde o item Setup para %s",
     role => {
       expect(renderAppShell(role)).not.toContain(">Setup</button>");

@@ -51,7 +51,7 @@ export default function Interesse() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-lucathi-canvas p-6">
-      <section className="w-full max-w-md rounded-[28px] border border-lucathi-line bg-white p-8 shadow-xl shadow-lucathi-deep/5">
+      <section className="w-full max-w-md rounded-2xl border border-lucathi-line bg-white p-8 shadow-xl shadow-lucathi-deep/5">
         <BrandMark />
         <Link href="/" className="mt-6 inline-flex items-center gap-2 text-xs text-lucathi-gray hover:text-lucathi-navy">
           <ArrowLeft className="size-3.5" /> Voltar para o login

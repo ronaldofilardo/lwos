@@ -1,15 +1,9 @@
-import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UfBracketFormData } from "./types";
+import { useUfBracketForm } from "./hooks/useUfBracketForm";
+import type { UfBracketFormData } from "./types";
 
 interface Props {
   open: boolean;
@@ -24,24 +18,8 @@ export function UfBracketFormModal({
   initialData,
   onSave,
 }: Props) {
-  const [limitValue, setLimitValue] = useState(
-    initialData ? String(initialData.limitValue) : "1000000"
-  );
-  const [rate, setRate] = useState(
-    initialData ? String(initialData.rate) : "4"
-  );
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave({
-      bracketOrder: initialData?.bracketOrder ?? 1,
-      limitValue: Math.max(0, parseFloat(limitValue) || 0),
-      rate: Math.max(0, parseFloat(rate) || 0),
-      accumulatedTax: 0,
-      deductionValue: 0,
-    });
-    onOpenChange(false);
-  };
+  const { limitValue, setLimitValue, rate, setRate, handleSubmit } =
+    useUfBracketForm({ initialData, onSave, onClose: () => onOpenChange(false) });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -103,4 +81,3 @@ export function UfBracketFormModal({
     </Dialog>
   );
 }
-

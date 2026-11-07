@@ -254,7 +254,7 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
   const utils = trpc.useUtils();
   const people = trpc.people.list.useQuery({ familyId });
   const list = trpc.companies.list.useQuery({ familyId });
-  const { counts, loading: alertsLoading } = useProjectAlerts(familyId);
+  const { counts, bySubject, loading: alertsLoading } = useProjectAlerts(familyId);
   const [detailsCompanyId, setDetailsCompanyId] = useState<string | null>(null);
   const [removingCompany, setRemovingCompany] = useState<{
     id: string;

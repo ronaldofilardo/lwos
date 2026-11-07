@@ -1,7 +1,6 @@
 import {
   BellRing,
   LogOut,
-  Menu,
   Shield,
   UsersRound,
   LayoutDashboard,
@@ -9,17 +8,18 @@ import {
   Settings2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useRoute } from "wouter";
-import { useLocation } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "./BrandMark";
 import { navigationItems, clientNavigationItems } from "./navigation";
 import { isClient, canManage, isPlatformAdmin } from "@shared/domain/permissions";
 import { hasBirthdaysThisWeek } from "@/features/birthdays/birthday-utils";
-
+import { MobileNavSheet } from "./MobileNavSheet";
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [, navigate] = useLocation(); const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
+  const [pathname] = useLocation();
+  const { user, logout } = useAuth();
   const birthdays = trpc.birthdays.list.useQuery(undefined, {
     enabled: user?.role === "SOCIO",
     refetchInterval: 60 * 60 * 1000,
@@ -27,15 +27,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hasWeeklyBirthdays = hasBirthdaysThisWeek(birthdays.data ?? []);
   const [matchFamily, paramsFamily] = useRoute("/familias/:familyId");
   const [matchClientFamily, paramsClientFamily] = useRoute("/minha-familia/:familyId");
-  const familyId = matchFamily
-    ? (paramsFamily?.familyId ?? "")
-    : matchClientFamily
-      ? (paramsClientFamily?.familyId ?? "")
-      : "";
+  const familyId = matchFamily ? (paramsFamily?.familyId ?? "") : matchClientFamily ? (paramsClientFamily?.familyId ?? "") : "";
   const family = trpc.families.get.useQuery({ familyId }, { enabled: Boolean(familyId) });
   const projectTitle = family.data?.name;
-  // Projetos e as áreas da equipe são da operação (SOCIO/ANALISTA) — o ADMIN
-  // é admin de plataforma e não enxerga dados de família/projeto.
   const canManageProjects = canManage(user?.role);
   const navItems = isClient(user?.role)
     ? clientNavigationItems
@@ -44,7 +38,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         if (item.path === "/familias") return canManageProjects;
         return true;
       });
-  // 1ª posição do menu: Home (as ações administrativas vêm depois dela).
   const [homeItem, ...otherNavItems] = navItems;
   return (
     <div className="min-h-screen bg-lucathi-canvas text-lucathi-ink">
@@ -53,29 +46,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <BrandMark />
           {projectTitle ? <div className="mt-8 rounded-xl bg-lucathi-mist px-3 py-2"><p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-lucathi-gray font-subtitle">Projeto ativo</p><p className="mt-1 truncate text-sm font-medium text-lucathi-navy">{projectTitle}</p></div> : null}
           <nav className="mt-12 space-y-1" aria-label="Navegação principal">
-            <Button key={homeItem.path} variant="ghost" onClick={() => navigate(homeItem.path)} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy">
+            <Button key={homeItem.path} variant="ghost" onClick={() => navigate(homeItem.path)} className={`w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy ${pathname === homeItem.path ? "bg-lucathi-mist font-semibold text-lucathi-navy" : ""}`} aria-current={pathname === homeItem.path ? "page" : undefined}>
               <homeItem.icon className="size-4" />
               {homeItem.label}
             </Button>
-            {canManage(user?.role) ? <Button variant="ghost" onClick={() => navigate("/dashboard")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><LayoutDashboard className="size-4" />Dashboard</Button> : null}
-            {canManage(user?.role) ? <Button variant="ghost" onClick={() => navigate("/interessados")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><UserPlus className="size-4" />Interessados</Button> : null}
-            {isPlatformAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/setup")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><Settings2 className="size-4" />Setup</Button> : null}
+            {canManage(user?.role) ? <Button variant="ghost" onClick={() => navigate("/dashboard")} className={`w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy ${pathname === "/dashboard" ? "bg-lucathi-mist font-semibold text-lucathi-navy" : ""}`} aria-current={pathname === "/dashboard" ? "page" : undefined}><LayoutDashboard className="size-4" />Dashboard</Button> : null}
+            {canManage(user?.role) ? <Button variant="ghost" onClick={() => navigate("/interessados")} className={`w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy ${pathname === "/interessados" ? "bg-lucathi-mist font-semibold text-lucathi-navy" : ""}`} aria-current={pathname === "/interessados" ? "page" : undefined}><UserPlus className="size-4" />Interessados</Button> : null}
+            {(isPlatformAdmin(user?.role) || user?.role === "SOCIO") ? <Button variant="ghost" onClick={() => navigate("/setup")} className={`w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy ${pathname === "/setup" ? "bg-lucathi-mist font-semibold text-lucathi-navy" : ""}`} aria-current={pathname === "/setup" ? "page" : undefined}><Settings2 className="size-4" />Setup</Button> : null}
             {otherNavItems.map(item => (
-              <Button key={item.path} variant="ghost" onClick={() => navigate(item.path)} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy">
+              <Button key={item.path} variant="ghost" onClick={() => navigate(item.path)} className={`w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy ${pathname === item.path ? "bg-lucathi-mist font-semibold text-lucathi-navy" : ""}`} aria-current={pathname === item.path ? "page" : undefined}>
                 <item.icon className="size-4" />
                 {item.label}
-{item.path === "/aniversarios" &&
-            user?.role === "SOCIO" &&
-            hasWeeklyBirthdays ? (
-              <span
-                className="ml-auto text-status-warning-text"
-                aria-label="Há aniversariantes esta semana"
-                role="img"
-                title="Há aniversariantes esta semana"
-              >
-                <BellRing className="size-4" aria-hidden={true} />
-              </span>
-            ) : null}
+                {item.path === "/aniversarios" &&
+                user?.role === "SOCIO" &&
+                hasWeeklyBirthdays ? (
+                  <span
+                    className="ml-auto text-status-warning-text"
+                    aria-label="Há aniversariantes esta semana"
+                    role="img"
+                    title="Há aniversariantes esta semana"
+                  >
+                    <BellRing className="size-4" aria-hidden={true} />
+                  </span>
+                ) : null}
               </Button>
             ))}
           </nav>
@@ -88,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
       <main className={!isClient(user?.role) ? "lg:ml-64" : ""}>
         <header className="flex min-h-20 items-center justify-between border-b border-lucathi-line bg-white/85 px-5 backdrop-blur lg:px-10">
-          <Button variant="ghost" size="icon" className="lg:hidden"><Menu className="size-5" /></Button>
+          <MobileNavSheet user={user ?? null} />
           <div className="ml-auto flex items-center gap-4">
             <div className="text-right"><p className="text-sm font-medium">{user?.name || "Usuário"}</p><p className="text-xs text-lucathi-gray">{user?.role || "CLIENTE"}</p></div>
             <Button variant="outline" size="icon" onClick={logout} aria-label="Sair"><LogOut className="size-4" /></Button>

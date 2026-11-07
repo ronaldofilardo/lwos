@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { formatBRL } from "@/features/properties/propertyCardView";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const isTeam = (role?: string) => role === "SOCIO" || role === "ANALISTA";
 
@@ -41,7 +42,7 @@ const statusBadge = (status: string) => {
 };
 
 export function FinancialProposalPanel({ familyId }: { familyId: string }) {
-  const { user } = trpc.useAuth();
+  const { user } = useAuth();
   const utils = trpc.useUtils();
   const isTeamFlag = isTeam(user?.role);
   const list = trpc.proposals.list.useQuery({ familyId });
@@ -189,11 +190,6 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
                         Aceita em {new Date(prop.acceptedAt).toLocaleDateString("pt-BR")}
                       </p>
                     )}
-                    {prop.acceptedValue && (
-                      <p className="text-sm font-bold text-status-success-text">
-                        Valor aceito: R$ {Number(prop.acceptedValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                      </p>
-                    )}
                     <Button
                       size="sm"
                       className="bg-status-success-bg text-status-success-text hover:bg-status-success-bg/80"
@@ -221,7 +217,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
                       <Button
                         size="sm"
                         onClick={() =>
-                          update.mutate({ proposalId: prop.id, status: "ACEITA", acceptedValue: prop.counterProposalValue })
+                          update.mutate({ proposalId: prop.id, status: "ACEITA" })
                         }
                         className="bg-status-success-bg text-status-success-text hover:bg-status-success-bg/80"
                       >
@@ -309,7 +305,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
                     </>
                   ) : (
                     <>
-                      {canEdit ? (
+                      {isTeamFlag ? (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -320,7 +316,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
                           Editar
                         </Button>
                       ) : null}
-                      {canEdit ? (
+                      {isTeamFlag ? (
                         <Button
                           variant="ghost"
                           size="sm"

@@ -30,3 +30,14 @@ export const reviewCounterProposalSchema = z.object({
   decision: z.enum(["ACEITAR", "RECUSAR"]),
   notes: z.string().max(1000).optional(),
 });
+
+export const updateProposalSchema = z.object({
+  proposalId: z.string().min(1),
+  status: proposalStatusSchema.optional(),
+  scopeDescription: z.string().min(10).optional(),
+  proposedValue: z.number().positive().optional(),
+});
+
+export const removeProposalSchema = z.object({
+  proposalId: z.string().min(1),
+});

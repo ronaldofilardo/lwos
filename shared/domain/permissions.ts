@@ -47,6 +47,8 @@ export const Permission = {
   
   // Propostas
   PROPOSAL_CREATE: "proposal.create" as const,
+  PROPOSAL_UPDATE: "proposal.update" as const,
+  PROPOSAL_REMOVE: "proposal.remove" as const,
   PROPOSAL_REVIEW_COUNTER: "proposal.reviewCounter" as const,
   
   // Portal
@@ -123,6 +125,8 @@ const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
     Permission.CERTIDAO_GENERATE,
     // Propostas
     Permission.PROPOSAL_CREATE,
+    Permission.PROPOSAL_UPDATE,
+    Permission.PROPOSAL_REMOVE,
     // LWR
     Permission.LWR_CREATE,
   ],

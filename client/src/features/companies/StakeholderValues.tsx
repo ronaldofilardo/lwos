@@ -29,7 +29,9 @@ export function StakeholderValues({
           <span className="cursor-help font-medium" title={field.tooltip}>
             {field.shortLabel}
           </span>{" "}
-          {formatAmount(values[field.key], international)}
+          <span className="tabular-nums">
+            {formatAmount(values[field.key], international)}
+          </span>
         </span>
       ))}
     </p>

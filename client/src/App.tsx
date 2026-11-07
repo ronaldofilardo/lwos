@@ -49,7 +49,8 @@ function Router() {
         <Route path={"/familias"}>{() => <AuthGate><RoleGate allow={["SOCIO", "ANALISTA"]}><AppShell><FamilyPage /></AppShell></RoleGate></AuthGate>}</Route>
         <Route path={"/patrimonio"}>{() => <AppShell><PlaceholderPage title="Patrimônio" description="Imóveis, gravames, sociedades e integralizações já possuem contratos de servidor e receberão a camada operacional nesta rota." /></AppShell>}</Route>
         <Route path={"/aniversarios"}>{() => <AuthGate><AppShell><BirthdaysPage /></AppShell></AuthGate>}</Route>
-        <Route path={"/setup"}>{() => <AuthGate><RoleGate allow={["ADMIN"]}><AppShell><SetupPage /></AppShell></RoleGate></AuthGate>}</Route>
+        <Route path={"/setup"}>{() => <AuthGate><RoleGate allow={["ADMIN", "SOCIO"]}><AppShell><SetupPage /></AppShell></RoleGate></AuthGate>}</Route>
+        <Route path={"/relatorios"}>{() => <AppShell><PlaceholderPage title="Relatórios" description="Em breve: relatórios gerenciais, patrimoniais e sucessórios estarão disponíveis nesta rota." /></AppShell>}</Route>
         <Route path={"/404"} component={NotFound} />
         {/* Final fallback route */}
         <Route component={NotFound} />

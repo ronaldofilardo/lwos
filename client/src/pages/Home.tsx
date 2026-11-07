@@ -41,7 +41,7 @@ export default function Home() {
 
   return (
     <section className="space-y-8">
-      <div className="grid gap-6 rounded-[28px] bg-lucathi-deep p-8 text-white lg:grid-cols-[1.4fr_0.6fr]">
+      <div className="grid gap-6 rounded-2xl bg-lucathi-deep p-8 text-white lg:grid-cols-[1.4fr_0.6fr]">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/65 font-subtitle">
             Lucathi Wealth OS

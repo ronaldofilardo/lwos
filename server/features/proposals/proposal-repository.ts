@@ -83,3 +83,27 @@ export async function reviewCounterProposalRecord(input: {
     })
     .where(eq(financialProposals.id, input.proposalId));
 }
+
+export async function updateProposalRecord(input: {
+  proposalId: string;
+  status?: "RASCUNHO" | "ENVIADA" | "ACEITA" | "CONTRAPROPOSTA_RECEBIDA" | "RECUSADA";
+  scopeDescription?: string;
+  proposedValue?: number;
+}) {
+  const db = await requireDatabase();
+  const setValues: Record<string, unknown> = {};
+  if (input.status !== undefined) setValues.status = input.status;
+  if (input.scopeDescription !== undefined) setValues.scopeDescription = input.scopeDescription;
+  if (input.proposedValue !== undefined) setValues.proposedValue = input.proposedValue.toFixed(2);
+  await db
+    .update(financialProposals)
+    .set(setValues)
+    .where(eq(financialProposals.id, input.proposalId));
+}
+
+export async function removeProposalRecord(proposalId: string) {
+  const db = await requireDatabase();
+  await db
+    .delete(financialProposals)
+    .where(eq(financialProposals.id, proposalId));
+}
