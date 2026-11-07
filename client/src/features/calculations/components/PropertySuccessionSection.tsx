@@ -7,18 +7,18 @@ export function PropertySuccessionSection({
   property: PropertyTaxRow;
 }) {
   return (
-    <div className="rounded-xl border border-lucathi-line/70 bg-amber-50/40 p-4">
+    <div className="rounded-xl border border-lucathi-line/70 bg-status-warning-bg/40 p-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-900">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-status-warning-text font-subtitle">
           Sucessão / Doação — ITCMD Individual
         </h4>
-        <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+        <span className="rounded bg-status-warning-bg px-2 py-0.5 text-[10px] font-bold text-status-warning-text">
           SEFAZ / {property.uf}
         </span>
       </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg bg-white p-3 border border-amber-200/60">
+        <div className="rounded-lg bg-white p-3 border border-status-warning-border/60">
           <p className="text-xs text-lucathi-gray">Base de Cálculo</p>
           <p className="mt-1 font-semibold text-sm text-lucathi-navy tabular-nums">
             {formatBRL(property.marketValue)}
@@ -26,7 +26,7 @@ export function PropertySuccessionSection({
           <p className="mt-0.5 text-[11px] text-lucathi-gray">Valor de mercado</p>
         </div>
 
-        <div className="rounded-lg bg-white p-3 border border-amber-200/60">
+        <div className="rounded-lg bg-white p-3 border border-status-warning-border/60">
           <p className="text-xs text-lucathi-gray">Alíquota Estadual</p>
           <p className="mt-1 font-semibold text-sm text-lucathi-navy tabular-nums">
             {property.itcmdRate.toFixed(2)}%
@@ -36,12 +36,12 @@ export function PropertySuccessionSection({
           </p>
         </div>
 
-        <div className="rounded-lg bg-white p-3 border border-amber-200/60">
+        <div className="rounded-lg bg-white p-3 border border-status-warning-border/60">
           <p className="text-xs text-lucathi-gray">ITCMD Estimado</p>
-          <p className="mt-1 font-bold text-sm text-amber-950 tabular-nums">
+          <p className="mt-1 font-bold text-sm text-status-warning-text tabular-nums">
             {formatBRL(property.itcmdTax)}
           </p>
-          <p className="mt-0.5 text-[11px] text-amber-800">
+          <p className="mt-0.5 text-[11px] text-status-warning-text">
             Devido ao Estado de {property.uf}
           </p>
         </div>
@@ -52,4 +52,3 @@ export function PropertySuccessionSection({
     </div>
   );
 }
-

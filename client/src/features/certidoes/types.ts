@@ -44,12 +44,12 @@ export const certidaoStatusLabels: Record<CertidaoStatus, string> = {
 };
 
 export const certidaoStatusStyles: Record<CertidaoStatus, string> = {
-  PENDENTE: "bg-amber-50 text-amber-800 border-amber-200",
-  NEGATIVA: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  PENDENTE: "bg-status-warning-bg text-status-warning-text border-status-warning-border",
+  NEGATIVA: "bg-status-success-bg text-status-success-text border-status-success-border",
   POSITIVA_COM_EFEITOS_DE_NEGATIVA:
-    "bg-sky-50 text-sky-800 border-sky-200",
-  SOMENTE_FISICA: "bg-purple-50 text-purple-800 border-purple-200",
-  POSITIVA: "bg-orange-50 text-orange-800 border-orange-200",
+    "bg-status-info-bg text-status-info-text border-status-info-border",
+  SOMENTE_FISICA: "bg-status-neutral-bg text-status-neutral-text border-status-neutral-border",
+  POSITIVA: "bg-status-warning-bg text-status-warning-text border-status-warning-border",
 };
 
 export const certidaoScopeLabels: Record<CertidaoScope, string> = {

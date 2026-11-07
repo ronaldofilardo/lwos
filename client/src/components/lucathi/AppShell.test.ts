@@ -97,3 +97,59 @@ describe("AppShell aniversários", () => {
     }
   );
 });
+
+describe("AppShell menu Setup", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    appShellMocks.useLocation.mockReturnValue(["/", vi.fn()]);
+    appShellMocks.useRoute.mockReturnValue([false, {}]);
+  });
+
+  it("mostra o item Setup apenas para ADMIN", () => {
+    expect(renderAppShell("ADMIN")).toContain(">Setup</button>");
+  });
+
+  it.each(["SOCIO", "ANALISTA", "CLIENTE"])(
+    "esconde o item Setup para %s",
+    role => {
+      expect(renderAppShell(role)).not.toContain(">Setup</button>");
+    }
+  );
+});
+
+describe("AppShell menu da equipe (sem ADMIN)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    appShellMocks.useLocation.mockReturnValue(["/", vi.fn()]);
+    appShellMocks.useRoute.mockReturnValue([false, {}]);
+  });
+
+  it.each(["SOCIO", "ANALISTA"])(
+    "mostra Dashboard, Interessados e Projetos para %s",
+    role => {
+      const markup = renderAppShell(role);
+
+      expect(markup).toContain(">Dashboard</button>");
+      expect(markup).toContain(">Interessados</button>");
+      expect(markup).toContain(">Projetos</button>");
+    }
+  );
+
+  it.each(["ADMIN", "CLIENTE"])(
+    "esconde Dashboard, Interessados e Projetos para %s",
+    role => {
+      const markup = renderAppShell(role);
+
+      expect(markup).not.toContain(">Dashboard</button>");
+      expect(markup).not.toContain(">Interessados</button>");
+      expect(markup).not.toContain(">Projetos</button>");
+    }
+  );
+
+  it("mantém Home e Setup visíveis para ADMIN", () => {
+    const markup = renderAppShell("ADMIN");
+
+    expect(markup).toContain(">Home</button>");
+    expect(markup).toContain(">Setup</button>");
+  });
+});

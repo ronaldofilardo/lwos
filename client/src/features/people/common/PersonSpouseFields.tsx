@@ -85,7 +85,7 @@ export function PersonSpouseFields({ state }: { state: PersonFormState }) {
         </label>
       ) : null}
       {state.parentTooClose ? (
-        <p className="text-xs text-amber-700">
+        <p className="text-xs text-status-warning-text">
           A idade do pai/mãe é muito próxima da do filho(a) — confira as datas de
           nascimento.
         </p>

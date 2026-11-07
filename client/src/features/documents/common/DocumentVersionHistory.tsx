@@ -59,7 +59,7 @@ export function DocumentVersionHistory({
             title="Copiar hash"
           >
             {copied === version.sha256 ? (
-              <span className="text-emerald-600">✓</span>
+              <span className="text-status-success-text">✓</span>
             ) : (
               <Copy className="size-3" />
             )}

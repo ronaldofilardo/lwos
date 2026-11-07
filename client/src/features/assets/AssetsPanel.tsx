@@ -146,7 +146,7 @@ function AssetFormModal({
               className="h-9"
             />
             {declaredValue.trim() && parseDeclaredValue(declaredValue) === null ? (
-              <span className="text-xs text-red-600">
+              <span className="text-xs text-status-danger-text">
                 Valor inválido. Use o formato 100.000,00 (maior que zero).
               </span>
             ) : null}
@@ -293,7 +293,7 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
                 placeholder={declaredValuePlaceholder(category)}
               />
               {declaredValue.trim() && value === null ? (
-                <span className="text-xs text-red-600">
+                <span className="text-xs text-status-danger-text">
                   Valor inválido. Use o formato 100.000,00 (maior que zero).
                 </span>
               ) : null}
@@ -389,7 +389,7 @@ export function AssetsPanel({ familyId }: { familyId: string }) {
                 <button
                   type="button"
                   aria-label="Excluir ativo"
-                  className="rounded px-1.5 py-1 text-red-600 hover:bg-red-50"
+                  className="rounded px-1.5 py-1 text-status-danger-text hover:bg-status-danger-bg"
                   onClick={() => setRemoving(row)}
                 >
                   <Trash2 className="size-4" />

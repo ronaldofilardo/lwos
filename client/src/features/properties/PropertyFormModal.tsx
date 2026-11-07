@@ -76,7 +76,7 @@ export function PropertyFormModal({
             onChange={patch => setValues(prev => ({ ...prev, ...patch }))}
           />
         </div>
-        {error ? <p className="mt-2 text-xs text-red-700">{error}</p> : null}
+        {error ? <p className="mt-2 text-xs text-status-danger-text">{error}</p> : null}
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="outline" onClick={onClose} disabled={isPending}>
             Cancelar

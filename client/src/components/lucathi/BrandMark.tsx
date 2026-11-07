@@ -1,12 +1,15 @@
-type BrandMarkProps = { compact?: boolean; inverse?: boolean };
+type BrandMarkProps = { compact?: boolean; variant?: "primary" | "negative" };
 
-export function BrandMark({ compact = false, inverse = false }: BrandMarkProps) {
+export function BrandMark({ compact = false, variant = "primary" }: BrandMarkProps) {
+  const src = variant === "negative" ? "/lucathi-logo-white.png" : "/lucathi-logo.png";
+  const height = compact ? "h-7" : "h-9";
+  const padding = "pl-[1.2em]";
+
   return (
     <img
-      src="/lucathi-logo.png"
+      src={src}
       alt="Lucathi Consult"
-      className={`w-auto object-contain object-left ${compact ? "h-7" : "h-9"}`}
-      style={inverse ? { filter: "brightness(0) invert(1)" } : undefined}
+      className={`w-auto object-contain object-left ${height} ${padding}`}
     />
   );
 }

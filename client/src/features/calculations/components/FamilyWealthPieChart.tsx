@@ -9,15 +9,15 @@ import { formatBRL } from "@/features/properties/propertyCardView";
 import type { WealthBreakdown } from "@shared/domain/family-wealth-calculator";
 
 const chartConfig = {
-  properties: { label: "Imóveis", color: "#003663" },
-  companies: { label: "Sociedades", color: "#5b7f9b" },
-  otherAssets: { label: "Demais ativos", color: "#b3c2cc" },
+  properties: { label: "Imóveis", color: "var(--chart-1)" },
+  companies: { label: "Sociedades", color: "var(--chart-2)" },
+  otherAssets: { label: "Demais ativos", color: "var(--chart-3)" },
 } satisfies ChartConfig;
 
 const CATEGORIES = [
-  { key: "properties", label: "Imóveis", color: "#003663" },
-  { key: "companies", label: "Sociedades", color: "#5b7f9b" },
-  { key: "otherAssets", label: "Demais ativos", color: "#b3c2cc" },
+  { key: "properties", label: "Imóveis", color: "var(--chart-1)" },
+  { key: "companies", label: "Sociedades", color: "var(--chart-2)" },
+  { key: "otherAssets", label: "Demais ativos", color: "var(--chart-3)" },
 ] as const;
 
 /** Proporção (R$ e %) das 3 categorias do patrimônio dos patriarcas. */
@@ -37,7 +37,7 @@ export function FamilyWealthPieChart({
 
   return (
     <section className="rounded-2xl border border-lucathi-line bg-white p-6 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-lucathi-gray">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-lucathi-gray font-subtitle">
         Composição do patrimônio
       </p>
       <ChartContainer config={chartConfig} className="mx-auto mt-2 h-[240px] w-full">

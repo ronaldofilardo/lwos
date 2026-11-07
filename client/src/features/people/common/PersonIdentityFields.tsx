@@ -121,7 +121,7 @@ export function PersonIdentityFields({
               inputMode="numeric"
             />
             {state.taxId.replace(/\D/g, "").length > 0 && !state.cpfOk ? (
-              <p className="text-xs text-red-600">CPF inválido.</p>
+              <p className="text-xs text-status-danger-text">CPF inválido.</p>
             ) : null}
           </>
         )}
@@ -142,7 +142,7 @@ export function PersonIdentityFields({
               </p>
             ) : null}
             {state.birthDate && !state.birthOk ? (
-              <p className="text-xs text-red-600">
+              <p className="text-xs text-status-danger-text">
                 Data de nascimento inválida.
               </p>
             ) : null}

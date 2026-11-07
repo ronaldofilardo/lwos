@@ -15,7 +15,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "./BrandMark";
 import { navigationItems, clientNavigationItems } from "./navigation";
-import { isClient, isAdmin } from "@shared/domain/permissions";
+import { isClient, canManage, isPlatformAdmin } from "@shared/domain/permissions";
 import { hasBirthdaysThisWeek } from "@/features/birthdays/birthday-utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -34,11 +34,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       : "";
   const family = trpc.families.get.useQuery({ familyId }, { enabled: Boolean(familyId) });
   const projectTitle = family.data?.name;
+  // Projetos e as áreas da equipe são da operação (SOCIO/ANALISTA) — o ADMIN
+  // é admin de plataforma e não enxerga dados de família/projeto.
+  const canManageProjects = canManage(user?.role);
   const navItems = isClient(user?.role)
     ? clientNavigationItems
-    : navigationItems.filter(
-        item => item.path !== "/aniversarios" || user?.role === "SOCIO"
-      );
+    : navigationItems.filter(item => {
+        if (item.path === "/aniversarios") return user?.role === "SOCIO";
+        if (item.path === "/familias") return canManageProjects;
+        return true;
+      });
   // 1ª posição do menu: Home (as ações administrativas vêm depois dela).
   const [homeItem, ...otherNavItems] = navItems;
   return (
@@ -46,31 +51,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!isClient(user?.role) && (
         <aside className="fixed inset-y-0 hidden w-64 border-r border-lucathi-line bg-white px-5 py-7 lg:block">
           <BrandMark />
-          {projectTitle ? <div className="mt-8 rounded-xl bg-lucathi-mist px-3 py-2"><p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-lucathi-gray">Projeto ativo</p><p className="mt-1 truncate text-sm font-medium text-lucathi-navy">{projectTitle}</p></div> : null}
+          {projectTitle ? <div className="mt-8 rounded-xl bg-lucathi-mist px-3 py-2"><p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-lucathi-gray font-subtitle">Projeto ativo</p><p className="mt-1 truncate text-sm font-medium text-lucathi-navy">{projectTitle}</p></div> : null}
           <nav className="mt-12 space-y-1" aria-label="Navegação principal">
             <Button key={homeItem.path} variant="ghost" onClick={() => navigate(homeItem.path)} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy">
               <homeItem.icon className="size-4" />
               {homeItem.label}
             </Button>
-            {isAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/dashboard")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><LayoutDashboard className="size-4" />Dashboard</Button> : null}
-            {isAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/interessados")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><UserPlus className="size-4" />Interessados</Button> : null}
-            {isAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/setup")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><Settings2 className="size-4" />Setup</Button> : null}
+            {canManage(user?.role) ? <Button variant="ghost" onClick={() => navigate("/dashboard")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><LayoutDashboard className="size-4" />Dashboard</Button> : null}
+            {canManage(user?.role) ? <Button variant="ghost" onClick={() => navigate("/interessados")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><UserPlus className="size-4" />Interessados</Button> : null}
+            {isPlatformAdmin(user?.role) ? <Button variant="ghost" onClick={() => navigate("/setup")} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy"><Settings2 className="size-4" />Setup</Button> : null}
             {otherNavItems.map(item => (
               <Button key={item.path} variant="ghost" onClick={() => navigate(item.path)} className="w-full justify-start gap-3 text-lucathi-gray hover:bg-lucathi-mist hover:text-lucathi-navy">
                 <item.icon className="size-4" />
                 {item.label}
-                {item.path === "/aniversarios" &&
-                user?.role === "SOCIO" &&
-                hasWeeklyBirthdays ? (
-                  <span
-                    className="ml-auto text-amber-700"
-                    aria-label="Há aniversariantes esta semana"
-                    role="img"
-                    title="Há aniversariantes esta semana"
-                  >
-                    <BellRing className="size-4" aria-hidden="true" />
-                  </span>
-                ) : null}
+{item.path === "/aniversarios" &&
+            user?.role === "SOCIO" &&
+            hasWeeklyBirthdays ? (
+              <span
+                className="ml-auto text-status-warning-text"
+                aria-label="Há aniversariantes esta semana"
+                role="img"
+                title="Há aniversariantes esta semana"
+              >
+                <BellRing className="size-4" aria-hidden={true} />
+              </span>
+            ) : null}
               </Button>
             ))}
           </nav>

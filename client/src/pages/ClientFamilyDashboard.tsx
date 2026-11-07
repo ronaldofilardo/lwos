@@ -33,7 +33,7 @@ function MetricCard({
       <div className="flex items-center gap-3">
         <Icon className="size-6 text-lucathi-navy" />
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray font-subtitle">
             {label}
           </p>
           <p className="text-3xl font-display text-lucathi-navy">{value}</p>
@@ -119,17 +119,17 @@ function ActionRequiredList({ familyId }: { familyId: string }) {
 
           const getGroupBgColor = (title: string) => {
             switch(title) {
-              case "Familiar e Pessoas": return "bg-blue-50";
-              case "Holdings e Sociedades": return "bg-purple-50";
-              case "Imóveis": return "bg-amber-50";
-              case "Investimentos e Outros Ativos": return "bg-emerald-50";
-              default: return "bg-slate-50";
+              case "Familiar e Pessoas": return "bg-lucathi-mist";
+              case "Holdings e Sociedades": return "bg-lucathi-mist";
+              case "Imóveis": return "bg-lucathi-mist";
+              case "Investimentos e Outros Ativos": return "bg-lucathi-mist";
+              default: return "bg-lucathi-mist";
             }
           };
 
           return (
             <div key={group.title} className="space-y-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-lucathi-gray border-b pb-1">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-lucathi-gray border-b pb-1 font-subtitle">
                 {group.title}
               </h3>
               {Object.entries(byEntity).map(([entityName, docs]) => (
@@ -203,7 +203,7 @@ function ClientFamilyOverview({ family }: { family: FamilyRow }) {
       <header className="rounded-[28px] bg-lucathi-deep p-7 text-white shadow-lg">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65 font-subtitle">
               Acesso do titular
             </p>
             <h1 className="mt-2 font-display text-4xl">{family.name}</h1>
@@ -212,7 +212,7 @@ function ClientFamilyOverview({ family }: { family: FamilyRow }) {
             {typeof percent === "number" ? (
               <div className="rounded-2xl bg-white/10 px-4 py-2.5 text-center backdrop-blur-sm">
                 <p className="text-xl font-semibold text-white">{percent}%</p>
-                <p className="text-[11px] uppercase tracking-wider text-white/60">
+                <p className="text-[11px] uppercase tracking-wider text-white/60 font-subtitle">
                   Progresso
                 </p>
               </div>
@@ -345,7 +345,7 @@ export default function ClientFamilyDashboard() {
 
   if (families.isError) {
     return (
-      <div className="p-8 text-center text-red-500">
+      <div className="p-8 text-center text-status-danger-text">
         Erro ao carregar seus dados
       </div>
     );

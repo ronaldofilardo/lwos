@@ -1,103 +1,85 @@
 import { useState } from "react";
-import { BadgeCheck, CheckCircle2, DollarSign, Handshake, MessageSquare, Send, ShieldAlert, XCircle } from "lucide-react";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { CheckCircle2, MessageSquare, XCircle, Handshake, Pencil, Trash2, Send, AlertTriangle, BadgeCheck, DollarSign, X } from "lucide-react";
+import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
+import { errorMessage } from "@/lib/trpcError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
-import { errorMessage } from "@/lib/trpcError";
-import { isSocio, isTeam } from "@shared/domain/permissions";
+import { Label } from "@/components/ui/label";
+import { formatBRL } from "@/features/properties/propertyCardView";
+
+const isTeam = (role?: string) => role === "SOCIO" || role === "ANALISTA";
+
+const statusBadge = (status: string) => {
+  switch (status) {
+    case "ACEITA":
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-status-success-bg px-2.5 py-0.5 text-xs font-semibold text-status-success-text">
+          <CheckCircle2 className="size-3.5" /> Proposta Aceita
+        </span>
+      );
+    case "CONTRAPROPOSTA_RECEBIDA":
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-status-warning-bg px-2.5 py-0.5 text-xs font-semibold text-status-warning-text">
+          <MessageSquare className="size-3.5" /> Contraproposta em Análise
+        </span>
+      );
+    case "RECUSADA":
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-status-danger-bg px-2.5 py-0.5 text-xs font-semibold text-status-danger-text">
+          <XCircle className="size-3.5" /> Recusada
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-status-info-bg px-2.5 py-0.5 text-xs font-semibold text-status-info-text">
+          <Handshake className="size-3.5" /> Proposta Aberta
+        </span>
+      );
+  }
+};
 
 export function FinancialProposalPanel({ familyId }: { familyId: string }) {
-  const { user } = useAuth();
+  const { user } = trpc.useAuth();
   const utils = trpc.useUtils();
-
-  const [scopeDescription, setScopeDescription] = useState("");
-  const [proposedValue, setProposedValue] = useState("");
-
-  const [counterValue, setCounterValue] = useState("");
-  const [counterNotes, setCounterNotes] = useState("");
-  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
-
+  const isTeamFlag = isTeam(user?.role);
   const list = trpc.proposals.list.useQuery({ familyId });
-
   const create = trpc.proposals.create.useMutation({
     onSuccess: () => {
       utils.proposals.list.invalidate({ familyId });
-      setScopeDescription("");
-      setProposedValue("");
-      toast.success("Proposta financeira registrada e disponibilizada.");
+      toast.success("Proposta registrada.");
     },
-    onError: (error) => toast.error(errorMessage(error)),
+    onError: error => toast.error(errorMessage(error)),
   });
-
-  const accept = trpc.proposals.accept.useMutation({
+  const update = trpc.proposals.update.useMutation({
     onSuccess: () => {
       utils.proposals.list.invalidate({ familyId });
-      toast.success("Proposta financeira aceita com sucesso!");
+      toast.success("Proposta atualizada.");
     },
-    onError: (error) => toast.error(errorMessage(error)),
+    onError: error => toast.error(errorMessage(error)),
   });
-
-  const counter = trpc.proposals.counterProposal.useMutation({
+  const remove = trpc.proposals.remove.useMutation({
     onSuccess: () => {
       utils.proposals.list.invalidate({ familyId });
-      setSelectedProposalId(null);
-      setCounterValue("");
-      setCounterNotes("");
-      toast.success("Contraproposta enviada para análise do Sócio.");
+      toast.success("Proposta excluída.");
     },
-    onError: (error) => toast.error(errorMessage(error)),
+    onError: error => toast.error(errorMessage(error)),
   });
 
-  const reviewCounter = trpc.proposals.reviewCounterProposal.useMutation({
-    onSuccess: () => {
-      utils.proposals.list.invalidate({ familyId });
-      toast.success("Deliberação da contraproposta registrada.");
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  });
-
-  const isSocioFlag = isSocio(user?.role);
-  const isTeamFlag = isTeam(user?.role);
+  const [scopeDescription, setScopeDescription] = useState("");
+  const [proposedValue, setProposedValue] = useState("");
+  const [editing, setEditing] = useState<{ id: string; scope: string; value: string } | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const handleCreate = () => {
-    if (!scopeDescription.trim() || !proposedValue) return;
-    create.mutate({
-      familyId,
-      scopeDescription: scopeDescription.trim(),
-      proposedValue: Number(proposedValue),
-    });
+    create.mutate({ familyId, scopeDescription, proposedValue: Number(proposedValue) });
   };
 
-  const statusBadge = (status: string) => {
-    switch (status) {
-      case "ACEITA":
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-            <CheckCircle2 className="size-3.5" /> Proposta Aceita
-          </span>
-        );
-      case "CONTRAPROPOSTA_RECEBIDA":
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
-            <MessageSquare className="size-3.5" /> Contraproposta em Análise
-          </span>
-        );
-      case "RECUSADA":
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
-            <XCircle className="size-3.5" /> Recusada
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
-            <Handshake className="size-3.5" /> Proposta Aberta
-          </span>
-        );
-    }
+  const handleUpdate = () => {
+    if (!editing) return;
+    update.mutate({ proposalId: editing.id, scopeDescription: editing.scope, proposedValue: Number(editing.value) });
+    setEditing(null);
   };
 
   return (
@@ -116,7 +98,7 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
 
       {isTeamFlag ? (
         <div className="mt-5 rounded-xl border border-dashed border-lucathi-line p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray font-subtitle">
             Nova Proposta Comercial / Aditivo
           </p>
           <div className="mt-3 space-y-3">
@@ -171,13 +153,13 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
 
               <div className="mt-3 space-y-2 text-sm">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">Escopo de Trabalho</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray font-subtitle">Escopo de Trabalho</p>
                   <p className="mt-1 whitespace-pre-wrap text-lucathi-navy">{prop.scopeDescription}</p>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-baseline gap-6">
                   <div>
-                    <p className="text-xs uppercase text-lucathi-gray">Valor da Proposta</p>
+                    <p className="text-xs text-lucathi-gray">Valor da Proposta</p>
                     <p className="text-xl font-bold text-lucathi-navy">
                       R$ {Number(prop.proposedValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </p>
@@ -185,135 +167,183 @@ export function FinancialProposalPanel({ familyId }: { familyId: string }) {
 
                   {prop.counterProposalValue ? (
                     <div>
-                      <p className="text-xs uppercase text-amber-700">Contraproposta do Cliente</p>
-                      <p className="text-xl font-bold text-amber-900">
+                      <p className="text-xs uppercase text-status-warning-text">Contraproposta do Cliente</p>
+                      <p className="text-xl font-bold text-status-warning-text">
                         R$ {Number(prop.counterProposalValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </p>
                       {prop.counterProposalNotes ? (
-                        <p className="mt-0.5 text-xs text-amber-800 italic">“{prop.counterProposalNotes}”</p>
+                        <p className="mt-0.5 text-xs text-status-warning-text/80 italic">“{prop.counterProposalNotes}”</p>
                       ) : null}
                     </div>
                   ) : null}
                 </div>
 
-                {isAccepted ? (
-                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 p-2.5 text-xs text-emerald-800">
-                    <BadgeCheck className="size-4 shrink-0 text-emerald-600" />
-                    <span>
-                      Aceite formalizado em {new Date(prop.acceptedAt!).toLocaleString("pt-BR")}.
-                      {prop.approvedBySocioId ? ` Aprovado pelo Sócio #${prop.approvedBySocioId}.` : ""}
-                    </span>
-                  </div>
-                ) : null}
-
-                {/* Ações para o Cliente: Aceite ou Contraproposta */}
-                {isPending && !isCounter && (
-                  <div className="mt-4 flex flex-wrap items-center gap-3 pt-2">
+                {isAccepted && (
+                  <div className="mt-3 rounded-xl border border-status-success-border bg-status-success-bg/60 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-status-success-text">
+                      <BadgeCheck className="size-4 shrink-0 text-status-success-text" />
+                      Proposta aceita pelo cliente
+                    </p>
+                    {prop.acceptedAt && (
+                      <p className="text-xs text-status-success-text">
+                        Aceita em {new Date(prop.acceptedAt).toLocaleDateString("pt-BR")}
+                      </p>
+                    )}
+                    {prop.acceptedValue && (
+                      <p className="text-sm font-bold text-status-success-text">
+                        Valor aceito: R$ {Number(prop.acceptedValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </p>
+                    )}
                     <Button
                       size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700"
-                      disabled={accept.isPending}
-                      onClick={() => accept.mutate({ proposalId: prop.id })}
+                      className="bg-status-success-bg text-status-success-text hover:bg-status-success-bg/80"
+                      onClick={() =>
+                        update.mutate({ proposalId: prop.id, status: "ENVIADA" })
+                      }
                     >
-                      <CheckCircle2 className="mr-1.5 size-4" /> Aceitar Proposta
+                      <MessageSquare className="mr-1 size-3" /> Reabrir negociação
                     </Button>
+                  </div>
+                )}
+
+                {isCounter && (
+                  <div className="mt-3 rounded-xl border border-status-warning-border bg-status-warning-bg/60 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-status-warning-text">
+                      <MessageSquare className="size-3.5" /> Contraproposta recebida
+                    </p>
+                    <p className="text-sm font-bold text-status-warning-text">
+                      R$ {Number(prop.counterProposalValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                    {prop.counterProposalNotes ? (
+                      <p className="mt-0.5 text-xs text-status-warning-text/80 italic">“{prop.counterProposalNotes}”</p>
+                    ) : null}
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          update.mutate({ proposalId: prop.id, status: "ACEITA", acceptedValue: prop.counterProposalValue })
+                        }
+                        className="bg-status-success-bg text-status-success-text hover:bg-status-success-bg/80"
+                      >
+                        <CheckCircle2 className="mr-1 size-3" /> Aceitar contraproposta
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          update.mutate({ proposalId: prop.id, status: "RECUSADA" })
+                        }
+                        className="bg-status-danger-bg text-status-danger-text hover:bg-status-danger-bg/80"
+                      >
+                        <XCircle className="mr-1 size-3" /> Recusar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {isPending && (
+                  <div className="mt-4 rounded-xl border border-status-warning-border bg-status-warning-bg/80 p-3">
+                    <p className="text-xs font-semibold text-status-warning-text">
+                      <AlertTriangle className="size-3.5" /> Aguardando aceite do cliente
+                    </p>
+                    <p className="mt-1 text-xs text-status-warning-text">
+                      Envie o link da proposta ao cliente para que ele possa aceitar ou contrapropor.
+                    </p>
                     <Button
                       size="sm"
                       variant="outline"
+                      className="mt-2 bg-white text-lucathi-navy hover:bg-lucathi-mist"
                       onClick={() =>
-                        setSelectedProposalId(selectedProposalId === prop.id ? null : prop.id)
+                        update.mutate({ proposalId: prop.id, status: "RECUSADA" })
                       }
                     >
-                      <MessageSquare className="mr-1.5 size-4" /> Enviar Contraproposta
+                      <X className="mr-1 size-3" /> Marcar como recusada
                     </Button>
                   </div>
                 )}
 
-                {/* Formulário de Contraproposta */}
-                {selectedProposalId === prop.id && isPending && (
-                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
-                    <p className="text-xs font-semibold text-amber-900">
-                      Indique o valor pretendido e a justificativa para avaliação do Sócio:
+                {prop.status === "RECUSADA" && (
+                  <div className="mt-4 rounded-xl border border-status-danger-border bg-status-danger-bg/80 p-3">
+                    <p className="text-xs font-semibold text-status-danger-text">
+                      <AlertTriangle className="size-3.5" /> Proposta recusada pelo cliente
                     </p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Input
-                        inputMode="decimal"
-                        value={counterValue}
-                        onChange={(e) => setCounterValue(e.target.value)}
-                        placeholder="Valor sugerido (R$)"
-                        className="bg-white text-sm"
-                      />
-                      <Input
-                        value={counterNotes}
-                        onChange={(e) => setCounterNotes(e.target.value)}
-                        placeholder="Justificativa / Condições de pagamento"
-                        className="bg-white text-sm"
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        className="bg-amber-700 hover:bg-amber-800 text-white"
-                        disabled={!counterValue || !counterNotes.trim() || counter.isPending}
-                        onClick={() =>
-                          counter.mutate({
-                            proposalId: prop.id,
-                            counterProposalValue: Number(counterValue),
-                            counterProposalNotes: counterNotes.trim(),
-                          })
-                        }
-                      >
-                        <Send className="mr-1.5 size-3.5" /> Remeter ao Sócio
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setSelectedProposalId(null)}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
+                    <p className="mt-1 text-xs text-status-danger-text">
+                      O cliente não aceitou a proposta. Pode-se registrar uma nova ou reabrir a negociação.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 bg-white text-lucathi-navy hover:bg-lucathi-mist"
+                      onClick={() =>
+                        update.mutate({ proposalId: prop.id, status: "ENVIADA" })
+                      }
+                    >
+                      <MessageSquare className="mr-1 size-3" /> Reabrir negociação
+                    </Button>
                   </div>
                 )}
 
-                {/* Deliberação exclusiva do Sócio para contrapropostas recebidas */}
-                {isCounter && isSocioFlag && (
-                  <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50/80 p-3">
-                    <p className="text-xs font-semibold text-amber-900">
-                      Deliberação do Sócio: O cliente propôs R${" "}
-                      {Number(prop.counterProposalValue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </p>
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700"
-                        disabled={reviewCounter.isPending}
-                        onClick={() =>
-                          reviewCounter.mutate({ proposalId: prop.id, decision: "ACEITAR" })
-                        }
-                      >
-                        <CheckCircle2 className="mr-1.5 size-4" /> Aceitar Contraproposta
+                <div className="mt-3 flex flex-wrap items-baseline gap-6">
+                  {editing?.id === prop.id ? (
+                    <>
+                      <Textarea
+                        value={editing.scope}
+                        onChange={e => setEditing({ ...editing, scope: e.target.value })}
+                        className="w-64 text-sm"
+                        rows={2}
+                        placeholder="Editar escopo"
+                      />
+                      <Input
+                        inputMode="decimal"
+                        value={editing.value}
+                        onChange={e => setEditing({ ...editing, value: e.target.value })}
+                        placeholder="Novo valor"
+                        className="w-36 text-sm"
+                      />
+                      <Button size="sm" onClick={handleUpdate} disabled={update.isPending}>
+                        Salvar
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        disabled={reviewCounter.isPending}
-                        onClick={() =>
-                          reviewCounter.mutate({ proposalId: prop.id, decision: "RECUSAR" })
-                        }
-                      >
-                        <XCircle className="mr-1.5 size-4" /> Recusar Contraproposta
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                        Cancelar
                       </Button>
-                    </div>
-                  </div>
-                )}
+                    </>
+                  ) : (
+                    <>
+                      {canEdit ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-lucathi-gray"
+                          onClick={() => setEditing({ id: prop.id, scope: prop.scopeDescription, value: String(prop.proposedValue) })}
+                        >
+                          <Pencil className="mr-1 size-3" />
+                          Editar
+                        </Button>
+                      ) : null}
+                      {canEdit ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-status-danger-text hover:text-status-danger-text/80"
+                          onClick={() => setDeleting(prop.id)}
+                        >
+                          <Trash2 className="mr-1 size-3" />
+                          Excluir
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
             </article>
           );
         })}
-
         {!list.data?.length ? (
-          <p className="text-sm text-lucathi-gray">Nenhuma proposta financeira registrada.</p>
+          <p className="text-sm text-lucathi-gray text-center py-4">
+            {isTeamFlag
+              ? "Nenhuma proposta registrada. Use o formulário acima para criar a primeira."
+              : "Nenhuma proposta registrada. Apenas SOCIO ou ANALISTA podem cadastrar propostas."}
+          </p>
         ) : null}
       </div>
     </section>

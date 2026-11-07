@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../../_core/trpc";
-import { requireRole } from "../access/authorization";
+import { adminProcedure, router } from "../../_core/trpc";
 import { getBracketsByUf, saveUfPolicy } from "./itcmd-repository";
 import { calculateItcmdForUf } from "../../../shared/domain/itcmd-engine";
 
@@ -21,7 +20,7 @@ const bracketInputSchema = z.object({
 });
 
 export const itcmdRouter = router({
-  listUfs: protectedProcedure.query(async () => {
+  listUfs: adminProcedure.query(async () => {
     const list = await Promise.all(
       UFS.map(async uf => {
         const brackets = await getBracketsByUf(uf);
@@ -39,27 +38,26 @@ export const itcmdRouter = router({
     return list;
   }),
 
-  getByUf: protectedProcedure
+  getByUf: adminProcedure
     .input(z.object({ uf: z.string().min(2).max(2) }))
     .query(async ({ input }) => {
       const brackets = await getBracketsByUf(input.uf);
       return { uf: input.uf.toUpperCase(), brackets };
     }),
 
-  updatePolicy: protectedProcedure
+  updatePolicy: adminProcedure
     .input(
       z.object({
         uf: z.string().min(2).max(2),
         brackets: z.array(bracketInputSchema),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      requireRole(ctx, ["SOCIO", "ADMIN"]);
+    .mutation(async ({ input }) => {
       const updated = await saveUfPolicy(input.uf, input.brackets);
       return { uf: input.uf.toUpperCase(), brackets: updated };
     }),
 
-  calculate: protectedProcedure
+  calculate: adminProcedure
     .input(
       z.object({
         uf: z.string().min(2).max(2),

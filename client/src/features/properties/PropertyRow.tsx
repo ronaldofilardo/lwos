@@ -50,9 +50,18 @@ const severityStyles: Record<
   EncumbranceSeverity,
   { badge: string; Icon: typeof ShieldAlert }
 > = {
-  verde: { badge: "bg-emerald-100 text-emerald-800 border-emerald-200", Icon: Circle },
-  amarelo: { badge: "bg-amber-100 text-amber-800 border-amber-200", Icon: TriangleAlert },
-  vermelho: { badge: "bg-red-100 text-red-800 border-red-200", Icon: OctagonAlert },
+  verde: {
+    badge: "bg-status-success-bg text-status-success-text border-status-success-border",
+    Icon: Circle,
+  },
+  amarelo: {
+    badge: "bg-status-warning-bg text-status-warning-text border-status-warning-border",
+    Icon: TriangleAlert,
+  },
+  vermelho: {
+    badge: "bg-status-danger-bg text-status-danger-text border-status-danger-border",
+    Icon: OctagonAlert,
+  },
 };
 
 /** Badge só com o status; a observação do gravame vai em texto próprio. */
@@ -146,12 +155,12 @@ export function PropertyRow({
               reasons={registrationAlert.reasons}
             />
             {hasUsufruto ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800">
+              <span className="inline-flex items-center gap-1 rounded-full bg-lucathi-mist px-2 py-0.5 text-xs font-semibold text-lucathi-gray border border-lucathi-line">
                 <Sparkles className="size-3" /> Usufruto Declarado
               </span>
             ) : null}
             {hasNuaPropriedade ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-800">
+              <span className="inline-flex items-center gap-1 rounded-full bg-lucathi-mist px-2 py-0.5 text-xs font-semibold text-lucathi-navy border border-lucathi-line">
                 <KeyRound className="size-3" /> Nua-Propriedade
               </span>
             ) : null}
@@ -168,7 +177,7 @@ export function PropertyRow({
               Matrícula: {property.registrationNumber || "Em análise"}
             </p>
           ) : (
-            <p className="mt-0.5 text-xs font-medium text-amber-800">
+            <p className="mt-0.5 text-xs font-medium text-status-warning-text">
               Sem Matrícula (Doc:{" "}
               {property.alternativeDocType
                 ? docTypeLabels[property.alternativeDocType] ||
@@ -213,8 +222,8 @@ export function PropertyRow({
       </div>
 
       {confirmDelete ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs">
-          <p className="font-semibold text-red-800">
+        <div className="rounded-lg border border-status-danger-border bg-status-danger-bg p-3 text-xs">
+          <p className="font-semibold text-status-danger-text">
             Excluir o imóvel «{property.description}»? Documentos enviados
             permanecem arquivados (nada é apagado do disco).
           </p>
@@ -272,10 +281,10 @@ export function PropertyRow({
                     : "Proprietário(a)";
               const badgeBg =
                 owner.rightType === "USUFRUTO"
-                  ? "bg-purple-50 text-purple-900 border-purple-200"
+                  ? "bg-lucathi-mist text-lucathi-gray border-lucathi-line"
                   : owner.rightType === "NUA_PROPRIEDADE"
-                    ? "bg-indigo-50 text-indigo-900 border-indigo-200"
-                    : "bg-slate-50 text-slate-900 border-slate-200";
+                    ? "bg-lucathi-mist text-lucathi-navy border-lucathi-line"
+                    : "bg-lucathi-mist text-lucathi-gray border-lucathi-line";
               return (
                 <span
                   key={owner.id}
@@ -306,9 +315,9 @@ export function PropertyRow({
           <ShieldAlert
             className={`size-3.5 ${
               severity === "vermelho"
-                ? "text-red-600"
+                ? "text-status-danger-text"
                 : severity === "amarelo"
-                  ? "text-amber-600"
+                  ? "text-status-warning-text"
                   : "text-lucathi-navy"
             }`}
           />{" "}

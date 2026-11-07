@@ -89,7 +89,7 @@ export function DocumentActions({
     <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
       <div className="flex flex-wrap items-center justify-end gap-2">
         {isResolved ? (
-          <span className="text-purple-600 text-sm font-medium">
+          <span className="text-status-neutral-text text-sm font-medium">
             {resolvedLabel()}
           </span>
         ) : (
@@ -136,7 +136,7 @@ export function DocumentActions({
               size="sm"
               disabled={busy || !needsValidation || disabled}
               onClick={() => onReview("VALIDADO")}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              className="bg-status-success-bg text-status-success-text hover:bg-status-success-bg/80"
             >
               <Check className="mr-1 size-3" /> Validar
             </Button>
@@ -161,7 +161,7 @@ export function DocumentActions({
             <Button
               size="sm"
               variant="outline"
-              className="text-purple-700 border-purple-200 hover:bg-purple-50"
+              className="text-status-neutral-text border-status-neutral-border hover:bg-status-neutral-bg"
               disabled={busy || disabled}
               onClick={() => setShowDispense(!showDispense)}
             >
@@ -171,7 +171,7 @@ export function DocumentActions({
             <Button
               size="sm"
               variant="outline"
-              className="text-purple-700 border-purple-200 hover:bg-purple-50"
+              className="text-status-neutral-text border-status-neutral-border hover:bg-status-neutral-bg"
               disabled={busy || disabled}
               onClick={() => onReview("NAO_POSSUI")}
             >
@@ -200,7 +200,7 @@ export function DocumentActions({
             size="sm"
             disabled={busy || disabled || dispenseReason.trim().length < 3}
             onClick={() => void handleDispense()}
-            className="bg-purple-700 text-white hover:bg-purple-800"
+            className="bg-status-neutral-bg text-status-neutral-text hover:bg-status-neutral-bg/80"
           >
             <Ban className="mr-1 size-3" /> Confirmar dispensa
           </Button>

@@ -89,6 +89,15 @@ describe("family-router consultas", () => {
     expect(databaseMocks.requireDatabase).not.toHaveBeenCalled();
   });
 
+  it("nega ADMIN a listagem e a abertura de projetos", async () => {
+    await expect(caller("ADMIN").list()).rejects.toThrow("Permissão insuficiente.");
+    await expect(caller("ADMIN").get({ familyId: "fam-1" })).rejects.toThrow(
+      "Permissão insuficiente."
+    );
+    expect(familyRepoMocks.listFamilyRecords).not.toHaveBeenCalled();
+    expect(familyRepoMocks.getFamilyRecord).not.toHaveBeenCalled();
+  });
+
   it("lista apenas as famílias com vínculo para o cliente e descarta as inexistentes", async () => {
     const { db } = fakeDb({ accessRows: [{ familyId: "fam-1" }, { familyId: "fam-sumida" }] });
     databaseMocks.requireDatabase.mockResolvedValue(db);
@@ -142,7 +151,7 @@ describe("family-router consultas", () => {
     expect(familyRepoMocks.getClientDashboardData).toHaveBeenCalledWith(7);
 
     await expect(caller("SOCIO").getDashboard()).resolves.toEqual({ families: 3 });
-    await expect(caller("ADMIN").getDashboard()).resolves.toEqual({ families: 3 });
+    await expect(caller("ADMIN").getDashboard()).rejects.toThrow("Permissão insuficiente.");
     await expect(caller("CLIENTE").listStorage()).resolves.toEqual(["meu.pdf"]);
     expect(familyRepoMocks.listClientStorageFiles).toHaveBeenCalledWith(7);
     await expect(caller("SOCIO").listStorage()).resolves.toEqual(["doc.pdf"]);
@@ -157,8 +166,8 @@ describe("family-router consultas", () => {
     expect(familyRepoMocks.getClientManagedWealth).toHaveBeenCalledWith(7);
 
     await expect(caller("SOCIO").getManagedWealth()).resolves.toEqual({ total: 99 });
-    await expect(caller("ADMIN").getManagedWealth()).resolves.toEqual({ total: 99 });
-    expect(familyRepoMocks.getManagedWealth).toHaveBeenCalledTimes(2);
+    await expect(caller("ADMIN").getManagedWealth()).rejects.toThrow("Permissão insuficiente.");
+    expect(familyRepoMocks.getManagedWealth).toHaveBeenCalledTimes(1);
   });
 
   it("bloqueia analista no painel e no armazenamento", async () => {

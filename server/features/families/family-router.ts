@@ -11,8 +11,9 @@ import { recordAudit, recordAuditSafe } from "../audit/audit-repository";
 import { createId } from "../_shared/ids";
 import { requireDatabase } from "../_shared/database";
 import { assertFamilyAccess } from "../access/family-access";
-import { requirePermission } from "../access/authorization";
+import { requirePermission, requireRole } from "../access/authorization";
 import { Permission } from "../../../shared/domain/permissions";
+import { TEAM_ROLES, type AppRole } from "../../../shared/domain/roles";
 import {
   getConclusionBlockers,
   listProjectAlertLevels,
@@ -46,8 +47,15 @@ async function withAlerts<T extends { id: string }>(records: T[]) {
   }));
 }
 
+/**
+ * Quem pode ver projetos/famílias: equipe operacional (SOCIO/ANALISTA) e o
+ * próprio cliente. ADMIN é admin de plataforma e fica de fora.
+ */
+const FAMILY_VIEWERS: readonly AppRole[] = [...TEAM_ROLES, "CLIENTE"];
+
 export const familyRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
+    requireRole(ctx, FAMILY_VIEWERS);
     const user = ctx.user!;
     if (user.role !== "CLIENTE") return withAlerts(await listFamilyRecords());
     const db = await requireDatabase();
@@ -67,6 +75,7 @@ export const familyRouter = router({
   get: protectedProcedure
     .input(z.object({ familyId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
+      requireRole(ctx, FAMILY_VIEWERS);
       await assertFamilyAccess(ctx, input.familyId);
       return getFamilyRecord(input.familyId);
     }),

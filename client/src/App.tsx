@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppShell } from "@/components/lucathi/AppShell";
 import { AuthGate } from "@/components/lucathi/AuthGate";
+import { RoleGate } from "@/components/lucathi/RoleGate";
 
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const Home = lazy(() => import("./pages/Home"));
@@ -39,16 +40,16 @@ function Router() {
         <Route path={"/"}>{() => <AuthGate><AppShell><Home /></AppShell></AuthGate>}</Route>
         <Route path={"/primeiro-acesso"}>{() => <PrimeiroAcesso />}</Route>
         <Route path={"/interesse"}>{() => <Interesse />}</Route>
-        <Route path={"/dashboard"}>{() => <AuthGate><AppShell><Dashboard /></AppShell></AuthGate>}</Route>
-        <Route path={"/interessados"}>{() => <AuthGate><AppShell><Leads /></AppShell></AuthGate>}</Route>
+        <Route path={"/dashboard"}>{() => <AuthGate><RoleGate allow={["SOCIO", "ANALISTA", "CLIENTE"]}><AppShell><Dashboard /></AppShell></RoleGate></AuthGate>}</Route>
+        <Route path={"/interessados"}>{() => <AuthGate><RoleGate allow={["SOCIO", "ANALISTA"]}><AppShell><Leads /></AppShell></RoleGate></AuthGate>}</Route>
         <Route path={"/portal/:token"} component={ClientPortalPage} />
         <Route path={"/minha-familia/:familyId"}>{() => <AuthGate><AppShell><ClientFamilyPage /></AppShell></AuthGate>}</Route>
         <Route path={"/minha-familia"}>{() => <AuthGate><AppShell><ClientFamilyIndex /></AppShell></AuthGate>}</Route>
-        <Route path={"/familias/:familyId"}>{() => <AuthGate><AppShell><FamilyWorkspacePage /></AppShell></AuthGate>}</Route>
-        <Route path={"/familias"}>{() => <AuthGate><AppShell><FamilyPage /></AppShell></AuthGate>}</Route>
+        <Route path={"/familias/:familyId"}>{() => <AuthGate><RoleGate allow={["SOCIO", "ANALISTA"]}><AppShell><FamilyWorkspacePage /></AppShell></RoleGate></AuthGate>}</Route>
+        <Route path={"/familias"}>{() => <AuthGate><RoleGate allow={["SOCIO", "ANALISTA"]}><AppShell><FamilyPage /></AppShell></RoleGate></AuthGate>}</Route>
         <Route path={"/patrimonio"}>{() => <AppShell><PlaceholderPage title="Patrimônio" description="Imóveis, gravames, sociedades e integralizações já possuem contratos de servidor e receberão a camada operacional nesta rota." /></AppShell>}</Route>
         <Route path={"/aniversarios"}>{() => <AuthGate><AppShell><BirthdaysPage /></AppShell></AuthGate>}</Route>
-        <Route path={"/setup"}>{() => <AuthGate><AppShell><SetupPage /></AppShell></AuthGate>}</Route>
+        <Route path={"/setup"}>{() => <AuthGate><RoleGate allow={["ADMIN"]}><AppShell><SetupPage /></AppShell></RoleGate></AuthGate>}</Route>
         <Route path={"/404"} component={NotFound} />
         {/* Final fallback route */}
         <Route component={NotFound} />

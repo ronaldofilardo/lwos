@@ -120,8 +120,8 @@ export function PropertyOwnerForm({
         <span
           className={
             remaining > 0
-              ? "font-semibold text-amber-700"
-              : "font-semibold text-emerald-700"
+              ? "font-semibold text-status-warning-text"
+              : "font-semibold text-status-success-text"
           }
         >
           {total}% vinculado
@@ -226,7 +226,7 @@ export function PropertyOwnerForm({
                     <button
                       type="button"
                       aria-label="Remover titularidade"
-                      className="rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50"
+                      className="rounded px-1.5 py-0.5 text-status-danger-text hover:bg-status-danger-bg"
                       disabled={removeOwner.isPending}
                       onClick={() =>
                         removeOwner.mutate({
@@ -250,7 +250,7 @@ export function PropertyOwnerForm({
       )}
 
       {isFull ? (
-        <p className="text-xs font-semibold text-emerald-700">
+        <p className="text-xs font-semibold text-status-success-text">
           Titularidade completa (100%) — não é possível adicionar novas linhas.
         </p>
       ) : (

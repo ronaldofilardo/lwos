@@ -62,10 +62,10 @@ export default function Interesse() {
         </p>
 
         {showSuccess ? (
-          <div className="mt-8 rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-            <CheckCircle className="mx-auto size-10 text-emerald-600" />
-            <p className="mt-3 font-semibold text-emerald-800">Recebemos seu interesse!</p>
-            <p className="mt-1 text-sm text-emerald-600">Em breve alguém da nossa equipe entra em contato.</p>
+          <div className="mt-8 rounded-xl border border-status-success-border bg-status-success-bg p-6 text-center">
+            <CheckCircle className="mx-auto size-10 text-status-success-text" />
+            <p className="mt-3 font-semibold text-status-success-text">Recebemos seu interesse!</p>
+            <p className="mt-1 text-sm text-status-success-text">Em breve alguém da nossa equipe entra em contato.</p>
           </div>
         ) : (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>

@@ -18,10 +18,10 @@ type Family = {
 };
 
 const statusBadge: Record<ProjectStatus, string> = {
-  ATIVO: "bg-emerald-50 text-emerald-700",
-  SUSPENSO: "bg-amber-50 text-amber-700",
-  CONCLUIDO: "bg-lucathi-mist text-lucathi-navy",
-  CANCELADO: "bg-gray-100 text-gray-500",
+  ATIVO: "bg-status-success-bg text-status-success-text border-status-success-border",
+  SUSPENSO: "bg-status-warning-bg text-status-warning-text border-status-warning-border",
+  CONCLUIDO: "bg-status-info-bg text-status-info-text border-status-info-border",
+  CANCELADO: "bg-status-neutral-bg text-status-neutral-text border-status-neutral-border",
 };
 
 export function FamilyTable({ families, onGenerateLink, generatedLinks, onGenerateResetLink, resetLinks, emptyHint = "Inicie o primeiro projeto pelo formulário ao lado." }: { families: Family[]; onGenerateLink?: (familyId: string) => void; generatedLinks?: Record<string, string>; onGenerateResetLink?: (familyId: string) => void; resetLinks?: Record<string, string>; emptyHint?: string }) {

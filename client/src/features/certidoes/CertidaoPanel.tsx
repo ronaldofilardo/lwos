@@ -81,7 +81,7 @@ function CertidaoRowItem({
       </span>
 
       {isExpired(row.validUntil) ? (
-        <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+        <span className="rounded-full border border-status-danger-border bg-status-danger-bg px-2.5 py-1 text-xs font-semibold text-status-danger-text">
           Vencida
         </span>
       ) : null}

@@ -86,7 +86,7 @@ export function UfBracketTable({
                     <Button size="icon" variant="ghost" className="size-7" onClick={() => onEdit(idx)}>
                       <Edit2 className="size-3.5 text-lucathi-gray" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="size-7 text-red-600 hover:text-red-700" onClick={() => onRemove(idx)}>
+                    <Button size="icon" variant="ghost" className="size-7 text-status-danger-text hover:text-status-danger-text/80" onClick={() => onRemove(idx)}>
                       <Trash2 className="size-3.5" />
                     </Button>
                   </div>

@@ -3,11 +3,10 @@ import {
   type SaleRecommendation,
 } from "@shared/domain/property-tax-engine";
 
-/** Cor semântica da recomendação: verde = vender PF, azul = vender PJ. */
 const styles: Record<SaleRecommendation, string> = {
-  VENDER_PF: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  VENDER_PJ: "bg-sky-50 text-sky-700 ring-sky-200",
-  PENDENTE: "bg-lucathi-mist text-lucathi-gray ring-lucathi-line",
+  VENDER_PF: "bg-status-success-bg text-status-success-text border-status-success-border",
+  VENDER_PJ: "bg-status-info-bg text-status-info-text border-status-info-border",
+  PENDENTE: "bg-status-warning-bg text-status-warning-text border-status-warning-border",
 };
 
 export function PropertyTaxBadge({

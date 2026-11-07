@@ -37,10 +37,10 @@ export function ProjectHealthDashboard({ familyId }: { familyId: string }) {
       <div
         className={`rounded-2xl border px-5 py-4 text-sm font-medium ${
           red > 0
-            ? "border-red-200 bg-red-50 text-red-800"
+            ? "border-status-danger-border bg-status-danger-bg text-status-danger-text"
             : yellow > 0
-              ? "border-amber-200 bg-amber-50 text-amber-800"
-              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+              ? "border-status-warning-border bg-status-warning-bg text-status-warning-text"
+              : "border-status-success-border bg-status-success-bg text-status-success-text"
         }`}
       >
         {family.data ? (

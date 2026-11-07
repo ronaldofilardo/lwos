@@ -41,7 +41,7 @@ export function LwrPanel({ familyId }: { familyId: string }) {
       </div>
 
       <div className="mt-5 rounded-xl border border-dashed border-lucathi-line p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray font-subtitle">
           Registrar Versão do LWR (Apresentação Taylor-Made)
         </p>
         <div className="mt-3 space-y-3">
@@ -107,7 +107,7 @@ export function LwrPanel({ familyId }: { familyId: string }) {
             </header>
 
             <div className="mt-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
+              <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray font-subtitle">
                 Diagnóstico e Estrutura Proposta
               </p>
               <p className="mt-1 whitespace-pre-wrap text-sm text-lucathi-navy">

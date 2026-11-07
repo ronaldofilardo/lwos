@@ -11,7 +11,7 @@ type SummaryCertidao = { status: string };
 
 const statBlock = (label: string, value: number, highlight?: string) => (
   <div key={label} className="rounded-xl bg-white px-3 py-2">
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-lucathi-gray">
+    <p className="text-[10px] font-semibold uppercase tracking-wider text-lucathi-gray font-subtitle">
       {label}
     </p>
     <p className={`text-lg font-semibold ${highlight ?? "text-lucathi-navy"}`}>
@@ -43,7 +43,7 @@ export function DocumentSummary({
   return (
     <section className="rounded-2xl border border-lucathi-line/80 bg-lucathi-mist/40 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
+        <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray font-subtitle">
           Resumo e status
         </p>
         <p className="text-sm font-semibold text-lucathi-navy">
@@ -59,14 +59,14 @@ export function DocumentSummary({
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {statBlock("Resolvidos", resolved, "text-emerald-700")}
-        {statBlock("Pendentes", pending, "text-amber-700")}
+        {statBlock("Resolvidos", resolved, "text-status-success-text")}
+        {statBlock("Pendentes", pending, "text-status-warning-text")}
         {statBlock("Em análise", inAnalysis)}
-        {statBlock("Rejeitados", rejected, "text-red-700")}
+        {statBlock("Rejeitados", rejected, "text-status-danger-text")}
       </div>
 
       <div className="mt-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
+        <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray font-subtitle">
           Certidões
         </p>
         {certidoes.length === 0 ? (

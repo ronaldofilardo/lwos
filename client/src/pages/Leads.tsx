@@ -6,7 +6,7 @@ import { errorMessage } from "@/lib/trpcError";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { formatDateOnlyBR } from "@shared/validation/datas";
-import { isAdmin } from "@shared/domain/permissions";
+import { canManage } from "@shared/domain/permissions";
 
 const civilStatusOptions = [
   { value: "SOLTEIRO", label: "Solteiro(a)" },
@@ -37,15 +37,16 @@ type Lead = {
 
 export default function Leads() {
   const { user } = useAuth();
-  const admin = isAdmin(user?.role);
-  const leads = trpc.leads.list.useQuery(undefined, { enabled: admin });
+  // Operação (SOCIO/ANALISTA) lista os interessados; ADMIN é admin de plataforma.
+  const canList = canManage(user?.role);
+  const leads = trpc.leads.list.useQuery(undefined, { enabled: canList });
 
-  if (user && !admin) {
+  if (user && !canList) {
     return <div className="p-8 text-center text-sm text-lucathi-gray">Área exclusiva do time Lucathi.</div>;
   }
 
   if (leads.isLoading) return <div className="p-8 text-center text-lucathi-gray">Carregando interessados…</div>;
-  if (leads.isError) return <div className="p-8 text-center text-red-500">Erro ao carregar interessados</div>;
+  if (leads.isError) return <div className="p-8 text-center text-status-danger-text">Erro ao carregar interessados</div>;
 
   const data = (leads.data ?? []) as Lead[];
   const pending = data.filter(l => l.status === "PENDENTE");
@@ -75,7 +76,7 @@ export default function Leads() {
                   <p className="text-sm font-medium text-lucathi-navy">{lead.fullName}</p>
                   <p className="text-xs text-lucathi-gray">{lead.email}</p>
                 </div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${lead.status === "ACEITO" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${lead.status === "ACEITO" ? "bg-status-success-bg text-status-success-text border-status-success-border" : "bg-status-danger-bg text-status-danger-text border-status-danger-border"}`}>
                   {lead.status === "ACEITO" ? "Aceito" : "Recusado"}
                 </span>
               </div>

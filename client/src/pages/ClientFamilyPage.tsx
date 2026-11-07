@@ -118,7 +118,7 @@ export default function ClientFamilyPage() {
       <header className="rounded-[28px] bg-lucathi-deep p-7 text-white shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65 font-subtitle">
               Acesso do titular · Consulta da família
             </p>
             <h1 className="mt-2 font-display text-4xl">{family.data.name}</h1>
@@ -127,7 +127,7 @@ export default function ClientFamilyPage() {
             <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 backdrop-blur-sm">
               <FolderKanban className="size-5 text-white/80" />
               <div className="text-xs">
-                <p className="font-semibold uppercase tracking-wider text-white/60">
+                <p className="font-semibold uppercase tracking-wider text-white/60 font-subtitle">
                   Progresso do processo
                 </p>
                 <p className="text-white font-medium">{percent}% concluído</p>

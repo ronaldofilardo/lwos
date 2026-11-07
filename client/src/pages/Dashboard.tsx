@@ -17,7 +17,7 @@ function TeamDashboard() {
   const storage = trpc.families.listStorage.useQuery();
 
   if (dashboard.isLoading || storage.isLoading) return <div className="p-8 text-center text-lucathi-gray">Carregando dashboard…</div>;
-  if (dashboard.isError) return <div className="p-8 text-center text-red-500">Erro ao carregar dashboard</div>;
+  if (dashboard.isError) return <div className="p-8 text-center text-status-danger-text">Erro ao carregar dashboard</div>;
 
   const { totalFamilies, totalPeople, totalDocuments, families } = dashboard.data ?? { totalFamilies: 0, totalPeople: 0, totalDocuments: 0, families: [] };
 
@@ -76,5 +76,5 @@ function StorageRow({ file }: { file: { path: string; size: number; isDirectory:
 }
 
 function MetricCard({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
-  return <div className="rounded-2xl border border-lucathi-line bg-white p-6"><div className="flex items-center gap-3"><Icon className="size-6 text-lucathi-navy" /><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray">{label}</p><p className="text-3xl font-display text-lucathi-navy">{value}</p></div></div></div>;
+  return <div className="rounded-2xl border border-lucathi-line bg-white p-6"><div className="flex items-center gap-3"><Icon className="size-6 text-lucathi-navy" /><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-lucathi-gray font-subtitle">{label}</p><p className="text-3xl font-display text-lucathi-navy">{value}</p></div></div></div>;
 }

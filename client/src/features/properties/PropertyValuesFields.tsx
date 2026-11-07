@@ -66,7 +66,7 @@ export function PropertyValuesFields({
       {moneyField("marketValue")}
       {moneyField("venalValue")}
       {venalDiverges ? (
-        <p className="col-span-full flex items-center gap-1 text-xs text-amber-700">
+        <p className="col-span-full flex items-center gap-1 text-xs text-status-warning-text">
           <AlertTriangle className="size-3.5" /> Valor venal diverge bastante do
           mercado — confira os valores.
         </p>
@@ -91,13 +91,13 @@ export function PropertyValuesFields({
             type="checkbox"
             checked={values.hasLaudemio}
             onChange={() => set({ hasLaudemio: !values.hasLaudemio })}
-            className="size-4 rounded border-gray-300"
+            className="size-4 rounded border-lucathi-line"
           />
           Laudêmio/Aforamento
         </label>
       </div>
       {itbiAtypical ? (
-        <p className="col-span-full flex items-center gap-1 text-xs text-amber-700">
+        <p className="col-span-full flex items-center gap-1 text-xs text-status-warning-text">
           <AlertTriangle className="size-3.5" /> Alíquota de ITBI atípica —
           confira o valor informado.
         </p>

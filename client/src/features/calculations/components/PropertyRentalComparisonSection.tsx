@@ -77,8 +77,8 @@ export function PropertyRentalComparisonSection({
         <div
           className={`rounded-lg p-3 border ${
             isSaving
-              ? "bg-emerald-50/70 border-emerald-200 text-emerald-900"
-              : "bg-amber-50/70 border-amber-200 text-amber-900"
+              ? "bg-status-success-bg/70 border-status-success-border text-status-success-text"
+              : "bg-status-warning-bg/70 border-status-warning-border text-status-warning-text"
           }`}
         >
           <p className="text-xs font-medium">Economia Líquida Anual na PJ</p>

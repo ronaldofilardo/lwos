@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { hasPermission, canEdit, canReview, canManage, isTeam, isSocio, isClient, isAdmin, canCreate, Permission } from "./permissions";
 
-describe("matriz de permissões", () => {
-  it("SOCIO tem todas as permissões", () => {
+describe("matriz de permissï¿½es", () => {
+  it("SOCIO tem todas as permissï¿½es", () => {
     for (const perm of Object.values(Permission)) {
       expect(hasPermission("SOCIO", perm)).toBe(true);
     }
   });
 
-  it("ANALISTA tem permissões de team operations", () => {
+  it("ANALISTA tem permissï¿½es de team operations", () => {
     expect(hasPermission("ANALISTA", Permission.PEOPLE_CREATE)).toBe(true);
     expect(hasPermission("ANALISTA", Permission.DOCUMENT_CREATE)).toBe(true);
     expect(hasPermission("ANALISTA", Permission.COMPANY_CREATE)).toBe(true);
   });
 
-  it("ANALISTA NÃO tem permissões exclusivas de SOCIO", () => {
+  it("ANALISTA Nï¿½O tem permissï¿½es exclusivas de SOCIO", () => {
     expect(hasPermission("ANALISTA", Permission.DOCUMENT_REVIEW)).toBe(false);
     expect(hasPermission("ANALISTA", Permission.DOCUMENT_DISPENSE)).toBe(false);
     expect(hasPermission("ANALISTA", Permission.CERTIDAO_UPDATE_STATUS)).toBe(false);
@@ -22,20 +22,32 @@ describe("matriz de permissões", () => {
     expect(hasPermission("ANALISTA", Permission.USER_LIST)).toBe(false);
   });
 
-  it("ADMIN tem permissões de leitura administrativa", () => {
-    expect(hasPermission("ADMIN", Permission.FAMILY_GET_DASHBOARD)).toBe(true);
-    expect(hasPermission("ADMIN", Permission.FAMILY_LIST_STORAGE)).toBe(true);
+  it("ADMIN tem permissï¿½es de leitura administrativa", () => {
     expect(hasPermission("ADMIN", Permission.AUDIT_LIST_BY_FAMILY)).toBe(true);
-    expect(hasPermission("ADMIN", Permission.LEAD_LIST)).toBe(true);
+    expect(hasPermission("ADMIN", Permission.FAMILY_GET_DASHBOARD)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.FAMILY_LIST_STORAGE)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.LEAD_LIST)).toBe(false);
   });
 
-  it("ADMIN tem permissões de team operations", () => {
-    expect(hasPermission("ADMIN", Permission.PEOPLE_CREATE)).toBe(true);
-    expect(hasPermission("ADMIN", Permission.DOCUMENT_CREATE)).toBe(true);
-    expect(hasPermission("ADMIN", Permission.COMPANY_CREATE)).toBe(true);
+  it("ADMIN nÃ£o tem permissÃµes de team operations", () => {
+    expect(hasPermission("ADMIN", Permission.PEOPLE_CREATE)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.DOCUMENT_CREATE)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.COMPANY_CREATE)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.CERTIDAO_GENERATE)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.PROPOSAL_CREATE)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.LWR_CREATE)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.USER_LIST)).toBe(false);
+    expect(hasPermission("ADMIN", Permission.PORTAL_LIST_LINKS)).toBe(false);
   });
 
-  it("CLIENTE não tem permissões de escrita", () => {
+  it("matriz do ADMIN Ã© sÃ³ auditoria", () => {
+    const adminPerms = Object.values(Permission).filter(perm =>
+      hasPermission("ADMIN", perm)
+    );
+    expect(adminPerms).toEqual([Permission.AUDIT_LIST_BY_FAMILY]);
+  });
+
+  it("CLIENTE nï¿½o tem permissï¿½es de escrita", () => {
     for (const perm of Object.values(Permission)) {
       expect(hasPermission("CLIENTE", perm)).toBe(false);
     }

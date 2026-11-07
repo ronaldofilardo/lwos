@@ -38,17 +38,17 @@ function statusInfo(status: string): {
 } {
   switch (status) {
     case "VALIDADO":
-      return { label: "Validado", icon: CheckCircle2, iconClass: "text-emerald-600", resolved: true };
+      return { label: "Validado", icon: CheckCircle2, iconClass: "text-status-success-text", resolved: true };
     case "DISPENSADO":
-      return { label: "Dispensado", icon: EyeOff, iconClass: "text-purple-500", resolved: true };
+      return { label: "Dispensado", icon: EyeOff, iconClass: "text-status-neutral-text", resolved: true };
     case "NAO_POSSUI":
-      return { label: "Não possui", icon: Ban, iconClass: "text-purple-500", resolved: true };
+      return { label: "Não possui", icon: Ban, iconClass: "text-status-neutral-text", resolved: true };
     case "REJEITADO":
-      return { label: "Rejeitado", icon: AlertCircle, iconClass: "text-red-600", resolved: false };
+      return { label: "Rejeitado", icon: AlertCircle, iconClass: "text-status-danger-text", resolved: false };
     case "RECEBIDO_EM_ANALISE":
-      return { label: "Em análise", icon: CircleDashed, iconClass: "text-lucathi-navy", resolved: false };
+      return { label: "Em análise", icon: CircleDashed, iconClass: "text-status-info-text", resolved: false };
     default:
-      return { label: "Pendente", icon: CircleDashed, iconClass: "text-lucathi-gray", resolved: false };
+      return { label: "Pendente", icon: CircleDashed, iconClass: "text-status-warning-text", resolved: false };
   }
 }
 
@@ -62,7 +62,7 @@ function DocRowItem({ doc, personName }: { doc: DocRow; personName?: string }) {
         info.resolved
           ? "border-lucathi-line/60 bg-white/60 opacity-55"
           : doc.status === "REJEITADO"
-            ? "border-red-200 bg-red-50/60"
+            ? "border-status-danger-border bg-status-danger-bg/60"
             : "border-lucathi-navy/20 bg-white"
       }`}
       title={info.resolved ? "Concluído — item opaco" : undefined}
@@ -76,13 +76,13 @@ function DocRowItem({ doc, personName }: { doc: DocRow; personName?: string }) {
           ) : null}
         </p>
         {doc.status === "REJEITADO" && doc.rejectionReason ? (
-          <p className="mt-0.5 truncate text-[11px] text-red-700">{doc.rejectionReason}</p>
+          <p className="mt-0.5 truncate text-[11px] text-status-danger-text">{doc.rejectionReason}</p>
         ) : null}
         {doc.status === "DISPENSADO" && doc.dispensationReason ? (
-          <p className="mt-0.5 truncate text-[11px] text-purple-700">{doc.dispensationReason}</p>
+          <p className="mt-0.5 truncate text-[11px] text-status-neutral-text">{doc.dispensationReason}</p>
         ) : null}
       </div>
-      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lucathi-gray">
+      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lucathi-gray font-subtitle">
         {info.label}
       </span>
     </li>
@@ -197,9 +197,9 @@ export function UnifiedRequirementsMap({ familyId }: { familyId: string }) {
             <p className="text-lg font-semibold text-lucathi-navy">{stats.pending}</p>
             <p className="text-[10px] uppercase tracking-wider text-lucathi-gray">pendentes</p>
           </div>
-          <div className="rounded-xl bg-red-50 px-3 py-2 text-center">
-            <p className="text-lg font-semibold text-red-700">{stats.rejected}</p>
-            <p className="text-[10px] uppercase tracking-wider text-red-700/80">rejeitados</p>
+          <div className="rounded-xl bg-status-danger-bg px-3 py-2 text-center">
+            <p className="text-lg font-semibold text-status-danger-text">{stats.rejected}</p>
+            <p className="text-[10px] uppercase tracking-wider text-status-danger-text/80 font-subtitle">rejeitados</p>
           </div>
         </div>
       </header>

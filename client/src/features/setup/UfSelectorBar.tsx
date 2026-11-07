@@ -21,7 +21,7 @@ export function UfSelectorBar({ selectedUf, onSelectUf, summaries }: Props) {
   return (
     <div className="space-y-3 rounded-xl border border-lucathi-line/70 bg-lucathi-mist/40 p-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
+        <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray font-subtitle">
           Selecione a Unidade Federativa (27 UFs)
         </p>
         <span className="text-xs text-lucathi-gray">

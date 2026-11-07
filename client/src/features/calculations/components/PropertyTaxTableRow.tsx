@@ -42,8 +42,8 @@ export function PropertyTaxTableRow({
           <span
             className={
               row.annualRentalSaving > 0
-                ? "font-semibold text-emerald-700"
-                : "text-amber-700"
+                ? "font-semibold text-status-success-text"
+                : "text-status-warning-text"
             }
           >
             {formatBRL(row.annualRentalSaving) ?? "—"}
@@ -73,4 +73,3 @@ export function PropertyTaxTableRow({
     </TableRow>
   );
 }
-

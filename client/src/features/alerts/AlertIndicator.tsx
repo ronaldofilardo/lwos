@@ -15,7 +15,7 @@ export function AlertIndicator({
       <Tooltip delayDuration={100}>
         <TooltipTrigger asChild tabIndex={0} aria-label="Alerta vermelho">
           <span className="inline-flex items-center">
-            <CircleAlert className="size-4 text-red-600" aria-hidden="true" />
+            <CircleAlert className="size-4 text-status-danger-text" aria-hidden="true" />
           </span>
         </TooltipTrigger>
         <TooltipContent>
@@ -31,7 +31,7 @@ export function AlertIndicator({
       <Tooltip delayDuration={100}>
         <TooltipTrigger asChild tabIndex={0} aria-label="Alerta amarelo">
           <span className="inline-flex items-center">
-            <TriangleAlert className="size-4 text-amber-500" aria-hidden="true" />
+            <TriangleAlert className="size-4 text-status-warning-text" aria-hidden="true" />
           </span>
         </TooltipTrigger>
         <TooltipContent>

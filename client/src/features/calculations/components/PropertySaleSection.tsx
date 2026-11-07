@@ -9,7 +9,7 @@ export function PropertySaleSection({ property }: { property: PropertyTaxRow }) 
   return (
     <div className="rounded-xl border border-lucathi-line/70 bg-lucathi-mist/40 p-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-lucathi-navy">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-lucathi-navy font-subtitle">
           2. Cenário de Alienação (Venda PF × PJ)
         </h4>
         <PropertyTaxBadge recommendation={property.recommendation} />
@@ -41,9 +41,9 @@ export function PropertySaleSection({ property }: { property: PropertyTaxRow }) 
           <p
             className={`mt-1 font-semibold text-sm tabular-nums ${
               isPjMoreExpensive
-                ? "text-amber-700"
+                ? "text-status-warning-text"
                 : isPfMoreExpensive
-                  ? "text-emerald-700"
+                  ? "text-status-success-text"
                   : "text-lucathi-navy"
             }`}
           >
@@ -61,4 +61,3 @@ export function PropertySaleSection({ property }: { property: PropertyTaxRow }) 
     </div>
   );
 }
-

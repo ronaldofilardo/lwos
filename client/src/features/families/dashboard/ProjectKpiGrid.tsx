@@ -19,16 +19,16 @@ function KpiCard({
 }) {
   const variantClass =
     variant === "alert"
-      ? "border-red-200 bg-red-50"
+      ? "border-status-danger-border bg-status-danger-bg"
       : variant === "ok"
-        ? "border-emerald-200 bg-emerald-50"
+        ? "border-status-success-border bg-status-success-bg"
         : "border-lucathi-line bg-white";
 
   const valueClass =
     variant === "alert"
-      ? "text-red-700"
+      ? "text-status-danger-text"
       : variant === "ok"
-        ? "text-emerald-700"
+        ? "text-status-success-text"
         : "text-lucathi-navy";
 
   return (

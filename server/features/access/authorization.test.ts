@@ -36,7 +36,11 @@ describe("requirePermission", () => {
 
   it("permite ADMIN em permissões administrativas", () => {
     expect(requirePermission(contextWithRole("ADMIN"), Permission.AUDIT_LIST_BY_FAMILY).role).toBe("ADMIN");
-    expect(requirePermission(contextWithRole("ADMIN"), Permission.FAMILY_GET_DASHBOARD).role).toBe("ADMIN");
+  });
+
+  it("nega ADMIN em permissões de projeto e de painel", () => {
+    expect(() => requirePermission(contextWithRole("ADMIN"), Permission.FAMILY_GET_DASHBOARD)).toThrow("Permissão insuficiente");
+    expect(() => requirePermission(contextWithRole("ADMIN"), Permission.LEAD_LIST)).toThrow("Permissão insuficiente");
   });
 
   it("nega ADMIN em permissões exclusivas de SOCIO", () => {

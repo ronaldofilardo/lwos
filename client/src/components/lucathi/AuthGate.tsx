@@ -22,9 +22,9 @@ function LoginForm() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-lucathi-canvas p-6">
-      <section className="w-full max-w-md rounded-[28px] border border-lucathi-line bg-white p-8 shadow-xl shadow-lucathi-deep/5">
+      <section className="w-full max-w-md rounded-[28px] border border-lucathi-line bg-white p-8 shadow-sm shadow-lucathi-deep/5">
         <BrandMark />
-        <p className="mt-12 text-xs font-semibold uppercase tracking-[0.16em] text-lucathi-gray">
+        <p className="mt-12 text-xs font-semibold uppercase tracking-[0.16em] text-lucathi-gray font-subtitle">
           Wealth & Legacy Engineering
         </p>
         <h1 className="mt-3 font-display text-4xl text-lucathi-navy">Acesso reservado</h1>
@@ -63,9 +63,9 @@ function LoginForm() {
             />
           </div>
 
-          {authError && <p className="text-sm text-red-600">{authError}</p>}
+          {authError && <p className="text-sm text-status-danger-text">{authError}</p>}
 
-          <Button type="submit" className="w-full bg-lucathi-deep hover:bg-lucathi-navy" disabled={authPending}>
+          <Button type="submit" className="w-full" disabled={authPending}>
             <ShieldCheck className="mr-2 size-4" />
             {mode === "login" ? "Entrar com segurança" : "Criar conta"}
           </Button>
@@ -94,13 +94,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <main className="grid min-h-screen place-items-center overflow-hidden bg-lucathi-deep p-6 text-white">
         <section className="relative w-full max-w-md overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.06] p-10 shadow-2xl">
           <div className="absolute -right-14 -top-14 size-52 rotate-45 border border-white/10" />
-          <img
-            src="/lucathi-logo.png"
-            alt="Lucathi Consult"
-            className="h-12 w-auto object-contain object-left"
-            style={{ filter: "brightness(0) invert(1)" }}
-          />
-          <p className="mt-14 text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+          <BrandMark variant="negative" />
+          <p className="mt-14 text-xs font-semibold uppercase tracking-[0.18em] text-white/55 font-subtitle">
             Ambiente confidencial
           </p>
           <h1 className="mt-3 font-display text-4xl">Preparando o seu acesso.</h1>

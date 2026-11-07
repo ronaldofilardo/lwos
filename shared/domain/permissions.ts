@@ -127,48 +127,11 @@ const PERMISSION_MATRIX: Record<AppRole, readonly Permission[]> = {
     Permission.LWR_CREATE,
   ],
   ADMIN: [
-    // Famílias
-    Permission.FAMILY_GET_DASHBOARD,
-    Permission.FAMILY_LIST_STORAGE,
-    // Auditoria
+    // Admin de plataforma: audita, mas não opera. Sem CRUD de pessoas/imóveis/
+    // documentos/sociedades/ativos/certidões/propostas — isso é da operação
+    // (SOCIO/ANALISTA). O acesso de plataforma (rota e API /setup) não passa
+    // por aqui: é adminProcedure, que compara role === "ADMIN".
     Permission.AUDIT_LIST_BY_FAMILY,
-    // Interessados
-    Permission.LEAD_LIST,
-    // Pessoas
-    Permission.PEOPLE_CREATE,
-    Permission.PEOPLE_UPDATE,
-    Permission.PEOPLE_REMOVE,
-    Permission.PEOPLE_ATTACH_DOCUMENTS,
-    Permission.PEOPLE_SET_PRIMARY_CONTACT,
-    // Propriedades
-    Permission.PROPERTY_CREATE,
-    Permission.PROPERTY_UPDATE,
-    Permission.PROPERTY_REMOVE,
-    Permission.PROPERTY_ADD_OWNER,
-    Permission.PROPERTY_UPDATE_OWNER,
-    Permission.PROPERTY_REMOVE_OWNER,
-    // Documentos
-    Permission.DOCUMENT_CREATE,
-    Permission.DOCUMENT_GENERATE_REQUIREMENTS,
-    Permission.DOCUMENT_UPLOAD_VERSION,
-    Permission.DOCUMENT_UPLOAD_BALANCE,
-    // Sociedades
-    Permission.COMPANY_CREATE,
-    Permission.COMPANY_REMOVE,
-    Permission.COMPANY_ADD_STAKEHOLDER,
-    Permission.COMPANY_UPDATE_STAKEHOLDER,
-    Permission.COMPANY_REMOVE_STAKEHOLDER,
-    Permission.COMPANY_UPSERT_DETAILS,
-    // Ativos
-    Permission.ASSET_CREATE,
-    Permission.ASSET_UPDATE,
-    Permission.ASSET_REMOVE,
-    // Certidões
-    Permission.CERTIDAO_GENERATE,
-    // Propostas
-    Permission.PROPOSAL_CREATE,
-    // LWR
-    Permission.LWR_CREATE,
   ],
   CLIENTE: [],
 };
@@ -217,6 +180,10 @@ export function isClient(role: AppRole | null | undefined): boolean {
 
 export function isAdmin(role: AppRole | null | undefined): boolean {
   return role === "SOCIO" || role === "ADMIN";
+}
+
+export function isPlatformAdmin(role: AppRole | null | undefined): boolean {
+  return role === "ADMIN";
 }
 
 export function canCreate(role: AppRole | null | undefined): boolean {

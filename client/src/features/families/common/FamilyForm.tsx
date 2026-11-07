@@ -42,7 +42,7 @@ export function FamilyForm({ data, disabled, existingNames, onChange, onSubmit }
         )}
       </LabeledField>
       {duplicateName ? (
-        <p className="flex items-center gap-1.5 text-xs text-amber-700">
+        <p className="flex items-center gap-1.5 text-xs text-status-warning-text">
           <AlertTriangle className="size-3.5 shrink-0" />
           Já existe um projeto com este nome. Você pode criar mesmo assim.
         </p>

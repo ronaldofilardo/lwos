@@ -4,9 +4,9 @@ import { FamilyWealthPieChart } from "./FamilyWealthPieChart";
 
 /** Cor da barra de cada categoria. */
 const BAR_COLORS = {
-  properties: "bg-[#003663]",
-  companies:  "bg-[#5b7f9b]",
-  otherAssets:"bg-[#b3c2cc]",
+  properties: "bg-[var(--chart-1)]",
+  companies:  "bg-[var(--chart-2)]",
+  otherAssets:"bg-[var(--chart-3)]",
 } as const;
 
 const LABELS = {
@@ -54,8 +54,8 @@ function BreakdownRow({
 function WealthInsights({ wealth }: { wealth: WealthBreakdown }) {
   if (wealth.total === 0) return null;
 
-  const propPct    = (wealth.properties  / wealth.total) * 100;
-  const compPct    = (wealth.companies   / wealth.total) * 100;
+  const propPct = (wealth.properties / wealth.total) * 100;
+  const compPct = (wealth.companies / wealth.total) * 100;
 
   const insights: string[] = [];
 
@@ -73,8 +73,8 @@ function WealthInsights({ wealth }: { wealth: WealthBreakdown }) {
   return (
     <ul className="mt-4 space-y-1.5 border-t border-lucathi-line/60 pt-4">
       {insights.map((insight, i) => (
-        <li key={i} className="flex items-start gap-2 text-xs text-amber-700">
-          <span className="mt-0.5 shrink-0 text-amber-400">▲</span>
+        <li key={i} className="flex items-start gap-2 text-xs text-status-warning-text">
+          <span className="mt-0.5 shrink-0 text-status-warning-text">▲</span>
           {insight}
         </li>
       ))}
@@ -120,7 +120,7 @@ export function FamilyWealthOverviewCard({
       {/* cabeçalho */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-lucathi-gray">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-lucathi-gray font-subtitle">
             Patrimônio Total Familiar — Visão dos Patriarcas
           </p>
           <p className="mt-1 text-sm text-lucathi-gray">
@@ -128,7 +128,7 @@ export function FamilyWealthOverviewCard({
           </p>
         </div>
         <div className="rounded-xl bg-lucathi-deep px-5 py-3 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 font-subtitle">
             Total
           </p>
           <p className="font-display text-2xl text-white">

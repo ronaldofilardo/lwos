@@ -182,13 +182,13 @@ export function FamilyWorkspacePage() {
             certidões em vermelho justificadas.
           </p>
           {blockers.length ? (
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-700">
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-status-warning-text">
               {blockers.map(blocker => (
                 <li key={blocker}>{blocker}</li>
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-emerald-700">
+            <p className="mt-3 text-sm text-status-success-text">
               Nenhum bloqueio encontrado.
             </p>
           )}

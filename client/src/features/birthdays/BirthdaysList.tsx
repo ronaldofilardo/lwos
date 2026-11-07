@@ -27,7 +27,7 @@ export function BirthdaysList({ people }: { people: BirthdayPerson[] }) {
         <caption className="sr-only">
           Pessoas, data de nascimento, vínculo, idade e projeto
         </caption>
-        <thead className="bg-lucathi-mist text-xs uppercase tracking-[0.12em] text-lucathi-gray">
+        <thead className="bg-lucathi-mist text-xs uppercase tracking-[0.12em] text-lucathi-gray font-subtitle">
           <tr>
             <th scope="col" className="px-4 py-3">Pessoa</th>
             <th scope="col" className="px-4 py-3">Nascimento</th>

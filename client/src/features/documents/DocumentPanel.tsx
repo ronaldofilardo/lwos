@@ -203,7 +203,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
           ) : null}
           {viewGroups.length > 0 ? (
             <div className="rounded-xl bg-lucathi-mist px-3 py-2 text-right ml-auto">
-              <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray">
+              <p className="text-xs font-semibold uppercase tracking-wider text-lucathi-gray font-subtitle">
                 Progresso
               </p>
               <p className="text-sm font-semibold text-lucathi-navy">
@@ -415,7 +415,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
 
                                 {document.status === "DISPENSADO" &&
                                 document.dispensationReason ? (
-                                  <div className="mt-2.5 rounded-lg border border-purple-200 bg-purple-50/80 p-2.5 text-xs text-purple-900">
+                                  <div className="mt-2.5 rounded-lg border border-status-neutral-border bg-status-neutral-bg/80 p-2.5 text-xs text-status-neutral-text">
                                     <span className="font-semibold">
                                       Dispensa formalizada por Sócio:
                                     </span>{" "}
@@ -428,7 +428,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
 
                                 {document.status === "REJEITADO" &&
                                 document.rejectionReason ? (
-                                  <div className="mt-2.5 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800">
+                                  <div className="mt-2.5 rounded-lg border border-status-danger-border bg-status-danger-bg p-2.5 text-xs text-status-danger-text">
                                     <span className="font-semibold">
                                       Motivo da Rejeição:
                                     </span>{" "}
@@ -442,7 +442,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                                       e.stopPropagation();
                                       setShowReviewModal(true);
                                     }}
-                                    className="mt-2 text-sm text-blue-600 underline cursor-pointer hover:text-blue-800"
+                                    className="mt-2 text-sm text-status-info-text underline cursor-pointer hover:text-status-info-text/80"
                                   >
                                     Solicitar novo documento
                                   </button>
@@ -532,7 +532,7 @@ export function DocumentPanel({ familyId }: { familyId: string }) {
                   setReviewModalReason("");
                   toast.success("Solicitação enviada ao titular");
                 }}
-                className="flex-1 py-2 bg-lucathi-navy text-white rounded-md hover:bg-lucathi-dark"
+                className="flex-1 py-2 bg-lucathi-navy text-white rounded-md hover:bg-lucathi-deep"
               >
                 Enviar solicitação
               </button>

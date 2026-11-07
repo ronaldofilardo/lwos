@@ -168,7 +168,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                       <VinculoBadge vinculo={person.vinculo} />
                     ) : null}
                     {person.isDependent ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                      <span className="inline-flex items-center rounded-full bg-status-neutral-bg px-2.5 py-1 text-xs font-semibold text-status-neutral-text">
                         Dependente no IRPF do titular
                       </span>
                     ) : null}
@@ -204,7 +204,7 @@ export function PeoplePanel({ familyId }: { familyId: string }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-auto px-2 py-1 text-xs text-red-600 hover:text-red-700"
+                          className="h-auto px-2 py-1 text-xs text-status-danger-text hover:text-status-danger-text/80"
                           onClick={() => setDeleting(person as PersonRow)}
                         >
                           <Trash2 className="mr-1 size-3" />

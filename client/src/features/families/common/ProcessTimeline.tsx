@@ -23,26 +23,26 @@ const statusMeta: Record<
   CONCLUIDO: {
     label: "Concluído",
     icon: CheckCircle2,
-    iconClass: "text-emerald-600",
-    chipClass: "bg-emerald-50 text-emerald-700",
+    iconClass: "text-status-success-text",
+    chipClass: "bg-status-success-bg text-status-success-text border-status-success-border",
   },
   EM_ANDAMENTO: {
     label: "Em andamento",
     icon: Loader2,
-    iconClass: "text-lucathi-navy animate-spin",
-    chipClass: "bg-lucathi-navy/10 text-lucathi-navy",
+    iconClass: "text-status-info-text animate-spin",
+    chipClass: "bg-status-info-bg text-status-info-text border-status-info-border",
   },
   PENDENTE: {
     label: "Pendente",
     icon: CircleDashed,
-    iconClass: "text-lucathi-gray",
-    chipClass: "bg-lucathi-mist text-lucathi-gray",
+    iconClass: "text-status-warning-text",
+    chipClass: "bg-status-warning-bg text-status-warning-text border-status-warning-border",
   },
   BLOQUEADO: {
     label: "Bloqueado",
     icon: AlertTriangle,
-    iconClass: "text-red-600",
-    chipClass: "bg-red-50 text-red-700",
+    iconClass: "text-status-danger-text",
+    chipClass: "bg-status-danger-bg text-status-danger-text border-status-danger-border",
   },
 };
 

@@ -98,77 +98,33 @@ function StakeholderManager({
     <div className="mt-3 space-y-2 border-t border-lucathi-line/60 pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="font-semibold text-lucathi-navy">
-          Quadro societário
+          Participações ({rows.length})
         </span>
-        <span
-          className={
-            remaining > 0
-              ? "font-semibold text-amber-700"
-              : "font-semibold text-emerald-700"
-          }
-        >
-          {total}% distribuído{remaining > 0 ? ` · falta ${remaining}%` : " · 100%"}
+        <span className="font-mono text-status-danger-text">
+          {remaining > 0 ? `Faltam ${remaining.toFixed(2)}%` : "100%"}
         </span>
       </div>
-
-      {(rows ?? []).length > 0 ? (
-        <div className="space-y-1.5">
-          {(rows ?? []).map(row => {
-            const person = row.personId
-              ? (people ?? []).find(item => item.id === row.personId)
-              : null;
-            const cpfSuffix = !person && row.externalCpf ? ` · CPF ${mascaraCpf(row.externalCpf)}` : "";
-            const label = `${person?.fullName ?? row.externalName ?? "—"}${cpfSuffix}`;
-            const values = computeStakeholderValues(row.percentage, totals);
+      {rows.length > 0 ? (
+        <div className="space-y-2">
+          {rows.map(row => {
+            const values = computeStakeholderValues(row, totals, international);
             return (
               <div
                 key={row.id}
-                className="rounded-lg border border-lucathi-line/60 bg-white px-2.5 py-1.5 text-xs"
+                className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-lucathi-line/60 bg-white p-2"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-lucathi-navy">{label}</span>
-                  <span className="flex items-center gap-1 text-lucathi-gray">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="0.01"
-                      defaultValue={row.percentage}
-                      key={row.percentage}
-                      onBlur={e => {
-                        const val = Number(e.target.value.replace(",", "."));
-                        if (!isNaN(val) && val !== Number(row.percentage)) {
-                          updateStakeholder.mutate({
-                            companyId,
-                            stakeholderId: row.id,
-                            percentage: val,
-                          });
-                        }
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") {
-                          e.currentTarget.blur();
-                        }
-                      }}
-                      className="h-6 w-14 rounded border border-input bg-transparent px-1 text-right text-xs"
-                      title="Editar participação (%)"
-                    />
-                    %
-                    {person ? "" : " · não-membro"}
-                  </span>
-                  {!person ? (
+                  <p className="text-sm font-medium text-lucathi-navy">
+                    {row.person
+                      ? row.person.fullName
+                      : row.externalName ?? "Não-membro"}
+                  </p>
+                  {row.person ? (
                     <button
                       type="button"
-                      className="rounded border border-lucathi-line px-1.5 py-0.5 text-lucathi-navy hover:bg-lucathi-mist"
-                      disabled={requestExternalDoc.isPending}
-                      onClick={() =>
-                        requestExternalDoc.mutate({
-                          familyId,
-                          entityType: "SOCIEDADE",
-                          entityId: companyId,
-                          category: `Doc. pessoal — ${label}`.slice(0, 80),
-                        })
-                      }
+                      aria-label="Doc pessoal"
+                      className="text-[11px] text-status-info-text hover:underline"
+                      onClick={() => requestExternalDoc.mutate({ companyId, personId: row.person.id, documentCategory: "DOCUMENTO_PESSOAL" })}
                     >
                       Doc pessoal
                     </button>
@@ -176,7 +132,7 @@ function StakeholderManager({
                   <button
                     type="button"
                     aria-label="Remover participação"
-                    className="ml-auto rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50"
+                    className="ml-auto rounded px-1.5 py-0.5 text-status-danger-text hover:bg-status-danger-bg"
                     disabled={remove.isPending}
                     onClick={() =>
                       remove.mutate({ companyId, stakeholderId: row.id })
@@ -267,44 +223,38 @@ function StakeholderManager({
                   inputMode="decimal"
                   placeholder="Ex.: 50"
                   className="h-9 text-xs"
+                  disabled={Boolean(externalName)}
                 />
               )}
             </LabeledField>
             <Button
               size="sm"
-              disabled={
-                !percentage ||
-                (!personId && !externalName.trim()) ||
-                add.isPending
-              }
+              disabled={!personId && !externalName || !percentage || add.isPending}
               onClick={() =>
                 add.mutate({
                   companyId,
                   personId: personId || undefined,
-                  externalName: externalName.trim() || undefined,
-                  externalCpf: externalCpf.trim() || undefined,
-                  percentage: Number(percentage.replace(',', '.')),
+                  externalName: externalName || undefined,
+                  externalCpf: externalCpf || undefined,
+                  percentage: Number(percentage),
                 })
               }
+              className="h-9"
             >
-              Adicionar sócio
+              {add.isPending ? "Adicionando…" : "Adicionar"}
             </Button>
           </div>
         </>
-      ) : (
-        <p className="text-xs text-lucathi-gray">
-          Quadro completo (100%) — remova uma participação para editar.
-        </p>
-      )}
+      ) : null}
     </div>
   );
 }
 
 export function CompanyPanel({ familyId }: { familyId: string }) {
   const utils = trpc.useUtils();
-  const [name, setName] = useState("");
-  const [isOffshore, setIsOffshore] = useState(false);
-  const [taxNumber, setTaxNumber] = useState("");
+  const people = trpc.people.list.useQuery({ familyId });
+  const list = trpc.companies.list.useQuery({ familyId });
+  const { counts, loading: alertsLoading } = useProjectAlerts(familyId);
   const [detailsCompanyId, setDetailsCompanyId] = useState<string | null>(null);
   const [removingCompany, setRemovingCompany] = useState<{
     id: string;
@@ -312,267 +262,180 @@ export function CompanyPanel({ familyId }: { familyId: string }) {
     propertyCount: number;
   } | null>(null);
 
-  const list = trpc.companies.list.useQuery({ familyId });
-  const people = trpc.people.list.useQuery({ familyId });
-  const { bySubject } = useProjectAlerts(familyId);
-
+  const create = trpc.companies.create.useMutation({
+    onSuccess: () => {
+      utils.companies.list.invalidate({ familyId });
+      setDetailsCompanyId(null);
+      toast.success("Sociedade registrada.");
+    },
+    onError: error => toast.error(errorMessage(error)),
+  });
   const removeCompany = trpc.companies.remove.useMutation({
     onSuccess: () => {
       utils.companies.list.invalidate({ familyId });
-      utils.companies.getDetails.invalidate();
-      utils.certidoes.list.invalidate({ familyId });
-      utils.documents.list.invalidate({ familyId });
-      utils.families.getManagedWealth.invalidate();
       setRemovingCompany(null);
       toast.success("Sociedade excluída.");
     },
     onError: error => toast.error(errorMessage(error)),
   });
 
-  const create = trpc.companies.create.useMutation({
-    onSuccess: (result) => {
-      utils.companies.list.invalidate({ familyId });
-      utils.certidoes.list.invalidate({ familyId });
-      utils.documents.list.invalidate({ familyId });
-      utils.families.getManagedWealth.invalidate();
-      setName("");
-      setTaxNumber("");
-      if (result.fromApi) {
-        toast.success("Sociedade criada com dados oficiais da Receita Federal.");
-      } else {
-        toast.success("Sociedade criada.");
-      }
-      setDetailsCompanyId(result.companyId);
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  });
-
-  const handleTaxNumberChange = (value: string) => {
-    setTaxNumber(value);
-    const cleaned = value.replace(/\D/g, "");
-    if (cleaned.length === 14 && !name.trim()) {
-      utils.companies.lookupCnpj.fetch({ cnpj: cleaned }).then(res => {
-        if (res?.legalName && !name.trim()) {
-          setName(res.legalName);
-        }
-      }).catch(() => {});
-    }
-  };
-
   return (
-    <section className="rounded-2xl border border-lucathi-line bg-white p-6">
-      <div className="flex items-center gap-3">
-        <Building2 className="size-5 text-lucathi-navy" />
-        <h2 className="font-display text-2xl text-lucathi-navy">
-          Sociedades
-        </h2>
-      </div>
+    <section className="space-y-6">
+      <div className="rounded-xl border border-lucathi-line bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-lucathi-gray font-subtitle">
+              Sociedades (Holdings / Offshore)
+            </p>
+            <p className="mt-1 text-sm text-lucathi-gray">
+              Capital, participação societária e valor de mercado estimado.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-lucathi-navy"
+            onClick={() => setDetailsCompanyId(null)}
+          >
+            <Building2 className="size-3.5" /> Nova sociedade
+          </Button>
+        </div>
 
-      <div className="mt-4 grid items-end gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
-        <LabeledField label="Denominação social">
-          {id => (
-            <Input
-              id={id}
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Ex.: Silva Participações Ltda."
-            />
-          )}
-        </LabeledField>
-        {isOffshore ? null : (
-          <LabeledField label="CNPJ">
-            {id => (
-              <Input
-                id={id}
-                value={taxNumber}
-                onChange={e => handleTaxNumberChange(e.target.value)}
-                placeholder="Ex.: 12.345.678/0001-90"
-              />
-            )}
-          </LabeledField>
-        )}
-        <label className="flex h-10 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-sm">
-          <input
-            type="checkbox"
-            checked={isOffshore}
-            onChange={e => {
-              setIsOffshore(e.target.checked);
-              if (e.target.checked) setTaxNumber("");
-            }}
-            className="size-4"
-          />
-          Offshore
-        </label>
-        <Button
-          disabled={
-            create.isPending ||
-            (isOffshore ? !name.trim() : !taxNumber.trim())
-          }
-          onClick={() =>
-            create.mutate({
-              familyId,
-              legalName: name.trim() || "Nova Sociedade",
-              taxNumber: taxNumber.trim() || undefined,
-              isOffshore,
-            })
-          }
-        >
-          Criar sociedade
-        </Button>
-      </div>
-
-      <div className="mt-5 space-y-3">
-        {list.data?.map(item => {
-          const simples = item.taxRegime === "SIMPLES_NACIONAL";
-          return (
-            <div
-              key={item.id}
-              className={
-                simples
-                  ? "rounded-xl border-2 border-red-500 bg-red-50/40 px-4 py-3"
-                  : "rounded-xl bg-lucathi-mist px-4 py-3"
-              }
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                    {item.legalName}
-                    {simples ? (
-                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                        Simples Nacional
-                      </span>
+        <div className="mt-4 space-y-3">
+          {list.data?.map(item => {
+            const simples = item.taxRegime === "SIMPLES_NACIONAL";
+            return (
+              <div
+                key={item.id}
+                className={
+                  simples
+                    ? "rounded-xl border-2 border-status-danger-text bg-status-danger-bg/40 px-4 py-3"
+                    : "rounded-xl bg-lucathi-mist px-4 py-3"
+                }
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                      {item.legalName}
+                      {simples ? (
+                        <span className="rounded-full bg-status-danger-text px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                          Simples Nacional
+                        </span>
+                      ) : null}
+                      <AlertIndicator
+                        level={levelFor(bySubject, "SOCIEDADE", item.id)}
+                      />
+                    </p>
+                    {item.isOffshore ? (
+                      <p className="text-xs font-medium text-lucathi-gray">
+                        Offshore
+                      </p>
                     ) : null}
-                    <AlertIndicator
-                      level={levelFor(bySubject, "SOCIEDADE", item.id)}
-                    />
-                  </p>
-                  {item.isOffshore ? (
-                    <p className="text-xs font-medium text-lucathi-gray">
-                      Offshore
-                    </p>
-                  ) : null}
-                  {item.isOffshore ? null : (
-                    <p className="text-xs text-lucathi-gray">
-                      {item.taxNumber
-                        ? `CNPJ ${mascaraCnpj(item.taxNumber)}`
-                        : "CNPJ não informado"}
-                    </p>
-                  )}
-                  <p className="text-xs text-lucathi-gray">
-                    Capital Social Total:{" "}
-                    {formatAmount(toNumberOrNull(item.capitalSocial), item.isOffshore)}
-                  </p>
-                  <p className="text-xs text-lucathi-gray">
-                    PL: {formatAmount(toNumberOrNull(item.equity), item.isOffshore)}
-                  </p>
-                  <p className="text-xs text-lucathi-gray">
-                    Valor Imóveis:{" "}
-                    {formatAmount(item.propertyValue, item.isOffshore)}{" "}
-                    ({item.propertyCount}{" "}
-                    {item.propertyCount === 1 ? "imóvel" : "imóveis"})
-                  </p>
-                  <p className="text-xs text-lucathi-gray">
-                    Valor de Mercado da Sociedade:{" "}
-                    {formatAmount(
-                      companyTotalsFromRow(item, item.propertyValue).estimatedValue,
-                      item.isOffshore
+                    {item.isOffshore ? null : (
+                      <p className="text-xs text-lucathi-gray">
+                        {item.taxNumber
+                          ? `CNPJ ${mascaraCnpj(item.taxNumber)}`
+                          : "CNPJ não informado"}
+                      </p>
                     )}
-                  </p>
-                  {item.notes ? (
-                    <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs text-lucathi-gray">
-                      <span className="font-medium text-lucathi-navy">Observações:</span>{" "}
-                      {item.notes}
+                    <p className="text-xs text-lucathi-gray">
+                      Capital Social Total:{" "}
+                      {formatAmount(toNumberOrNull(item.capitalSocial), item.isOffshore)}
                     </p>
-                  ) : null}
+                    <p className="text-xs text-lucathi-gray">
+                      PL: {formatAmount(toNumberOrNull(item.equity), item.isOffshore)}
+                    </p>
+                    <p className="text-xs text-lucathi-gray">
+                      Valor Imóveis:{" "}
+                      {formatAmount(item.propertyValue, item.isOffshore)}{" "}
+                      ({item.propertyCount}{" "}
+                      {item.propertyCount === 1 ? "imóvel" : "imóveis"})
+                    </p>
+                    <p className="text-xs text-lucathi-gray">
+                      Valor de Mercado da Sociedade:{" "}
+                      {formatAmount(
+                        companyTotalsFromRow(item, item.propertyValue).estimatedValue,
+                        item.isOffshore
+                      )}
+                    </p>
+                    {item.notes ? (
+                      <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-xs text-lucathi-gray">
+                        <span className="font-medium text-lucathi-navy">Observações:</span>{" "}
+                        {item.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2 text-xs"
+                      onClick={() => setDetailsCompanyId(item.id)}
+                    >
+                      <Info className="mr-1 size-3.5" /> Detalhes
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2 text-xs text-status-danger-text hover:bg-status-danger-bg hover:text-status-danger-text"
+                      onClick={() =>
+                        setRemovingCompany({
+                          id: item.id,
+                          legalName: item.legalName,
+                          propertyCount: item.propertyCount,
+                        })
+                      }
+                      title="Excluir sociedade"
+                    >
+                      <Trash2 className="mr-1 size-3.5" /> Excluir
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 px-2 text-xs"
-                    onClick={() => setDetailsCompanyId(item.id)}
-                  >
-                    <Info className="mr-1 size-3.5" /> Detalhes
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                    onClick={() =>
-                      setRemovingCompany({
-                        id: item.id,
-                        legalName: item.legalName,
-                        propertyCount: item.propertyCount,
-                      })
-                    }
-                    title="Excluir sociedade"
-                  >
-                    <Trash2 className="mr-1 size-3.5" /> Excluir
-                  </Button>
-                </div>
+                <StakeholderManager
+                  companyId={item.id}
+                  familyId={familyId}
+                  people={people.data ?? []}
+                  totals={companyTotalsFromRow(item, item.propertyValue)}
+                  international={item.isOffshore}
+                />
               </div>
-              <StakeholderManager
-                companyId={item.id}
-                familyId={familyId}
-                people={people.data ?? []}
-                totals={companyTotalsFromRow(item, item.propertyValue)}
-                international={item.isOffshore}
-              />
-            </div>
-          );
-        })}
-        {!list.data?.length ? (
-          <p className="text-sm text-lucathi-gray">
-            Nenhuma sociedade cadastrada.
-          </p>
-        ) : null}
+            );
+          })}
+          {!list.data?.length ? (
+            <p className="text-sm text-lucathi-gray text-center py-4">
+              Nenhuma sociedade cadastrada. Clique em «Nova sociedade» para começar.
+            </p>
+          ) : null}
+        </div>
       </div>
 
-      <CompanyDetailsModal
-        familyId={familyId}
-        companyId={detailsCompanyId}
-        onClose={() => setDetailsCompanyId(null)}
-      />
+      {detailsCompanyId ? (
+        <CompanyDetailsModal
+          companyId={detailsCompanyId}
+          familyId={familyId}
+          onClose={() => setDetailsCompanyId(null)}
+        />
+      ) : null}
 
-      <Dialog
-        open={Boolean(removingCompany)}
-        onOpenChange={open => !open && setRemovingCompany(null)}
-      >
-        <DialogContent>
+      <Dialog open={Boolean(removingCompany)} onOpenChange={value => { if (!value) setRemovingCompany(null); }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Excluir sociedade</DialogTitle>
+            <DialogTitle className="text-lucathi-navy">Excluir sociedade?</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja excluir «{removingCompany?.legalName}»? Esta
-              ação removerá a ficha da sociedade e o quadro societário vinculado.
-              Documentos enviados permanecem arquivados.
+              A sociedade “{removingCompany?.legalName}” será removida. Se houver
+              {removingCompany?.propertyCount} imóvel(is) vinculado(s), eles
+              permanecerão no projeto, mas sem sociedade associada.
             </DialogDescription>
-            {(removingCompany?.propertyCount ?? 0) > 0 ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                Esta sociedade é titular de {removingCompany?.propertyCount}{" "}
-                imóvel(is): remova a titularidade nos imóveis antes de excluí-la.
-              </p>
-            ) : null}
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setRemovingCompany(null)}
-              disabled={removeCompany.isPending}
-            >
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setRemovingCompany(null)}>Cancelar</Button>
             <Button
               variant="destructive"
-              disabled={
-                removeCompany.isPending || (removingCompany?.propertyCount ?? 0) > 0
+              disabled={removeCompany.isPending}
+              onClick={() =>
+                removingCompany &&
+                removeCompany.mutate({ familyId, companyId: removingCompany.id })
               }
-              onClick={() => {
-                if (!removingCompany) return;
-                removeCompany.mutate({
-                  familyId,
-                  companyId: removingCompany.id,
-                });
-              }}
             >
               {removeCompany.isPending ? "Excluindo…" : "Excluir"}
             </Button>

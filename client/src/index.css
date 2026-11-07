@@ -1,8 +1,10 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme {
   --font-display: "Cormorant Garamond", serif;
   --font-sans: "Inter", sans-serif;
+  --font-subtitle: "Montserrat", sans-serif;
   --color-lucathi-canvas: #fbfbf8;
   --color-lucathi-deep: #00243e;
   --color-lucathi-navy: #003663;
@@ -10,6 +12,21 @@
   --color-lucathi-gray: #60666b;
   --color-lucathi-line: #e4e6e4;
   --color-lucathi-mist: #f2f5f5;
+  --color-status-success-bg: #e8f5e9;
+  --color-status-success-text: #2e7d32;
+  --color-status-success-border: #a5d6a7;
+  --color-status-warning-bg: #fff8e1;
+  --color-status-warning-text: #f57f17;
+  --color-status-warning-border: #ffecb3;
+  --color-status-danger-bg: #fdecea;
+  --color-status-danger-text: #c62828;
+  --color-status-danger-border: #ef9a9a;
+  --color-status-info-bg: #e3f2fd;
+  --color-status-info-text: #1565c0;
+  --color-status-info-border: #90caf9;
+  --color-status-neutral-bg: #f2f5f5;
+  --color-status-neutral-text: #60666b;
+  --color-status-neutral-border: #e4e6e4;
 }
 
 @layer base {
@@ -17,9 +34,6 @@
   body { @apply bg-lucathi-canvas font-sans text-lucathi-ink antialiased; }
   button, input, select, textarea { font: inherit; }
 }
-@import "tw-animate-css";
-
-@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -61,74 +75,39 @@
 }
 
 :root {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-600);
-  --sidebar-primary-foreground: var(--color-blue-50);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
+  --primary: #003663;
+  --primary-foreground: #ffffff;
+  --sidebar-primary: #003663;
+  --sidebar-primary-foreground: #ffffff;
+  --chart-1: #00243e;
+  --chart-2: #003663;
+  --chart-3: #5b7f9b;
+  --chart-4: #b3c2cc;
+  --chart-5: #60666b;
   --radius: 0.65rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.235 0.015 65);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.235 0.015 65);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.235 0.015 65);
-  --secondary: oklch(0.98 0.001 286.375);
-  --secondary-foreground: oklch(0.4 0.015 65);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.141 0.005 285.823);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.623 0.214 259.815);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.235 0.015 65);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.623 0.214 259.815);
-}
-
-.dark {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-500);
-  --sidebar-primary-foreground: var(--color-blue-50);
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.85 0.005 65);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.85 0.005 65);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.85 0.005 65);
-  --secondary: oklch(0.24 0.006 286.033);
-  --secondary-foreground: oklch(0.7 0.005 65);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground:  oklch(0.92 0.005 65);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.488 0.243 264.376);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.85 0.005 65);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground:  oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.488 0.243 264.376);
+  --background: #fbfbf8;
+  --foreground: #2a3036;
+  --card: #ffffff;
+  --card-foreground: #2a3036;
+  --popover: #ffffff;
+  --popover-foreground: #2a3036;
+  --secondary: #f2f5f5;
+  --secondary-foreground: #2a3036;
+  --muted: #f2f5f5;
+  --muted-foreground: #60666b;
+  --accent: #f2f5f5;
+  --accent-foreground: #2a3036;
+  --destructive: #c62828;
+  --destructive-foreground: #ffffff;
+  --border: #e4e6e4;
+  --input: #e4e6e4;
+  --ring: #5b7f9b;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #2a3036;
+  --sidebar-accent: #f2f5f5;
+  --sidebar-accent-foreground: #2a3036;
+  --sidebar-border: #e4e6e4;
+  --sidebar-ring: #5b7f9b;
 }
 
 @layer base {
@@ -152,24 +131,11 @@
 }
 
 @layer components {
-  /**
-   * Custom container utility that centers content and adds responsive padding.
-   *
-   * This overrides Tailwind's default container behavior to:
-   * - Auto-center content (mx-auto)
-   * - Add responsive horizontal padding
-   * - Set max-width for large screens
-   *
-   * Usage: <div className="container">...</div>
-   *
-   * For custom widths, use max-w-* utilities directly:
-   * <div className="max-w-6xl mx-auto px-4">...</div>
-   */
   .container {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1rem; /* 16px - mobile padding */
+    padding-left: 1rem;
     padding-right: 1rem;
   }
 
@@ -180,16 +146,25 @@
 
   @media (min-width: 640px) {
     .container {
-      padding-left: 1.5rem; /* 24px - tablet padding */
+      padding-left: 1.5rem;
       padding-right: 1.5rem;
     }
   }
 
   @media (min-width: 1024px) {
     .container {
-      padding-left: 2rem; /* 32px - desktop padding */
+      padding-left: 2rem;
       padding-right: 2rem;
-      max-width: 1280px; /* Standard content width */
+      max-width: 1280px;
     }
+  }
+
+  .font-display {
+    font-weight: 600;
+  }
+
+  .font-subtitle {
+    font-family: var(--font-subtitle);
+    font-weight: 500;
   }
 }

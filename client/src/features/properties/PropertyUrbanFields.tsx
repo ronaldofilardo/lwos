@@ -35,7 +35,7 @@ export function PropertyUrbanFields({
             type="checkbox"
             checked={!values.hasRegistration}
             onChange={() => set({ hasRegistration: !values.hasRegistration })}
-            className="size-4 rounded border-gray-300 text-lucathi-navy"
+            className="size-4 rounded border-lucathi-line text-lucathi-navy"
           />
           Não há matrícula registrada (Imóvel em construção, posse ou
           loteamento)

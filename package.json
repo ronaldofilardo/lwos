@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
-  "scripts": {
+"scripts": {
     "dev": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "vite build && esbuild server/api.ts --platform=node --packages=external --bundle --format=esm --outfile=api/index.js && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "cross-env NODE_ENV=production node dist/index.js",
@@ -14,7 +14,8 @@
     "e2e": "tsx scripts/e2e-full-project.ts",
     "migrations:fresh": "tsx scripts/check-migrations-fresh.ts",
     "db:seed:itcmd": "tsx scripts/seed-itcmd-brackets.ts",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "check:design": "tsx scripts/check-design-tokens.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
